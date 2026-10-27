@@ -1,0 +1,55 @@
+name: Gerar APK
+
+# A cada envio para a branch main, compila o app, roda os testes e publica o APK
+# na página de Releases (versão "latest"), para baixar direto no multimídia ou no celular.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: android-actions/setup-android@v3
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.9"
+
+      - name: Testes unitários
+        working-directory: android
+        run: gradle test --no-daemon --stacktrace
+        continue-on-error: true # um teste falhando não deve impedir de gerar o APK para o teste no carro
+
+      - name: Relatório dos testes
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: relatorio-testes
+          path: android/app/build/reports/tests
+          if-no-files-found: ignore
+
+      - name: Gerar APK
+        working-directory: android
+        run: gradle assembleDebug --no-daemon --stacktrace
+
+      - name: Publicar APK na página de Releases
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cp android/app/build/outputs/apk/debug/app-debug.apk monitor-2008.apk
+          gh release delete latest --yes --cleanup-tag || true
+          gh release create latest monitor-2008.apk \
+            --title "Monitor 2008 (versão mais recente)" \
+            --notes "APK de teste gerado em $(date -u +'%d/%m/%Y %H:%M') UTC a partir do commit ${GITHUB_SHA::7}. Baixe monitor-2008.apk e instale."

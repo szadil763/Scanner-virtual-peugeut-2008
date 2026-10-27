@@ -1,0 +1,539 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Monitor 2008</title>
+<style>
+  :root {
+    --bg: #0b0f14;
+    --panel: #131a22;
+    --panel-2: #1a232e;
+    --line: #26323f;
+    --text: #eef3f8;
+    --muted: #93a2b3;
+    --accent: #38bdf8;
+    --ok: #4ade80;
+    --warn: #fbbf24;
+    --bad: #f87171;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: #000; color: var(--text);
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  .viewport { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; overflow: hidden; }
+  .stage { width: 1280px; height: 800px; flex: none; background: var(--bg); position: relative;
+    display: grid; grid-template-columns: 150px 1fr; grid-template-rows: 64px 1fr; transform-origin: center center; }
+
+  /* barra superior */
+  .top { grid-column: 1 / 3; display: flex; align-items: center; gap: 16px; padding: 0 24px;
+    background: var(--panel); border-bottom: 1px solid var(--line); }
+  .top .title { font-size: 20px; font-weight: 700; letter-spacing: .2px; }
+  .chip { display: inline-flex; align-items: center; gap: 8px; padding: 6px 14px; border-radius: 999px;
+    background: var(--panel-2); border: 1px solid var(--line); font-size: 15px; color: var(--muted); }
+  .chip .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--warn); }
+  .chip.live .dot { background: var(--ok); }
+  .spacer { flex: 1; }
+  .clock { font-size: 20px; font-variant-numeric: tabular-nums; color: var(--muted); }
+
+  /* menu lateral */
+  .rail { background: var(--panel); border-right: 1px solid var(--line); padding: 12px 10px;
+    display: flex; flex-direction: column; gap: 10px; }
+  .rail button { all: unset; box-sizing: border-box; cursor: pointer; min-height: 76px; border-radius: 14px;
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px;
+    color: var(--muted); font-size: 16px; font-weight: 600; border: 1px solid transparent; text-align: center; }
+  .rail button svg { width: 28px; height: 28px; stroke: currentColor; fill: none; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+  .rail button.on { background: var(--panel-2); color: var(--accent); border-color: var(--line); }
+  .rail button:focus-visible { outline: 2px solid var(--accent); }
+
+  /* conteúdo */
+  main { padding: 20px 24px; overflow: hidden; position: relative; }
+  section { display: none; height: 100%; }
+  section.on { display: block; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 18px; padding: 18px 20px; }
+  .label { font-size: 15px; color: var(--muted); text-transform: uppercase; letter-spacing: .6px; font-weight: 600; }
+  .big { font-size: 84px; font-weight: 700; line-height: 1; font-variant-numeric: tabular-nums; }
+  .mid { font-size: 44px; font-weight: 700; line-height: 1.05; font-variant-numeric: tabular-nums; }
+  .unit { font-size: 22px; color: var(--muted); font-weight: 500; margin-left: 6px; }
+  .sub { font-size: 15px; color: var(--muted); margin-top: 6px; }
+
+  /* painel */
+  .dash { display: grid; grid-template-columns: 400px minmax(0, 1fr) 270px; gap: 18px; height: 100%; }
+  .dash > * { min-width: 0; }
+  .hero { display: flex; flex-direction: column; }
+  #pidTable td { padding: 7px 10px; }
+  .gauge-card { display: flex; align-items: center; justify-content: center; position: relative; padding: 10px; }
+  .gauge-card svg { width: 100%; height: auto; }
+  .gauge-center { position: absolute; text-align: center; top: 50%; left: 50%; transform: translate(-50%, -52%); }
+  .gauge-center .big { font-size: 110px; }
+  .gauge-center .kmh { font-size: 22px; color: var(--muted); margin-top: 2px; }
+  .gauge-center .rpm { font-size: 24px; color: var(--accent); margin-top: 16px; font-variant-numeric: tabular-nums; }
+  .col { display: flex; flex-direction: column; gap: 18px; }
+  .col .grow { flex: 1; }
+  .hero .big { color: var(--ok); font-size: 104px; }
+  .hero .big.low { color: var(--warn); }
+  .two { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+  .bar { height: 14px; border-radius: 8px; background: var(--panel-2); overflow: hidden; margin-top: 12px; }
+  .bar > i { display: block; height: 100%; background: var(--accent); border-radius: 8px; transition: width .5s; }
+  .bar.warn > i { background: var(--warn); }
+  .bar.bad > i { background: var(--bad); }
+  .bar.ok > i { background: var(--ok); }
+
+  /* abas internas */
+  h2 { margin: 0 0 14px; font-size: 26px; }
+  .row { display: flex; gap: 18px; }
+  .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; }
+  table { width: 100%; border-collapse: collapse; font-size: 18px; }
+  th { text-align: left; color: var(--muted); font-size: 14px; text-transform: uppercase; letter-spacing: .5px; padding: 8px 10px; border-bottom: 1px solid var(--line); }
+  td { padding: 12px 10px; border-bottom: 1px solid var(--line); font-variant-numeric: tabular-nums; }
+  td.r, th.r { text-align: right; }
+  .btn { all: unset; box-sizing: border-box; cursor: pointer; min-height: 60px; padding: 0 26px; border-radius: 14px;
+    background: var(--accent); color: #04202e; font-weight: 700; font-size: 19px; display: inline-flex; align-items: center; justify-content: center; }
+  .btn.ghost { background: var(--panel-2); color: var(--text); border: 1px solid var(--line); }
+  .btn[disabled] { opacity: .4; cursor: not-allowed; }
+  .btn:focus-visible, .seg button:focus-visible { outline: 2px solid #fff; }
+  .seg { display: inline-flex; gap: 8px; flex-wrap: wrap; }
+  .seg button { all: unset; box-sizing: border-box; cursor: pointer; min-height: 60px; padding: 0 22px; border-radius: 14px;
+    background: var(--panel-2); border: 1px solid var(--line); font-size: 18px; font-weight: 600; color: var(--text); display: inline-flex; align-items: center; }
+  .seg button.on { background: var(--accent); color: #04202e; border-color: var(--accent); }
+  .note { color: var(--muted); font-size: 16px; line-height: 1.45; }
+  .pill { display: inline-block; padding: 3px 12px; border-radius: 999px; font-size: 14px; font-weight: 700; }
+  .pill.ok { background: rgba(74,222,128,.16); color: var(--ok); }
+  .pill.off { background: rgba(147,162,179,.16); color: var(--muted); }
+  .pill.warn { background: rgba(251,191,36,.16); color: var(--warn); }
+  .pill.bad { background: rgba(248,113,113,.16); color: var(--bad); }
+  .field { display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 14px 0; border-bottom: 1px solid var(--line); font-size: 19px; }
+  .field:last-child { border-bottom: 0; }
+  .stepper { display: inline-flex; align-items: center; gap: 10px; }
+  .stepper button { all: unset; width: 56px; height: 56px; border-radius: 14px; background: var(--panel-2); border: 1px solid var(--line);
+    display: inline-flex; align-items: center; justify-content: center; font-size: 28px; cursor: pointer; }
+  .stepper span { min-width: 92px; text-align: center; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .log { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 15px; color: var(--muted); line-height: 1.6; }
+  .log b { color: var(--ok); font-weight: 600; }
+  svg text { fill: var(--muted); font-size: 13px; }
+
+  /* diálogo */
+  .scrim { position: absolute; inset: 0; background: rgba(0,0,0,.6); display: none; align-items: center; justify-content: center; z-index: 5; }
+  .scrim.on { display: flex; }
+  .dialog { width: 560px; background: var(--panel); border: 1px solid var(--line); border-radius: 20px; padding: 26px; }
+  .dialog h3 { margin: 0 0 14px; font-size: 24px; }
+  .actions { display: flex; gap: 12px; justify-content: flex-end; margin-top: 18px; }
+</style>
+</head>
+<body>
+<div class="viewport">
+<div class="stage" id="stage">
+
+  <div class="top">
+    <div class="title">Monitor 2008</div>
+    <span class="chip" id="chipMode"><span class="dot"></span><span id="chipText">Dados simulados</span></span>
+    <span class="chip" id="chipFuel">Gasolina E30</span>
+    <div class="spacer"></div>
+    <div class="clock" id="clock">--:--</div>
+  </div>
+
+  <nav class="rail" aria-label="Seções">
+    <button class="on" data-tab="painel">
+      <svg viewBox="0 0 24 24"><path d="M4 16a8 8 0 1 1 16 0"/><path d="M12 16l4-5"/></svg>Painel
+    </button>
+    <button data-tab="consumo">
+      <svg viewBox="0 0 24 24"><path d="M5 20V6a2 2 0 0 1 2-2h6a2 2 0 0 1 2 2v14"/><path d="M4 20h12"/><path d="M15 9h2a2 2 0 0 1 2 2v5a1.5 1.5 0 0 0 3 0V9l-3-3"/></svg>Consumo
+    </button>
+    <button data-tab="manut">
+      <svg viewBox="0 0 24 24"><path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L3 18l3 3 6.3-6.3a4 4 0 0 0 5.4-5.4l-2.5 2.5-2.5-.5-.5-2.5z"/></svg>Manutenção
+    </button>
+    <button data-tab="diag">
+      <svg viewBox="0 0 24 24"><path d="M12 3l9 16H3z"/><path d="M12 10v4"/><path d="M12 17h.01"/></svg>Diagnóstico
+    </button>
+    <button data-tab="ajustes">
+      <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>Ajustes
+    </button>
+  </nav>
+
+  <main>
+    <!-- PAINEL -->
+    <section id="painel" class="on">
+      <div class="dash">
+        <div class="card gauge-card">
+          <svg viewBox="0 0 300 300" aria-hidden="true">
+            <circle cx="150" cy="150" r="120" fill="none" stroke="#1a232e" stroke-width="22" stroke-linecap="round"
+              stroke-dasharray="502.65 754" transform="rotate(150 150 150)"/>
+            <circle id="rpmArc" cx="150" cy="150" r="120" fill="none" stroke="#38bdf8" stroke-width="22" stroke-linecap="round"
+              stroke-dasharray="0 754" transform="rotate(150 150 150)"/>
+            <text x="46" y="268" text-anchor="middle">0</text>
+            <text x="254" y="268" text-anchor="middle">6000</text>
+          </svg>
+          <div class="gauge-center">
+            <div class="big" id="speed">0</div>
+            <div class="kmh">km/h</div>
+            <div class="rpm"><span id="rpm">0</span> rpm</div>
+          </div>
+        </div>
+
+        <div class="col">
+          <div class="card hero grow">
+            <div class="label">Consumo agora</div>
+            <div style="margin-top:14px"><span class="big" id="kml">--</span><span class="unit">km/l</span></div>
+            <div class="sub" id="lph">-- L/h</div>
+            <svg id="spark2" viewBox="0 0 320 130" width="100%" height="130" style="margin-top:auto" aria-hidden="true"></svg>
+          </div>
+          <div class="two">
+            <div class="card">
+              <div class="label">Média da viagem</div>
+              <div style="margin-top:8px"><span class="mid" id="avg">--</span><span class="unit">km/l</span></div>
+            </div>
+            <div class="card">
+              <div class="label">Distância</div>
+              <div style="margin-top:8px"><span class="mid" id="dist">0,0</span><span class="unit">km</span></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="col">
+          <div class="card">
+            <div class="label">Temp. do motor</div>
+            <div style="margin-top:8px"><span class="mid" id="ect">--</span><span class="unit">°C</span></div>
+            <div class="bar" id="ectBar"><i style="width:0"></i></div>
+          </div>
+          <div class="card">
+            <div class="label">Bateria</div>
+            <div style="margin-top:8px"><span class="mid" id="vbat">--</span><span class="unit">V</span></div>
+          </div>
+          <div class="card">
+            <div class="label">Combustível</div>
+            <div style="margin-top:8px"><span class="mid" id="fuel">--</span><span class="unit">%</span></div>
+            <div class="bar ok" id="fuelBar"><i style="width:0"></i></div>
+          </div>
+          <div class="card">
+            <div class="label">Ar de admissão</div>
+            <div style="margin-top:8px"><span class="mid" id="iat">--</span><span class="unit">°C</span></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- CONSUMO -->
+    <section id="consumo">
+      <h2>Consumo</h2>
+      <div class="stats">
+        <div class="card"><div class="label">Média da viagem</div><div style="margin-top:8px"><span class="mid" id="c-avg">--</span><span class="unit">km/l</span></div><div class="sub" id="c-l100">-- L/100 km</div></div>
+        <div class="card"><div class="label">Combustível usado</div><div style="margin-top:8px"><span class="mid" id="c-liters">0,00</span><span class="unit">L</span></div><div class="sub" id="c-cost">R$ 0,00 na viagem</div></div>
+        <div class="card"><div class="label">Velocidade média</div><div style="margin-top:8px"><span class="mid" id="c-vavg">0</span><span class="unit">km/h</span></div><div class="sub" id="c-time">0 min</div></div>
+      </div>
+      <div class="row" style="margin-top:18px">
+        <div class="card" style="flex:1.2">
+          <div class="label">km/l nos últimos minutos</div>
+          <svg id="spark" viewBox="0 0 560 190" width="100%" height="190" style="margin-top:8px"></svg>
+        </div>
+        <div class="card" style="flex:1">
+          <div class="label" style="margin-bottom:6px">Abastecimentos</div>
+          <table>
+            <thead><tr><th>Data</th><th class="r">Litros</th><th class="r">km/l real</th></tr></thead>
+            <tbody>
+              <tr><td>02/10</td><td class="r">36,8</td><td class="r">10,9</td></tr>
+              <tr><td>18/09</td><td class="r">38,2</td><td class="r">11,4</td></tr>
+              <tr><td>03/09</td><td class="r">35,6</td><td class="r">11,1</td></tr>
+            </tbody>
+          </table>
+          <div style="margin-top:14px;display:flex;gap:12px;align-items:center;flex-wrap:wrap">
+            <button class="btn" id="btnRefuel">Registrar abastecimento</button>
+            <span class="note" id="refuelHint"></span>
+          </div>
+        </div>
+      </div>
+      <p class="note" style="margin-top:12px">Valores de exemplo. O "km/l real" vem do tanque cheio a tanque cheio e calibra a estimativa do app.</p>
+    </section>
+
+    <!-- MANUTENÇÃO -->
+    <section id="manut">
+      <h2>Manutenção</h2>
+      <div class="row">
+        <div class="card" style="flex:1.3">
+          <div class="label">Troca de óleo</div>
+          <div style="margin-top:10px;display:flex;align-items:baseline;gap:10px;flex-wrap:wrap">
+            <span class="big" style="font-size:72px" id="oilKm">3.700</span><span class="unit">km restantes</span>
+            <span class="pill ok" id="oilPill">Em dia</span>
+          </div>
+          <div class="bar ok" id="oilBar" style="height:20px;margin-top:18px"><i style="width:63%"></i></div>
+          <div class="row" style="margin-top:20px">
+            <div style="flex:1"><div class="label">Última troca</div><div class="mid" style="font-size:30px;margin-top:6px">8.000 km</div><div class="sub">20/03/2026</div></div>
+            <div style="flex:1"><div class="label">Próxima por data</div><div class="mid" style="font-size:30px;margin-top:6px" id="oilDays">147 dias</div><div class="sub">20/03/2027</div></div>
+            <div style="flex:1"><div class="label">Intervalo</div><div class="mid" style="font-size:30px;margin-top:6px">10.000 km</div><div class="sub">ou 12 meses</div></div>
+          </div>
+          <div style="margin-top:22px;display:flex;gap:12px;flex-wrap:wrap">
+            <button class="btn" id="btnOil">Registrei a troca</button>
+            <span class="note" id="oilHint" style="align-self:center"></span>
+          </div>
+        </div>
+        <div class="card" style="flex:1">
+          <div class="label" style="margin-bottom:8px">Outros itens</div>
+          <table>
+            <tbody>
+              <tr><td>Filtro de ar</td><td class="r"><span class="pill off">Definir</span></td></tr>
+              <tr><td>Filtro de combustível</td><td class="r"><span class="pill off">Definir</span></td></tr>
+              <tr><td>Velas</td><td class="r"><span class="pill off">Definir</span></td></tr>
+              <tr><td>Pastilhas de freio</td><td class="r"><span class="pill off">Definir</span></td></tr>
+              <tr><td>Correia dentada</td><td class="r"><span class="pill off">Definir</span></td></tr>
+            </tbody>
+          </table>
+          <p class="note" style="margin-top:12px">Valores de exemplo neste protótipo. Intervalos conforme o manual do carro. O app não lê o nível de óleo pelo OBD2; o controle é por km rodados e data.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- DIAGNÓSTICO -->
+    <section id="diag">
+      <h2>Diagnóstico</h2>
+      <div class="row">
+        <div class="card" style="flex:1">
+          <div class="label" style="margin-bottom:8px">Falhas armazenadas</div>
+          <div id="dtcBox"><p class="note" style="font-size:19px;margin:18px 0">Toque em "Ler falhas" para consultar a central.</p></div>
+          <button class="btn" id="btnDtc">Ler falhas</button>
+          <p class="note" style="margin-top:12px">Somente leitura. O app não apaga falhas.</p>
+        </div>
+        <div class="card" style="flex:1">
+          <div class="label" style="margin-bottom:8px">Dados que o carro entrega (exemplo)</div>
+          <table>
+            <tbody id="pidTable"></tbody>
+          </table>
+        </div>
+      </div>
+      <div class="card" style="margin-top:18px">
+        <div class="label">Conexão (exemplo, nada foi testado no carro ainda)</div>
+        <div class="log" style="margin-top:8px" id="log"></div>
+      </div>
+    </section>
+
+    <!-- AJUSTES -->
+    <section id="ajustes">
+      <h2>Ajustes</h2>
+      <div class="card">
+        <div class="field">
+          <div>Combustível no tanque<div class="note" style="font-size:15px">Muda o cálculo de consumo</div></div>
+          <div class="seg" id="fuelSeg">
+            <button class="on" data-f="0.30">Gasolina E30</button>
+            <button data-f="0.32">Gasolina E32</button>
+            <button data-f="0.95">Etanol</button>
+          </div>
+        </div>
+        <div class="field">
+          <div>Fator de calibração<div class="note" style="font-size:15px">Ajustado pelos abastecimentos</div></div>
+          <div class="stepper"><button data-cal="-0.01" aria-label="Diminuir">−</button><span id="cal">1,00</span><button data-cal="0.01" aria-label="Aumentar">+</button></div>
+        </div>
+        <div class="field">
+          <div>Eficiência volumétrica<div class="note" style="font-size:15px">Usada só quando o carro não informa o fluxo de ar</div></div>
+          <div class="stepper"><button data-ve="-0.01" aria-label="Diminuir">−</button><span id="ve">0,80</span><button data-ve="0.01" aria-label="Aumentar">+</button></div>
+        </div>
+        <div class="field">
+          <div>Adaptador Bluetooth</div>
+          <div class="seg"><button class="on" style="cursor:default">OBDII</button><button>Trocar</button></div>
+        </div>
+        <div class="field">
+          <div>Fonte de dados</div>
+          <div class="seg" id="srcSeg"><button class="on" data-s="sim">Simulada</button><button data-s="bt">Adaptador</button></div>
+        </div>
+      </div>
+      <p class="note" style="margin-top:12px">Protótipo: os botões mudam o cálculo na hora, mas nada é salvo.</p>
+    </section>
+
+    <div class="scrim" id="scrimRefuel"><div class="dialog">
+      <h3>Registrar abastecimento</h3>
+      <div class="field"><span>Litros</span><div class="stepper"><button data-l="-1">−</button><span id="refL">35,0</span><button data-l="1">+</button></div></div>
+      <div class="field"><span>Preço por litro</span><div class="stepper"><button data-p="-0.05">−</button><span id="refP">R$ 6,21</span><button data-p="0.05">+</button></div></div>
+      <div class="field"><span>Tanque cheio?</span><div class="seg" id="fullSeg"><button class="on" data-v="1">Sim</button><button data-v="0">Não</button></div></div>
+      <div class="actions"><button class="btn ghost" data-close>Cancelar</button><button class="btn" data-close>Salvar</button></div>
+    </div></div>
+
+    <div class="scrim" id="scrimOil"><div class="dialog">
+      <h3>Registrar troca de óleo</h3>
+      <p class="note" style="font-size:18px">O contador reinicia a partir da quilometragem de hoje e o prazo de 12 meses volta a contar.</p>
+      <div class="actions"><button class="btn ghost" data-close>Cancelar</button><button class="btn" id="oilConfirm">Confirmar troca</button></div>
+    </div></div>
+  </main>
+</div>
+</div>
+
+<script>
+// ---------- ajuste de escala (o palco é 1280x800) ----------
+const stage = document.getElementById('stage');
+function fit() {
+  const s = Math.min(window.innerWidth / 1280, window.innerHeight / 800);
+  stage.style.transform = `scale(${s})`;
+}
+window.addEventListener('resize', fit); fit();
+
+// ---------- navegação ----------
+const $ = (id) => document.getElementById(id);
+document.querySelectorAll('.rail button').forEach((b) => b.addEventListener('click', () => {
+  document.querySelectorAll('.rail button').forEach((x) => x.classList.toggle('on', x === b));
+  document.querySelectorAll('main > section').forEach((s) => s.classList.toggle('on', s.id === b.dataset.tab));
+}));
+
+// ---------- fórmulas (mesmas de tools/verify-formulas.js e domain/FuelCalc.kt) ----------
+const AFR_G = 14.7, AFR_E = 9.0, DENS_G = 745, DENS_E = 789;
+const st = { eth: 0.30, cal: 1.00, ve: 0.80, price: 6.21 };
+const blend = (f) => ({ afr: AFR_G * (1 - f) + AFR_E * f, dens: DENS_G * (1 - f) + DENS_E * f });
+const lphFromMaf = (maf) => { const b = blend(st.eth); return maf * 3600 / (b.afr * b.dens) * st.cal; };
+const kmPerL = (v, lph) => (lph > 0.05 && v >= 3) ? Math.min(v / lph, 50) : null;
+const fmt = (n, d = 1) => n.toLocaleString('pt-BR', { minimumFractionDigits: d, maximumFractionDigits: d });
+
+// ---------- simulação de uma viagem (ciclo de 90 s) ----------
+const CYCLE = [ // [segundos, velocidade alvo]
+  [8, 0], [14, 45], [10, 60], [14, 62], [10, 38], [8, 0], [14, 28], [12, 50]
+];
+let t = 0, speed = 0, prevSpeed = 0, ect = 66, fuelLevel = 74;
+const trip = { km: 0, liters: 0, sec: 0 };
+const hist = [];
+
+function targetSpeed(sec) {
+  const total = CYCLE.reduce((a, p) => a + p[0], 0);
+  let x = sec % total, acc = 0;
+  for (const [d, v] of CYCLE) { if (x < acc + d) return v; acc += d; }
+  return 0;
+}
+
+const DT = 0.5;
+function tick() {
+  t += DT;
+  prevSpeed = speed;
+  const tgt = targetSpeed(t);
+  speed += Math.max(-9, Math.min(7, tgt - speed)) * 0.45 * DT * 2;
+  if (speed < 0.6) speed = 0;
+  const accel = (speed - prevSpeed) / DT; // km/h por s
+  const rpm = speed < 1 ? 780 + Math.random() * 30 : Math.min(5600, 1100 + speed * 24 + Math.max(0, accel) * 90 + Math.random() * 25);
+  const maf = 2.4 + speed * 0.19 + Math.max(0, accel) * 1.5 + Math.random() * 0.15; // g/s
+  const lph = lphFromMaf(maf);
+  const inst = kmPerL(speed, lph);
+  ect = Math.min(91, ect + 0.02 * DT * 10 * (91 - ect) / 25);
+  fuelLevel = Math.max(5, fuelLevel - lph * DT / 3600 / 54 * 100);
+  trip.km += speed * DT / 3600; trip.liters += lph * DT / 3600; trip.sec += DT;
+  hist.push(inst ?? (hist.length ? hist[hist.length - 1] : 0));
+  if (hist.length > 120) hist.shift();
+  render({ speed, rpm, lph, inst });
+}
+
+function render({ speed, rpm, lph, inst }) {
+  $('speed').textContent = Math.round(speed);
+  $('rpm').textContent = Math.round(rpm);
+  $('rpmArc').setAttribute('stroke-dasharray', `${502.65 * Math.min(1, rpm / 6000)} 754`);
+  $('kml').textContent = inst == null ? '--' : fmt(inst);
+  $('kml').classList.toggle('low', inst != null && inst < 7);
+  $('lph').textContent = `${fmt(lph, 2)} L/h`;
+  const avg = trip.liters > 0.01 && trip.km > 0.1 ? trip.km / trip.liters : null;
+  $('avg').textContent = avg ? fmt(avg) : '--';
+  $('dist').textContent = fmt(trip.km, 1);
+  $('ect').textContent = Math.round(ect);
+  const eb = $('ectBar'); eb.firstElementChild.style.width = Math.min(100, (ect - 40) / 70 * 100) + '%';
+  eb.className = 'bar ' + (ect > 105 ? 'bad' : ect < 70 ? 'warn' : 'ok');
+  $('vbat').textContent = fmt(14.1 + Math.sin(t / 7) * 0.1, 1);
+  $('fuel').textContent = Math.round(fuelLevel);
+  const fb = $('fuelBar'); fb.firstElementChild.style.width = fuelLevel + '%';
+  fb.className = 'bar ' + (fuelLevel < 12 ? 'bad' : fuelLevel < 25 ? 'warn' : 'ok');
+  $('iat').textContent = Math.round(31 + Math.sin(t / 30) * 1.5);
+  // consumo
+  $('c-avg').textContent = avg ? fmt(avg) : '--';
+  $('c-l100').textContent = avg ? `${fmt(100 / avg)} L/100 km` : '-- L/100 km';
+  $('c-liters').textContent = fmt(trip.liters, 2);
+  $('c-cost').textContent = `R$ ${fmt(trip.liters * st.price, 2)} na viagem`;
+  $('c-vavg').textContent = trip.sec > 0 ? Math.round(trip.km / trip.sec * 3600) : 0;
+  $('c-time').textContent = `${Math.floor(trip.sec / 60)} min`;
+  drawSpark();
+  // bloqueios com o carro em movimento
+  const moving = speed > 0.5;
+  $('btnRefuel').disabled = moving; $('btnOil').disabled = moving;
+  $('refuelHint').textContent = moving ? 'Pare o carro para registrar.' : '';
+  $('oilHint').textContent = moving ? 'Pare o carro para registrar.' : '';
+}
+
+function sparkInto(el, W, H, pad, labels) {
+  if (!hist.length) return;
+  const max = 30, bottom = labels ? 22 : 8, top = labels ? 14 : 8;
+  const yOf = (v) => H - bottom - (Math.min(v, max) / max) * (H - bottom - top);
+  const pts = hist.map((v, i) => [pad + (i / 119) * (W - pad - 6), yOf(v)]);
+  const line = pts.map((p, i) => `${i ? 'L' : 'M'}${p[0].toFixed(1)} ${p[1].toFixed(1)}`).join(' ');
+  const grid = [0, 10, 20, 30].map((g) => {
+    const y = yOf(g);
+    return `<line x1="${pad}" x2="${W - 6}" y1="${y}" y2="${y}" stroke="#26323f"/>` +
+      (labels ? `<text x="${pad - 6}" y="${y + 4}" text-anchor="end">${g}</text>` : '');
+  }).join('');
+  el.innerHTML = grid + `<path d="${line}" fill="none" stroke="#4ade80" stroke-width="3" stroke-linejoin="round"/>`;
+}
+function drawSpark() {
+  sparkInto($('spark'), 560, 190, 26, true);
+  sparkInto($('spark2'), 320, 130, 6, false);
+}
+
+// ---------- manutenção ----------
+let oilKm = 3700;
+$('oilConfirm').addEventListener('click', () => {
+  oilKm = 10000; paintOil(); $('scrimOil').classList.remove('on');
+});
+function paintOil() {
+  $('oilKm').textContent = oilKm.toLocaleString('pt-BR');
+  const pct = Math.max(0, Math.min(100, oilKm / 100));
+  $('oilBar').firstElementChild.style.width = pct + '%';
+  $('oilBar').className = 'bar ' + (oilKm <= 0 ? 'bad' : oilKm <= 1000 ? 'warn' : 'ok');
+  const p = $('oilPill');
+  p.className = 'pill ' + (oilKm <= 0 ? 'bad' : oilKm <= 1000 ? 'warn' : 'ok');
+  p.textContent = oilKm <= 0 ? 'Vencida' : oilKm <= 1000 ? 'Perto de vencer' : 'Em dia';
+}
+paintOil();
+$('btnOil').addEventListener('click', () => $('scrimOil').classList.add('on'));
+$('btnRefuel').addEventListener('click', () => $('scrimRefuel').classList.add('on'));
+document.querySelectorAll('[data-close]').forEach((b) => b.addEventListener('click', () => {
+  $('scrimRefuel').classList.remove('on'); $('scrimOil').classList.remove('on');
+}));
+
+// ---------- abastecimento (diálogo) ----------
+let refL = 35, refP = 6.21;
+function paintRef() { $('refL').textContent = fmt(refL, 1); $('refP').textContent = 'R$ ' + fmt(refP, 2); }
+document.querySelectorAll('[data-l]').forEach((b) => b.addEventListener('click', () => { refL = Math.max(1, refL + +b.dataset.l); paintRef(); }));
+document.querySelectorAll('[data-p]').forEach((b) => b.addEventListener('click', () => { refP = Math.max(1, refP + +b.dataset.p); paintRef(); }));
+function seg(id, cb) {
+  const box = $(id);
+  box.querySelectorAll('button').forEach((b) => b.addEventListener('click', () => {
+    box.querySelectorAll('button').forEach((x) => x.classList.toggle('on', x === b)); cb && cb(b);
+  }));
+}
+seg('fullSeg');
+
+// ---------- ajustes ----------
+seg('fuelSeg', (b) => { st.eth = +b.dataset.f; $('chipFuel').textContent = b.textContent; });
+seg('srcSeg', (b) => {
+  const live = b.dataset.s === 'bt';
+  $('chipText').textContent = live ? 'Adaptador (não conectado)' : 'Dados simulados';
+});
+document.querySelectorAll('[data-cal]').forEach((b) => b.addEventListener('click', () => {
+  st.cal = Math.max(0.5, Math.min(1.5, +(st.cal + +b.dataset.cal).toFixed(2))); $('cal').textContent = fmt(st.cal, 2);
+}));
+document.querySelectorAll('[data-ve]').forEach((b) => b.addEventListener('click', () => {
+  st.ve = Math.max(0.5, Math.min(1.0, +(st.ve + +b.dataset.ve).toFixed(2))); $('ve').textContent = fmt(st.ve, 2);
+}));
+
+// ---------- diagnóstico ----------
+const PIDS = [
+  ['Rotação', 1], ['Velocidade', 1], ['Temp. do motor', 1], ['Pressão do coletor (MAP)', 1], ['Fluxo de ar (MAF)', 0],
+  ['Nível de combustível', 1], ['Tensão da bateria', 1], ['Taxa de combustível (L/h)', 0], ['Temp. do óleo', 0],
+];
+$('pidTable').innerHTML = PIDS.map(([n, s]) =>
+  `<tr><td>${n}</td><td class="r"><span class="pill ${s ? 'ok' : 'off'}">${s ? 'Responde' : 'Sem dado'}</span></td></tr>`).join('');
+$('log').innerHTML = [
+  '<b>OK</b> Adaptador OBDII pareado',
+  '<b>OK</b> ATZ → ELM327 v1.5',
+  '<b>OK</b> Protocolo: ISO 15765-4 CAN 11/500',
+  '<b>OK</b> PIDs suportados: 0100, 0120, 0140',
+  'Método de consumo: MAP + rotação (sem MAF)',
+].join('<br>');
+$('btnDtc').addEventListener('click', () => {
+  $('dtcBox').innerHTML = '<p style="font-size:20px;margin:14px 0"><span class="pill ok">OK</span> Nenhuma falha armazenada.</p>';
+});
+
+// relógio
+function clock() { $('clock').textContent = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }); }
+clock(); setInterval(clock, 15000);
+
+// aquece o histórico para o gráfico já nascer com dados
+for (let i = 0; i < 60; i++) tick();
+setInterval(tick, DT * 1000);
+</script>
+</body>
+</html>

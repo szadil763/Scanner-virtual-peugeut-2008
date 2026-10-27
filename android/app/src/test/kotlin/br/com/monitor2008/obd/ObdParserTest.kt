@@ -1,0 +1,47 @@
+package br.com.monitor2008.obd
+
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
+import org.junit.Test
+
+class ObdParserTest {
+
+    @Test fun rpm() = assertEquals(1726.0, ObdParser.parse(Pid.RPM, "41 0C 1A F8 \r\r>")!!, 1e-9)
+
+    @Test fun speed() = assertEquals(50.0, ObdParser.parse(Pid.SPEED, "41 0D 32")!!, 1e-9)
+
+    @Test fun coolantIgnoresSearchingLine() =
+        assertEquals(83.0, ObdParser.parse(Pid.COOLANT_TEMP, "SEARCHING...\r41 05 7B\r\r>")!!, 1e-9)
+
+    @Test fun maf() = assertEquals(5.0, ObdParser.parse(Pid.MAF, "41 10 01 F4")!!, 1e-9)
+
+    @Test fun battery() = assertEquals(14.5, ObdParser.parse(Pid.MODULE_VOLTAGE, "41 42 38 A4")!!, 1e-9)
+
+    @Test fun fuelLevel() = assertEquals(50.196078, ObdParser.parse(Pid.FUEL_LEVEL, "41 2F 80")!!, 1e-5)
+
+    @Test fun fuelRate() = assertEquals(10.0, ObdParser.parse(Pid.FUEL_RATE, "41 5E 00 C8")!!, 1e-9)
+
+    @Test fun responseWithoutSpaces() = assertEquals(1726.0, ObdParser.parse(Pid.RPM, "410C1AF8")!!, 1e-9)
+
+    @Test fun noDataAndQuestionMarkGiveNull() {
+        assertNull(ObdParser.parse(Pid.RPM, "NO DATA\r\r>"))
+        assertNull(ObdParser.parse(Pid.RPM, "?\r\r>"))
+    }
+
+    @Test fun incompleteResponseGivesNull() = assertNull(ObdParser.parse(Pid.RPM, "41 0C 1A"))
+
+    @Test fun supportedPids() {
+        val s = ObdParser.supportedFrom(0x00, "41 00 BE 3F A8 13")
+        assertTrue(s.containsAll(listOf(0x01, 0x03, 0x04, 0x05, 0x06, 0x07, 0x0B, 0x0C, 0x0D, 0x0F, 0x10, 0x11)))
+        assertTrue(0x20 in s) // há outra faixa disponível
+        assertTrue(0x02 !in s)
+    }
+
+    @Test fun dtcsInCanFormat() =
+        assertEquals(listOf("P0133", "P0200"), ObdParser.dtcs("43 02 01 33 02 00 00 00"))
+
+    @Test fun noDtcs() = assertEquals(emptyList<String>(), ObdParser.dtcs("43 00 00 00 00 00 00 00"))
+
+    @Test fun networkDtcLetter() = assertEquals(listOf("U0100"), ObdParser.dtcs("43 01 C1 00 00 00 00 00"))
+}
