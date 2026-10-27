@@ -1,5 +1,11 @@
 package br.com.monitor2008.ui
 
+import android.Manifest
+import android.content.Intent
+import android.os.Build
+import android.provider.Settings
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -44,6 +50,7 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -51,6 +58,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import br.com.monitor2008.data.ConnState
 import br.com.monitor2008.domain.FlowMethod
@@ -347,9 +355,43 @@ private fun AjustesScreen(ui: UiState, vm: MonitorViewModel) {
             Spacer(Modifier.width(12.dp))
             Text(if (ui.simulated) "Dados simulados (ligue para usar o adaptador)" else "Usando o adaptador Bluetooth", fontSize = 18.sp)
         }
-        var name by remember(ui.adapterName) { mutableStateOf(ui.adapterName) }
-        OutlinedTextField(name, { name = it; vm.setAdapterName(it) }, label = { Text("Nome do adaptador (vazio = detectar OBD/ELM/V-LINK)") },
-            singleLine = true, enabled = !ui.moving, modifier = Modifier.fillMaxWidth())
-        Text("Pareie o adaptador antes, nas configurações de Bluetooth do aparelho.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+        if (!ui.simulated && ui.conn.message.isNotBlank()) {
+            Text(ui.conn.message, color = if (ui.conn.state == ConnState.ERROR) Warn else MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 16.sp)
+        }
+        AdapterPicker(ui, vm)
+    }
+}
+
+/** Lista os aparelhos pareados para tocar no adaptador, em vez de digitar o nome. */
+@Composable
+private fun AdapterPicker(ui: UiState, vm: MonitorViewModel) {
+    val context = LocalContext.current
+    val askPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { vm.refreshPaired() }
+    // Atualiza ao abrir a tela e ao voltar das configurações de Bluetooth.
+    LifecycleResumeEffect(Unit) {
+        vm.refreshPaired()
+        onPauseOrDispose { }
+    }
+
+    Text("Adaptador OBD2", fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
+    Text("Toque no adaptador na lista. Ele precisa estar pareado antes, no Bluetooth do aparelho (senha comum: 1234 ou 0000).",
+        color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 16.sp)
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        OutlinedButton({ vm.refreshPaired() }, Modifier.height(56.dp)) { Text("Atualizar lista", fontSize = 18.sp) }
+        OutlinedButton({ context.startActivity(Intent(Settings.ACTION_BLUETOOTH_SETTINGS)) }, Modifier.height(56.dp), enabled = !ui.moving) {
+            Text("Abrir Bluetooth do aparelho", fontSize = 18.sp)
+        }
+    }
+    if (ui.paired.problem.isNotBlank()) Text(ui.paired.problem, color = Warn, fontSize = 16.sp)
+    if (ui.paired.needsPermission && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+        Button({ askPermission.launch(Manifest.permission.BLUETOOTH_CONNECT) }, Modifier.height(56.dp)) {
+            Text("Permitir Bluetooth", fontSize = 18.sp)
+        }
+    }
+    FilterChip(selected = ui.adapterName.isBlank(), onClick = { vm.setAdapterName("") }, enabled = !ui.moving,
+        label = { Text("Detectar sozinho (nome com OBD, ELM ou V-LINK)", fontSize = 18.sp) }, modifier = Modifier.height(56.dp).fillMaxWidth())
+    ui.paired.names.forEach { n ->
+        FilterChip(selected = n.equals(ui.adapterName, ignoreCase = true), onClick = { vm.setAdapterName(n) }, enabled = !ui.moving,
+            label = { Text(n, fontSize = 18.sp) }, modifier = Modifier.height(56.dp).fillMaxWidth())
     }
 }

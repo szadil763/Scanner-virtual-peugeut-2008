@@ -181,7 +181,7 @@ class BluetoothObdSource(
         val device = bonded.firstOrNull { matches(it) }
         if (device == null) {
             val names = bonded.joinToString(", ") { it.name ?: it.address }.ifBlank { "nenhum" }
-            return fail("Adaptador não encontrado entre os pareados ($names). Pareie o ELM327 nas configurações de Bluetooth ou digite o nome dele em Ajustes.")
+            return fail("Adaptador não encontrado entre os pareados ($names). Pareie o ELM327 nas configurações de Bluetooth e escolha-o na lista em Ajustes.")
         }
         log("Dispositivo: ${device.name} (${device.address})")
 

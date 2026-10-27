@@ -1,6 +1,12 @@
 package br.com.monitor2008.ui
 
+import android.Manifest
+import android.annotation.SuppressLint
 import android.app.Application
+import android.bluetooth.BluetoothManager
+import android.content.pm.PackageManager
+import android.os.Build
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import br.com.monitor2008.data.BluetoothObdSource
@@ -48,6 +54,7 @@ data class UiState(
     val refuels: List<Refuel> = emptyList(),
     val simulated: Boolean = true,
     val adapterName: String = "",
+    val paired: PairedList = PairedList(),
     val conn: ConnectionInfo = ConnectionInfo(),
     val dtcs: List<String>? = null,
     val history: List<Double> = emptyList(),
@@ -55,6 +62,14 @@ data class UiState(
     /** Com o carro andando, o app não aceita digitação nem registros. */
     val moving: Boolean get() = (sample?.speedKmh ?: 0.0) > 0.5
 }
+
+/** Aparelhos pareados no Bluetooth, para escolher o adaptador em Ajustes. */
+data class PairedList(
+    val names: List<String> = emptyList(),
+    /** Motivo de a lista estar vazia (Bluetooth desligado, sem permissão...), ou vazio. */
+    val problem: String = "",
+    val needsPermission: Boolean = false,
+)
 
 class MonitorViewModel(app: Application) : AndroidViewModel(app) {
 
@@ -77,6 +92,7 @@ class MonitorViewModel(app: Application) : AndroidViewModel(app) {
     private var conn = ConnectionInfo()
     private var dtcs: List<String>? = null
     private val history = ArrayDeque<Double>()
+    private var paired = PairedList()
     private var refuelList: List<Refuel> = store.refuels().asReversed() // mais recente primeiro
 
     private val _ui = MutableStateFlow(snapshot())
@@ -181,7 +197,35 @@ class MonitorViewModel(app: Application) : AndroidViewModel(app) {
     fun setEthanolFraction(f: Double) { store.ethanolFraction = f; publish() }
     fun setCalibration(v: Double) { store.calibration = v.coerceIn(0.5, 1.5); publish() }
     fun setVolumetricEfficiency(v: Double) { store.volumetricEfficiency = v.coerceIn(0.5, 1.0); publish() }
-    fun setAdapterName(name: String) { store.adapterName = name; publish() }
+    fun setAdapterName(name: String) {
+        if (store.adapterName == name) return
+        store.adapterName = name
+        if (store.useSimulated) publish() else start() // reconecta já com o adaptador escolhido
+    }
+
+    @SuppressLint("MissingPermission") // a permissão é conferida logo abaixo
+    /** Lê os aparelhos pareados. O pareamento em si é feito nas configurações de Bluetooth do aparelho. */
+    fun refreshPaired() {
+        val ctx = getApplication<Application>()
+        paired = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S &&
+            ContextCompat.checkSelfPermission(ctx, Manifest.permission.BLUETOOTH_CONNECT) != PackageManager.PERMISSION_GRANTED
+        ) {
+            PairedList(problem = "O app ainda não tem permissão para usar o Bluetooth.", needsPermission = true)
+        } else {
+            val adapter = ctx.getSystemService(BluetoothManager::class.java)?.adapter
+            when {
+                adapter == null -> PairedList(problem = "Este aparelho não tem Bluetooth.")
+                !adapter.isEnabled -> PairedList(problem = "Bluetooth desligado. Ligue o Bluetooth e toque em Atualizar.")
+                else -> try {
+                    val names = adapter.bondedDevices.mapNotNull { it.name ?: it.address }.distinct().sorted()
+                    PairedList(names, if (names.isEmpty()) "Nenhum aparelho pareado ainda." else "")
+                } catch (e: SecurityException) {
+                    PairedList(problem = "O app ainda não tem permissão para usar o Bluetooth.", needsPermission = true)
+                }
+            }
+        }
+        publish()
+    }
 
     fun setSimulated(simulated: Boolean) {
         if (store.useSimulated == simulated) return
@@ -228,6 +272,7 @@ class MonitorViewModel(app: Application) : AndroidViewModel(app) {
             refuels = refuelList,
             simulated = store.useSimulated,
             adapterName = store.adapterName,
+            paired = paired,
             conn = conn,
             dtcs = dtcs,
             history = history.toList(),
