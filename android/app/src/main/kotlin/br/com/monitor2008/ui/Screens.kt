@@ -1,8 +1,6 @@
 package br.com.monitor2008.ui
 
-import android.Manifest
 import android.content.Intent
-import android.os.Build
 import android.provider.Settings
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -60,6 +58,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import br.com.monitor2008.data.BtPermissions
 import br.com.monitor2008.data.ConnState
 import br.com.monitor2008.domain.FlowMethod
 import br.com.monitor2008.domain.MaintState
@@ -366,7 +365,7 @@ private fun AjustesScreen(ui: UiState, vm: MonitorViewModel) {
 @Composable
 private fun AdapterPicker(ui: UiState, vm: MonitorViewModel) {
     val context = LocalContext.current
-    val askPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { vm.refreshPaired() }
+    val askPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { vm.refreshPaired() }
     // Atualiza ao abrir a tela e ao voltar das configurações de Bluetooth.
     LifecycleResumeEffect(Unit) {
         vm.refreshPaired()
@@ -374,7 +373,8 @@ private fun AdapterPicker(ui: UiState, vm: MonitorViewModel) {
     }
 
     Text("Adaptador OBD2", fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
-    Text("Toque no adaptador na lista. Ele precisa estar pareado antes, no Bluetooth do aparelho (senha comum: 1234 ou 0000).",
+    Text("Adaptador BLE (como o OBDBLE) não precisa parear nem de PIN: deixe em Detectar sozinho. " +
+        "Adaptador clássico precisa estar pareado antes no Bluetooth do aparelho; aí ele aparece aqui para tocar.",
         color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 16.sp)
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         OutlinedButton({ vm.refreshPaired() }, Modifier.height(56.dp)) { Text("Atualizar lista", fontSize = 18.sp) }
@@ -383,8 +383,8 @@ private fun AdapterPicker(ui: UiState, vm: MonitorViewModel) {
         }
     }
     if (ui.paired.problem.isNotBlank()) Text(ui.paired.problem, color = Warn, fontSize = 16.sp)
-    if (ui.paired.needsPermission && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-        Button({ askPermission.launch(Manifest.permission.BLUETOOTH_CONNECT) }, Modifier.height(56.dp)) {
+    if (ui.paired.needsPermission) {
+        Button({ askPermission.launch(BtPermissions.needed) }, Modifier.height(56.dp)) {
             Text("Permitir Bluetooth", fontSize = 18.sp)
         }
     }

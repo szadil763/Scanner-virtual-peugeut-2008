@@ -1,15 +1,12 @@
 package br.com.monitor2008.ui
 
-import android.Manifest
 import android.annotation.SuppressLint
 import android.app.Application
 import android.bluetooth.BluetoothManager
-import android.content.pm.PackageManager
-import android.os.Build
-import androidx.core.content.ContextCompat
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import br.com.monitor2008.data.BluetoothObdSource
+import br.com.monitor2008.data.BtPermissions
 import br.com.monitor2008.data.ConnectionInfo
 import br.com.monitor2008.data.ObdSource
 import br.com.monitor2008.data.Refuel
@@ -207,9 +204,7 @@ class MonitorViewModel(app: Application) : AndroidViewModel(app) {
     /** Lê os aparelhos pareados. O pareamento em si é feito nas configurações de Bluetooth do aparelho. */
     fun refreshPaired() {
         val ctx = getApplication<Application>()
-        paired = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S &&
-            ContextCompat.checkSelfPermission(ctx, Manifest.permission.BLUETOOTH_CONNECT) != PackageManager.PERMISSION_GRANTED
-        ) {
+        paired = if (BtPermissions.missing(ctx).isNotEmpty()) {
             PairedList(problem = "O app ainda não tem permissão para usar o Bluetooth.", needsPermission = true)
         } else {
             val adapter = ctx.getSystemService(BluetoothManager::class.java)?.adapter

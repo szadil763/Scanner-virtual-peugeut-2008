@@ -1,7 +1,6 @@
 package br.com.monitor2008.data
 
 import android.annotation.SuppressLint
-import android.bluetooth.BluetoothDevice
 import android.bluetooth.BluetoothManager
 import android.bluetooth.BluetoothSocket
 import android.content.Context
@@ -25,15 +24,15 @@ import java.io.IOException
 import java.util.UUID
 
 /**
- * Adaptador ELM327 por Bluetooth clássico (RFCOMM/SPP). O adaptador precisa estar pareado
- * antes, nas configurações de Bluetooth do aparelho (senha comum: 1234, 8888 ou 0000).
+ * Adaptador ELM327 por Bluetooth. Tenta primeiro o clássico (RFCOMM/SPP), se o adaptador estiver
+ * pareado nas configurações do aparelho; senão procura por BLE ([BleLink]), que não usa PIN.
  *
  * Reconecta sozinho se a conexão cair e pausa a leitura com o carro desligado
  * (consultar com a ignição desligada mantém os módulos acordados e descarrega a bateria).
  *
  * NUNCA TESTADO NO CARRO. Primeira tarefa da fase 1: validar com o adaptador real.
  */
-@SuppressLint("MissingPermission") // BLUETOOTH_CONNECT é pedida na MainActivity
+@SuppressLint("MissingPermission") // BLUETOOTH_CONNECT e BLUETOOTH_SCAN são pedidas na MainActivity
 class BluetoothObdSource(
     private val context: Context,
     private val preferredName: String?,
@@ -45,6 +44,7 @@ class BluetoothObdSource(
     override val info: StateFlow<ConnectionInfo> = _info.asStateFlow()
 
     private var socket: BluetoothSocket? = null
+    private var bleLink: BleLink? = null
     private var client: Elm327Client? = null
     private val lock = Any() // o ELM327 atende um comando por vez
 
@@ -177,35 +177,53 @@ class BluetoothObdSource(
             ?: return fail("Este aparelho não tem Bluetooth")
         if (!adapter.isEnabled) return fail("Bluetooth desligado")
 
+        // 1) Bluetooth clássico, se o adaptador estiver pareado.
         val bonded = adapter.bondedDevices.toList()
-        val device = bonded.firstOrNull { matches(it) }
-        if (device == null) {
-            val names = bonded.joinToString(", ") { it.name ?: it.address }.ifBlank { "nenhum" }
-            return fail("Adaptador não encontrado entre os pareados ($names). Pareie o ELM327 nas configurações de Bluetooth e escolha-o na lista em Ajustes.")
-        }
-        log("Dispositivo: ${device.name} (${device.address})")
-
-        adapter.cancelDiscovery()
-        val s = try {
-            device.createRfcommSocketToServiceRecord(SPP_UUID).also { it.connect() }
-        } catch (e: IOException) {
-            log("Conexão padrão falhou (${e.message}); tentando o canal 1")
-            // Alguns clones só aceitam o canal 1 direto (truque conhecido).
-            try {
-                val m = device.javaClass.getMethod("createRfcommSocket", Int::class.javaPrimitiveType)
-                (m.invoke(device, 1) as BluetoothSocket).also { it.connect() }
-            } catch (e2: Exception) {
-                return fail("Não foi possível conectar: ${e2.message ?: e.message}")
+        val device = bonded.firstOrNull { matches(it.name) }
+        if (device != null) {
+            log("Dispositivo: ${device.name} (${device.address})")
+            adapter.cancelDiscovery()
+            val s = try {
+                device.createRfcommSocketToServiceRecord(SPP_UUID).also { it.connect() }
+            } catch (e: IOException) {
+                log("Conexão padrão falhou (${e.message}); tentando o canal 1")
+                // Alguns clones só aceitam o canal 1 direto (truque conhecido).
+                try {
+                    val m = device.javaClass.getMethod("createRfcommSocket", Int::class.javaPrimitiveType)
+                    (m.invoke(device, 1) as BluetoothSocket).also { it.connect() }
+                } catch (e2: Exception) {
+                    log("Clássico falhou: ${e2.message ?: e.message}; tentando BLE")
+                    null
+                }
+            }
+            if (s != null) {
+                socket = s
+                return Elm327Client(s.inputStream, s.outputStream, ::exchanged).also { client = it }
             }
         }
-        socket = s
-        return Elm327Client(s.inputStream, s.outputStream) { cmd, resp ->
-            if (logging) log("$cmd -> ${resp.replace('\r', ' ').replace('\n', ' ').trim()}")
-        }.also { client = it }
+
+        // 2) BLE (por exemplo "OBDBLE"): não precisa parear nem de PIN.
+        _info.value = ConnectionInfo(ConnState.CONNECTING, "Procurando o adaptador BLE...")
+        val ble = try {
+            BleLink.find(adapter, ::matches)?.let { BleLink.open(context, it, ::log) }
+        } catch (e: SecurityException) {
+            return fail("Sem permissão para procurar o adaptador. Toque em Permitir Bluetooth em Ajustes.")
+        }
+        if (ble == null) {
+            val names = bonded.joinToString(", ") { it.name ?: it.address }.ifBlank { "nenhum" }
+            return fail("Adaptador não encontrado (nem pareado, nem por BLE). Pareados: $names. Ligue a ignição e confira o adaptador.")
+        }
+        log("Dispositivo BLE: ${ble.deviceName}")
+        bleLink = ble
+        return Elm327Client(ble.input, ble.output, ::exchanged).also { client = it }
     }
 
-    private fun matches(d: BluetoothDevice): Boolean {
-        val n = d.name ?: return false
+    private fun exchanged(cmd: String, resp: String) {
+        if (logging) log("$cmd -> ${resp.replace('\r', ' ').replace('\n', ' ').trim()}")
+    }
+
+    private fun matches(n: String?): Boolean {
+        if (n == null) return false
         if (!preferredName.isNullOrBlank()) return n.equals(preferredName, ignoreCase = true)
         return KNOWN_NAMES.any { n.contains(it, ignoreCase = true) }
     }
@@ -213,6 +231,8 @@ class BluetoothObdSource(
     private fun close() {
         try { socket?.close() } catch (_: IOException) { }
         socket = null
+        bleLink?.close()
+        bleLink = null
         client = null
     }
 
