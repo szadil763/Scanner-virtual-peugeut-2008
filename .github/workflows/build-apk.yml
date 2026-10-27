@@ -1,10 +1,10 @@
 name: Gerar APK
 
-# A cada envio para a branch main, compila o app, roda os testes e publica o APK
+# A cada envio para a branch main (ou a branch de desenvolvimento), compila o app, roda os testes e publica o APK
 # na página de Releases (versão "latest"), para baixar direto no multimídia ou no celular.
 on:
   push:
-    branches: [main]
+    branches: [main, claude/new-session-dxg0wo]
   workflow_dispatch:
 
 permissions:
