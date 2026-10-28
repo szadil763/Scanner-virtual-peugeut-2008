@@ -28,6 +28,10 @@ Definições: **marcha lenta** = parado, motor ligado e quente (≥ 80 °C). **Q
 
 Carro flex: logo depois de trocar de combustível, a correção muda por uns 50 km enquanto a central se adapta.
 
+## Botão "Gerar dicas de manutenção"
+
+`domain/Advisor.kt` junta viagens, indicadores, falhas (com explicação dos códigos mais comuns), itens por km/data, padrão de uso (viagens curtas = uso severo; trânsito parado) e consumo do trajeto, e gera dicas priorizadas (alta, atenção, dica) com observações do 2008 1.6 EC5 flex automático: bobinas individuais, carcaça plástica da válvula termostática, respiro do cárter, coxins, fluido do câmbio automático de 4 marchas (família AL4) e correia dentada com tensor e bomba d'água. Regras fixas, sem internet; intervalos exatos sempre com "confirme no manual".
+
 ## Limitações
 
 - A sonda é lida a ~2–3 vezes por segundo pelo BLE, então os "cruzamentos por minuto" são aproximados; o critério de saúde usa a faixa de oscilação.

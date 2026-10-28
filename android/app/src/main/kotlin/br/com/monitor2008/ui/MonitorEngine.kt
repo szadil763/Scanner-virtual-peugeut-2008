@@ -13,6 +13,8 @@ import br.com.monitor2008.data.Refuel
 import br.com.monitor2008.data.Sample
 import br.com.monitor2008.data.SimulatedSource
 import br.com.monitor2008.data.Store
+import br.com.monitor2008.domain.Advisor
+import br.com.monitor2008.domain.AdvisorInput
 import br.com.monitor2008.domain.EngineConfig
 import br.com.monitor2008.domain.FlowMethod
 import br.com.monitor2008.domain.FuelBlend
@@ -27,6 +29,7 @@ import br.com.monitor2008.domain.Maintenance
 import br.com.monitor2008.domain.OilPlan
 import br.com.monitor2008.domain.OilStatus
 import br.com.monitor2008.domain.RefuelState
+import br.com.monitor2008.domain.Tip
 import br.com.monitor2008.domain.TripAccumulator
 import br.com.monitor2008.domain.TripHealth
 import kotlinx.coroutines.CoroutineScope
@@ -242,6 +245,24 @@ class MonitorEngine private constructor(private val app: Application) {
             pendingDtcs = src.readPendingDtcs()
             publish()
         }
+    }
+
+    /** Dicas de manutenção preventiva com tudo que já foi coletado (botão da aba Saúde). */
+    fun preventiveTips(): List<Tip> {
+        val u = _ui.value
+        return Advisor.tips(
+            AdvisorInput(
+                trips = trips,
+                health = u.health,
+                maint = u.maint.map { it.item to it.status },
+                tripKmPerL = realTrip.avgKmPerL,
+                tripKm = realTrip.distanceKm,
+                ethanolFraction = store.ethanolFraction,
+                calibrated = refuelList.any { it.realKmPerL != null },
+                storedDtcs = dtcs ?: trips.lastOrNull()?.storedDtcs.orEmpty(),
+                pendingDtcs = pendingDtcs ?: trips.lastOrNull()?.pendingDtcs.orEmpty(),
+            ),
+        )
     }
 
     fun registerMaintDone(id: String) {

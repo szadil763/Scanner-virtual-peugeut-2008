@@ -76,6 +76,8 @@ import br.com.monitor2008.domain.FlowMethod
 import br.com.monitor2008.domain.HealthItem
 import br.com.monitor2008.domain.HealthStatus
 import br.com.monitor2008.domain.RefLine
+import br.com.monitor2008.domain.Tip
+import br.com.monitor2008.domain.TipLevel
 import br.com.monitor2008.domain.MaintState
 import br.com.monitor2008.obd.Pid
 import kotlinx.coroutines.delay
@@ -126,7 +128,7 @@ fun MonitorApp(vm: MonitorEngine) {
                     when (tab) {
                         Tab.PAINEL -> if (compact) PainelCompact(ui) else PainelScreen(ui)
                         Tab.CONSUMO -> ConsumoScreen(ui, vm)
-                        Tab.SAUDE -> SaudeScreen(ui, compact)
+                        Tab.SAUDE -> SaudeScreen(ui, vm, compact)
                         Tab.MANUTENCAO -> ManutencaoScreen(ui, vm)
                         Tab.DIAGNOSTICO -> DiagnosticoScreen(ui, vm)
                         Tab.AJUSTES -> AjustesScreen(ui, vm)
@@ -499,7 +501,8 @@ private fun statusLabel(st: HealthStatus) = when (st) {
 }
 
 @Composable
-private fun SaudeScreen(ui: UiState, compact: Boolean) {
+private fun SaudeScreen(ui: UiState, vm: MonitorEngine, compact: Boolean) {
+    var tips by remember { mutableStateOf<List<Tip>?>(null) }
     // Alertas primeiro, depois atenção; "aprendendo" por último.
     val order = listOf(HealthStatus.ALERTA, HealthStatus.ATENCAO, HealthStatus.OK, HealthStatus.APRENDENDO)
     val items = ui.health.sortedBy { order.indexOf(it.status) }
@@ -524,12 +527,37 @@ private fun SaudeScreen(ui: UiState, compact: Boolean) {
         if (ui.simulated) {
             Text("Dados simulados: as viagens só são gravadas com o adaptador conectado.", color = Warn, fontSize = 15.sp)
         }
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            Button({ tips = vm.preventiveTips() }, Modifier.height(60.dp)) { Text("Gerar dicas de manutenção", fontSize = 18.sp) }
+            if (tips != null) OutlinedButton({ tips = null }, Modifier.height(60.dp)) { Text("Fechar dicas", fontSize = 18.sp) }
+        }
+        tips?.let { list ->
+            Text("Dicas para o 2008 1.6 flex automático, com base em ${ui.tripsRecorded} viagem(ns) e nos dados atuais. " +
+                "Confirme intervalos e peças no manual.", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 15.sp)
+            list.forEach { TipCard(it) }
+        }
         val perRow = if (compact) 1 else 2
         items.chunked(perRow).forEach { row ->
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 row.forEach { HealthCard(it, Modifier.weight(1f)) }
                 repeat(perRow - row.size) { Spacer(Modifier.weight(1f)) }
             }
+        }
+    }
+}
+
+@Composable
+private fun TipCard(tip: Tip) {
+    val (label, color) = when (tip.level) {
+        TipLevel.ALTA -> "PRIORIDADE ALTA" to Bad
+        TipLevel.MEDIA -> "ATENÇÃO" to Warn
+        TipLevel.BAIXA -> "DICA" to Color(0xFF94A3B8)
+    }
+    Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
+        Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text(label, color = color, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+            Text(tip.title, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
+            Text(tip.text, fontSize = 15.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
 }
