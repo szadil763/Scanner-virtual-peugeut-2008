@@ -3,8 +3,6 @@ package br.com.monitor2008.ui
 import android.annotation.SuppressLint
 import android.app.Application
 import android.bluetooth.BluetoothManager
-import androidx.lifecycle.AndroidViewModel
-import androidx.lifecycle.viewModelScope
 import br.com.monitor2008.data.BluetoothObdSource
 import br.com.monitor2008.data.BtPermissions
 import br.com.monitor2008.data.ConnState
@@ -31,7 +29,10 @@ import br.com.monitor2008.domain.OilStatus
 import br.com.monitor2008.domain.RefuelState
 import br.com.monitor2008.domain.TripAccumulator
 import br.com.monitor2008.domain.TripHealth
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -85,7 +86,14 @@ data class PairedList(
     val needsPermission: Boolean = false,
 )
 
-class MonitorViewModel(app: Application) : AndroidViewModel(app) {
+/**
+ * O "motor" do app: conexão com o adaptador, cálculos, viagens e estado das telas. É um só por
+ * processo ([get]), compartilhado entre a tela do app e o Android Auto: o adaptador aceita uma
+ * conexão por vez, então as duas telas precisam usar a mesma.
+ */
+class MonitorEngine private constructor(private val app: Application) {
+
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
 
     private val store = Store(app)
     private val trip = TripAccumulator()
@@ -132,10 +140,10 @@ class MonitorViewModel(app: Application) : AndroidViewModel(app) {
         val src: ObdSource = if (store.useSimulated) {
             SimulatedSource()
         } else {
-            BluetoothObdSource(getApplication(), store.adapterName.ifBlank { null })
+            BluetoothObdSource(app, store.adapterName.ifBlank { null })
         }
         source = src
-        infoJob = viewModelScope.launch {
+        infoJob = scope.launch {
             src.info.collect {
                 // Conexão perdida ou carro desligado: a viagem termina aqui.
                 if (it.state != ConnState.CONNECTED) closeTrip()
@@ -143,7 +151,7 @@ class MonitorViewModel(app: Application) : AndroidViewModel(app) {
                 publish()
             }
         }
-        sourceJob = viewModelScope.launch {
+        sourceJob = scope.launch {
             src.samples().collect { onSample(it) }
         }
     }
@@ -191,7 +199,7 @@ class MonitorViewModel(app: Application) : AndroidViewModel(app) {
             if (!tripDtcsRead) {
                 tripDtcsRead = true
                 val src = source ?: return
-                viewModelScope.launch {
+                scope.launch {
                     val stored = src.readDtcs()
                     val pending = src.readPendingDtcs()
                     recorder.setDtcs(stored, pending)
@@ -220,7 +228,7 @@ class MonitorViewModel(app: Application) : AndroidViewModel(app) {
 
     fun readDtcs() {
         val src = source ?: return
-        viewModelScope.launch {
+        scope.launch {
             dtcs = src.readDtcs()
             pendingDtcs = src.readPendingDtcs()
             publish()
@@ -280,7 +288,7 @@ class MonitorViewModel(app: Application) : AndroidViewModel(app) {
     @SuppressLint("MissingPermission") // a permissão é conferida logo abaixo
     /** Lê os aparelhos pareados. O pareamento em si é feito nas configurações de Bluetooth do aparelho. */
     fun refreshPaired() {
-        val ctx = getApplication<Application>()
+        val ctx = app
         paired = if (BtPermissions.missing(ctx).isNotEmpty()) {
             PairedList(problem = "O app ainda não tem permissão para usar o Bluetooth.", needsPermission = true)
         } else {
@@ -305,10 +313,9 @@ class MonitorViewModel(app: Application) : AndroidViewModel(app) {
         start()
     }
 
-    override fun onCleared() {
-        closeTrip()
+    /** Grava o progresso (odômetro e acumuladores) quando o app sai da tela. A viagem continua. */
+    fun saveNow() {
         store.saveProgress(odometerKm, uncalLiters, kmSinceFull)
-        super.onCleared()
     }
 
     // ---------- estado exposto ----------
@@ -364,8 +371,13 @@ class MonitorViewModel(app: Application) : AndroidViewModel(app) {
         )
     }
 
-    private companion object {
+    companion object {
         /** Motor parado por mais que isso = fim da viagem. */
-        const val ENGINE_OFF_TRIP_END_MS = 30_000L
+        private const val ENGINE_OFF_TRIP_END_MS = 30_000L
+
+        @Volatile private var instance: MonitorEngine? = null
+
+        fun get(app: Application): MonitorEngine =
+            instance ?: synchronized(this) { instance ?: MonitorEngine(app).also { instance = it } }
     }
 }

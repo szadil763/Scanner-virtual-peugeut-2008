@@ -1,18 +1,20 @@
 # Arquitetura
 
 ```
- Carro (CAN) ──► ELM327 ──Bluetooth RFCOMM──► Elm327Client ──► ObdParser ──► Sample
-                                                                               │
-                              ObdSource (interface)                            ▼
-                              ├─ BluetoothObdSource (real)              MonitorViewModel
-                              └─ SimulatedSource (testes e demo)        ├─ FuelCalc (L/h, km/l)
-                                                                        ├─ TripAccumulator (médias)
-                                                                        ├─ Maintenance (óleo)
-                                                                        └─ Store (SharedPreferences)
-                                                                               │
-                                                                               ▼
-                                                                    Telas Compose (Painel, Consumo,
-                                                                    Manutenção, Diagnóstico, Ajustes)
+ Carro (CAN) ──► ELM327 ──Bluetooth (BLE ou RFCOMM)──► Elm327Client ──► ObdParser ──► Sample
+                                                                                       │
+                              ObdSource (interface)                                    ▼
+                              ├─ BluetoothObdSource (real: BleLink ou RFCOMM)   MonitorEngine (um por processo)
+                              └─ SimulatedSource (testes e demo)                ├─ FuelCalc (L/h, km/l)
+                                                                                ├─ TripAccumulator (médias)
+                                                                                ├─ HealthRecorder/HealthRules (Saúde)
+                                                                                ├─ Maintenance (óleo, filtros, correia...)
+                                                                                └─ Store, HealthStore
+                                                                                       │
+                                                         ┌─────────────────────────────┴───────────┐
+                                                         ▼                                         ▼
+                                          Telas Compose (Painel, Consumo, Saúde,     Android Auto (car/: grade
+                                          Manutenção, Diagnóstico, Ajustes)          do painel e lista da Saúde)
 ```
 
 ## Camadas

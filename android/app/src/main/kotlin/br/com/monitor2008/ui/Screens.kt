@@ -92,7 +92,7 @@ enum class Tab(val label: String) {
 private val COMPACT_WIDTH = 800.dp
 
 @Composable
-fun MonitorApp(vm: MonitorViewModel) {
+fun MonitorApp(vm: MonitorEngine) {
     val ui by vm.ui.collectAsStateWithLifecycle()
     var tab by remember { mutableStateOf(Tab.PAINEL) }
 
@@ -281,7 +281,7 @@ private fun methodLabel(m: FlowMethod?) = when (m) {
 }
 
 @Composable
-private fun ConsumoScreen(ui: UiState, vm: MonitorViewModel) {
+private fun ConsumoScreen(ui: UiState, vm: MonitorEngine) {
     var dialog by remember { mutableStateOf(false) }
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(16.dp)) {
         Text("Consumo", fontSize = 26.sp, fontWeight = FontWeight.Bold)
@@ -435,7 +435,7 @@ private fun TrendChart(values: List<Double?>, lines: List<RefLine>, color: Color
 }
 
 @Composable
-private fun ManutencaoScreen(ui: UiState, vm: MonitorViewModel) {
+private fun ManutencaoScreen(ui: UiState, vm: MonitorEngine) {
     var confirm by remember { mutableStateOf(false) }
     var itemToConfirm by remember { mutableStateOf<MaintRow?>(null) }
     val oil = ui.oil
@@ -504,7 +504,7 @@ private fun MaintCard(row: MaintRow, moving: Boolean, onDone: () -> Unit) {
 }
 
 @Composable
-private fun DiagnosticoScreen(ui: UiState, vm: MonitorViewModel) {
+private fun DiagnosticoScreen(ui: UiState, vm: MonitorEngine) {
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Text("Diagnóstico", fontSize = 26.sp, fontWeight = FontWeight.Bold)
         val context = LocalContext.current
@@ -560,7 +560,7 @@ private fun DiagnosticoScreen(ui: UiState, vm: MonitorViewModel) {
 }
 
 @Composable
-private fun AjustesScreen(ui: UiState, vm: MonitorViewModel) {
+private fun AjustesScreen(ui: UiState, vm: MonitorEngine) {
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(14.dp)) {
         Text("Ajustes", fontSize = 26.sp, fontWeight = FontWeight.Bold)
         Text("Combustível no tanque", fontSize = 18.sp)
@@ -598,7 +598,7 @@ private fun AjustesScreen(ui: UiState, vm: MonitorViewModel) {
 
 /** Lista os aparelhos pareados para tocar no adaptador, em vez de digitar o nome. */
 @Composable
-private fun AdapterPicker(ui: UiState, vm: MonitorViewModel) {
+private fun AdapterPicker(ui: UiState, vm: MonitorEngine) {
     val context = LocalContext.current
     val askPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { vm.refreshPaired() }
     // Atualiza ao abrir a tela e ao voltar das configurações de Bluetooth.

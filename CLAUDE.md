@@ -44,6 +44,8 @@ O APK sai em Releases (`latest`); a versão (0.1.N, N = número do build) aparec
 
 Tela **Saúde** (manutenção preventiva, etapas 1 e 2): grava um resumo por viagem e avalia mistura, sondas, catalisador, marcha lenta, borboleta, vácuo, arrefecimento, bateria e falhas (modos 03 e 07). Regras e limites em `docs/SAUDE.md`; código puro e testado em `domain/Health.kt`. A aba Manutenção tem itens por km/data (filtros, velas, correia, fluidos). Etapa 3 (previsões por tendência) depende de semanas de dados.
 
+**Android Auto** (`car/`, `docs/ANDROID-AUTO.md`): com o APK no celular, o app aparece na tela do carro pela Car App Library (categoria IoT, exige "Fontes desconhecidas" no Android Auto). Só telas de modelo: grade de 6 blocos (números desenhados como imagem; título e blocos fixos para cada atualização contar como refresh) e lista da Saúde. Estado e conexão ficam em `ui/MonitorEngine` (um por processo), compartilhado entre a tela do app e o Android Auto, porque o adaptador aceita uma conexão por vez.
+
 Tela dividida e janela flutuante: abaixo de 800 dp de largura o app usa layout compacto; em janela pequena (picture-in-picture, ligado em Ajustes) mostra só velocidade, km/l, rotação e temperatura.
 
 Pendências conhecidas: serviço em primeiro plano (com outro app em tela inteira na frente, o Android pode encerrar o app e a viagem não é gravada; em tela dividida ou janela flutuante ele segue ativo), leitura de códigos pendentes (modo 07), registro de falhas com foto dos dados, ícone do app.
