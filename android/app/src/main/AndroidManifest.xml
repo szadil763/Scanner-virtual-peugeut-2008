@@ -15,6 +15,36 @@
     <uses-feature android:name="android.hardware.bluetooth" android:required="false" />
     <uses-feature android:name="android.hardware.bluetooth_le" android:required="false" />
 
+    <!-- Android 11+: o app só enxerga os apps de mapa e música que declarar aqui. -->
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:scheme="geo" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.MAIN" />
+            <category android:name="android.intent.category.APP_MUSIC" />
+        </intent>
+        <intent>
+            <action android:name="android.media.browse.MediaBrowserService" />
+        </intent>
+        <package android:name="com.google.android.apps.maps" />
+        <package android:name="com.waze" />
+        <package android:name="net.osmand" />
+        <package android:name="net.osmand.plus" />
+        <package android:name="com.sygic.aura" />
+        <package android:name="com.here.app.maps" />
+        <package android:name="ru.yandex.yandexnavi" />
+        <package android:name="com.spotify.music" />
+        <package android:name="com.google.android.apps.youtube.music" />
+        <package android:name="deezer.android.app" />
+        <package android:name="com.amazon.mp3" />
+        <package android:name="com.apple.android.music" />
+        <package android:name="com.soundcloud.android" />
+        <package android:name="com.audible.application" />
+        <package android:name="com.google.android.apps.podcasts" />
+    </queries>
+
     <application
         android:allowBackup="true"
         android:label="Monitor 2008"
@@ -27,6 +57,17 @@
         <meta-data
             android:name="androidx.car.app.minCarApiLevel"
             android:value="1" />
+
+        <!-- Mini player: libera a leitura do que está tocando (o usuário ativa em "acesso a notificações"). -->
+        <service
+            android:name=".data.MediaListenerService"
+            android:exported="true"
+            android:label="Monitor 2008 (música tocando)"
+            android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE">
+            <intent-filter>
+                <action android:name="android.service.notification.NotificationListenerService" />
+            </intent-filter>
+        </service>
 
         <service
             android:name=".car.MonitorCarAppService"

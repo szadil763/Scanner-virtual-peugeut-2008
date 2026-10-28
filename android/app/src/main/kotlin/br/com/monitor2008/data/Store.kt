@@ -90,6 +90,14 @@ class Store(context: Context) {
         get() = p.getString("bleName", null)
         set(v) { p.edit().putString("bleName", v).apply() }
 
+    /** Apps abertos ao lado do Monitor (null = o primeiro instalado). */
+    var mapPackage: String?
+        get() = p.getString("mapPackage", null)
+        set(v) { p.edit().putString("mapPackage", v).apply() }
+    var musicPackage: String?
+        get() = p.getString("musicPackage", null)
+        set(v) { p.edit().putString("musicPackage", v).apply() }
+
     /** Ao sair do app, continuar numa janela flutuante (picture-in-picture). */
     var pipOnLeave: Boolean
         get() = p.getBoolean("pipOnLeave", false)

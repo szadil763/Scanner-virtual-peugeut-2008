@@ -15,6 +15,7 @@ import androidx.compose.material3.darkColorScheme
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import br.com.monitor2008.data.BtPermissions
+import br.com.monitor2008.data.MediaWatcher
 import br.com.monitor2008.ui.MonitorApp
 import br.com.monitor2008.ui.MonitorEngine
 
@@ -60,6 +61,12 @@ class MainActivity : ComponentActivity() {
         } catch (_: Exception) {
             // Alguns multimídias não suportam janela flutuante: segue normal.
         }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        // Ao voltar da tela de "acesso a notificações", o mini player já começa a mostrar a música.
+        MediaWatcher.get(application).start()
     }
 
     override fun onStop() {

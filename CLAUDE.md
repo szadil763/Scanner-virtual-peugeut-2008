@@ -46,6 +46,8 @@ Tela **Saúde** (manutenção preventiva, etapas 1 e 2): grava um resumo por via
 
 **Android Auto** (`car/`, `docs/ANDROID-AUTO.md`): com o APK no celular, o app aparece na tela do carro pela Car App Library (categoria IoT, exige "Fontes desconhecidas" no Android Auto). Só telas de modelo: grade de 6 blocos (números desenhados como imagem; título e blocos fixos para cada atualização contar como refresh) e lista da Saúde. Estado e conexão ficam em `ui/MonitorEngine` (um por processo), compartilhado entre a tela do app e o Android Auto, porque o adaptador aceita uma conexão por vez.
 
+**Mapa e música ao lado** (recomendado em vez do Android Auto): botões "Mapa ao lado" e "Música" no Painel abrem o app escolhido em Ajustes na outra metade da tela (`data/AppLauncher`, FLAG_ACTIVITY_LAUNCH_ADJACENT; abrir um troca pelo outro). Mini player da música tocando (`data/MediaWatcher`) via sessões de mídia; exige "acesso a notificações" (`MediaListenerService`, que não lê as notificações). Rádio FM nativo do multimídia pode não aparecer.
+
 Tela dividida e janela flutuante: abaixo de 800 dp de largura o app usa layout compacto; em janela pequena (picture-in-picture, ligado em Ajustes) mostra só velocidade, km/l, rotação e temperatura.
 
 Pendências conhecidas: serviço em primeiro plano (com outro app em tela inteira na frente, o Android pode encerrar o app e a viagem não é gravada; em tela dividida ou janela flutuante ele segue ativo), leitura de códigos pendentes (modo 07), registro de falhas com foto dos dados, ícone do app.

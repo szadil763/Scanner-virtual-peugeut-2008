@@ -1,6 +1,8 @@
 package br.com.monitor2008.ui
 
+import android.app.Application
 import android.content.Intent
+import android.widget.Toast
 import android.provider.Settings
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -18,6 +20,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.text.KeyboardOptions
@@ -55,12 +58,16 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import br.com.monitor2008.data.AppChoice
+import br.com.monitor2008.data.AppLauncher
 import br.com.monitor2008.data.BtPermissions
+import br.com.monitor2008.data.MediaWatcher
 import br.com.monitor2008.data.ConnState
 import br.com.monitor2008.domain.FlowMethod
 import br.com.monitor2008.domain.HealthItem
@@ -238,6 +245,7 @@ private fun PainelScreen(ui: UiState) {
             Metric("Ar de admissão", s?.intakeC?.let { Math.round(it).toString() } ?: "--", "°C", Modifier.fillMaxWidth())
         }
     }
+    MediaBar(compact = false)
     }
 }
 
@@ -269,6 +277,116 @@ private fun PainelCompact(ui: UiState) {
         val warns = ui.health.count { it.status == HealthStatus.ATENCAO }
         if (alerts + warns > 0) {
             Text("Saúde: $alerts alerta(s), $warns atenção", color = if (alerts > 0) Bad else Warn, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+        }
+        MediaBar(compact = true)
+    }
+}
+
+// ---------- mapa e música ao lado ----------
+
+/**
+ * Atalhos para abrir o mapa ou a música na outra metade da tela, e o mini player do que está
+ * tocando. No layout compacto (tela dividida) os botões ficam em cima e o player embaixo.
+ */
+@Composable
+private fun MediaBar(compact: Boolean) {
+    val ctx = LocalContext.current
+    val app = ctx.applicationContext as Application
+    val media = remember { MediaWatcher.get(app) }
+    val launcher = remember { AppLauncher(app) }
+    val now by media.now.collectAsStateWithLifecycle()
+    val allowed by media.allowed.collectAsStateWithLifecycle()
+    fun open(result: String?) { if (result != null) Toast.makeText(ctx, result, Toast.LENGTH_LONG).show() }
+
+    val buttons: @Composable () -> Unit = {
+        Button({ open(launcher.openMap()) }, Modifier.height(56.dp)) { Text("Mapa ao lado", fontSize = 17.sp) }
+        OutlinedButton({ open(launcher.openMusic()) }, Modifier.height(56.dp)) { Text("Música", fontSize = 17.sp) }
+    }
+    val player: @Composable (Modifier) -> Unit = { mod ->
+        Row(mod, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            val n = now
+            Column(Modifier.weight(1f)) {
+                when {
+                    !allowed -> Text("Para ver a música tocando, libere em Ajustes.", fontSize = 15.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    n == null -> Text("Nada tocando", fontSize = 16.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    else -> {
+                        Text(n.title ?: n.app, fontSize = 18.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Text(listOfNotNull(n.artist, n.app).joinToString(" · "), fontSize = 14.sp, maxLines = 1,
+                            overflow = TextOverflow.Ellipsis, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                }
+            }
+            if (allowed && n != null) {
+                MediaKey("⏮") { media.previous() }
+                MediaKey(if (n.playing) "⏸" else "▶") { media.playPause() }
+                MediaKey("⏭") { media.next() }
+            }
+        }
+    }
+
+    Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
+        if (compact) {
+            Column(Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) { buttons() }
+                player(Modifier.fillMaxWidth())
+            }
+        } else {
+            Row(Modifier.padding(10.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                buttons()
+                Spacer(Modifier.width(6.dp))
+                player(Modifier.weight(1f))
+            }
+        }
+    }
+}
+
+@Composable
+private fun MediaKey(symbol: String, onClick: () -> Unit) {
+    OutlinedButton(onClick, Modifier.size(56.dp), contentPadding = PaddingValues(0.dp)) { Text(symbol, fontSize = 22.sp) }
+}
+
+/** Escolha dos apps de mapa e música e liberação do mini player. */
+@Composable
+private fun MapMusicSettings() {
+    val ctx = LocalContext.current
+    val app = ctx.applicationContext as Application
+    val launcher = remember { AppLauncher(app) }
+    val media = remember { MediaWatcher.get(app) }
+    val allowed by media.allowed.collectAsStateWithLifecycle()
+    val maps = remember { launcher.mapApps() }
+    val musics = remember { launcher.musicApps() }
+    var mapPkg by remember { mutableStateOf(launcher.mapPackage ?: maps.firstOrNull()?.pkg) }
+    var musicPkg by remember { mutableStateOf(launcher.musicPackage ?: musics.firstOrNull()?.pkg) }
+
+    Text("Mapa e música", fontSize = 22.sp, fontWeight = FontWeight.Bold)
+    Text("Os botões do Painel abrem o app escolhido na outra metade da tela; abrir um troca pelo outro.",
+        color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 15.sp)
+    Text("App de mapa", fontSize = 18.sp)
+    AppChips(maps, mapPkg, "Nenhum app de mapa instalado.") { mapPkg = it; launcher.mapPackage = it }
+    Text("App de música", fontSize = 18.sp)
+    AppChips(musics, musicPkg, "Nenhum app de música instalado.") { musicPkg = it; launcher.musicPackage = it }
+    if (allowed) {
+        Text("Mini player ativado: o Painel mostra a música tocando.", color = OkGreen, fontSize = 15.sp)
+    } else {
+        Button({ ctx.startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)) }, Modifier.height(56.dp)) {
+            Text("Mostrar a música tocando no Painel", fontSize = 17.sp)
+        }
+        Text("Abre \"acesso a notificações\": ative o Monitor 2008. É o que permite ver e controlar a música; " +
+            "o app não lê nem guarda suas notificações.", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 14.sp)
+    }
+}
+
+@Composable
+private fun AppChips(apps: List<AppChoice>, selected: String?, empty: String, onSelect: (String) -> Unit) {
+    if (apps.isEmpty()) {
+        Text(empty, color = Warn)
+        return
+    }
+    Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        apps.forEach { a ->
+            FilterChip(selected = a.pkg == selected, onClick = { onSelect(a.pkg) },
+                label = { Text(a.label, fontSize = 18.sp) }, modifier = Modifier.height(56.dp))
         }
     }
 }
@@ -593,6 +711,7 @@ private fun AjustesScreen(ui: UiState, vm: MonitorEngine) {
             Text(ui.conn.message, color = if (ui.conn.state == ConnState.ERROR) Warn else MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 16.sp)
         }
         AdapterPicker(ui, vm)
+        MapMusicSettings()
     }
 }
 
