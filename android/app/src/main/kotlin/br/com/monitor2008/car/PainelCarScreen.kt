@@ -70,7 +70,7 @@ class PainelCarScreen(carContext: CarContext) : Screen(carContext) {
             .addItem(tile("Consumo", n(kmPerL, 1), "km/l", if ((kmPerL ?: 99.0) < 7) YELLOW else GREEN, "${n(ui.litersPerHour, 2)} L/h"))
             .addItem(tile("Rotação", n(s?.rpm), "rpm", WHITE, saudeText))
             .addItem(tile("Temp. motor", n(s?.coolantC), "°C", if (hot) RED else WHITE, null))
-            .addItem(tile("Média da viagem", n(ui.tripAvgKmPerL, 1), "km/l", WHITE, "${n(ui.tripKm, 1)} km"))
+            .addItem(tile("Média do trajeto", n(ui.tripAvgKmPerL, 1), "km/l", WHITE, "${n(ui.tripKm, 1)} km"))
             .addItem(tile("Bateria", n(s?.batteryV, 1), "V", WHITE, null))
             .build()
 

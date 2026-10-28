@@ -240,7 +240,7 @@ private fun PainelScreen(ui: UiState) {
                 }
             }
             Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                Metric("Média da viagem", ui.tripAvgKmPerL.f(), "km/l", Modifier.weight(1f))
+                Metric("Média do trajeto", ui.tripAvgKmPerL.f(), "km/l", Modifier.weight(1f))
                 Metric("Distância", ui.tripKm.f(1), "km", Modifier.weight(1f))
             }
         }
@@ -277,7 +277,7 @@ private fun PainelCompact(ui: UiState) {
                 color = if ((s?.coolantC ?: 0.0) > 105) Bad else Color.Unspecified)
         }
         Row(horizontalArrangement = gap) {
-            Metric("Média viagem", ui.tripAvgKmPerL.f(), "km/l", Modifier.weight(1f), valueSize = 32.sp)
+            Metric("Média trajeto", ui.tripAvgKmPerL.f(), "km/l", Modifier.weight(1f), valueSize = 32.sp)
             Metric("Bateria", s?.batteryV.f(1), "V", Modifier.weight(1f), valueSize = 32.sp)
         }
         val alerts = ui.health.count { it.status == HealthStatus.ALERTA }
@@ -415,14 +415,22 @@ private fun methodLabel(m: FlowMethod?) = when (m) {
 @Composable
 private fun ConsumoScreen(ui: UiState, vm: MonitorEngine) {
     var dialog by remember { mutableStateOf(false) }
+    var confirmReset by remember { mutableStateOf(false) }
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(16.dp)) {
         Text("Consumo", fontSize = 26.sp, fontWeight = FontWeight.Bold)
+        val since = ui.tripSinceDay?.let { LocalDate.ofEpochDay(it) }
+        Text(
+            "Trajeto: soma todas as viagens " +
+                (since?.let { "desde %02d/%02d/%d".format(it.dayOfMonth, it.monthValue, it.year) } ?: "até você zerar") +
+                " · ${Math.round(ui.tripKm)} km em ${ui.tripMinutes / 60} h ${ui.tripMinutes % 60} min",
+            color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 15.sp,
+        )
         Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-            Metric("Média da viagem", ui.tripAvgKmPerL.f(), "km/l", Modifier.weight(1f))
+            Metric("Média do trajeto", ui.tripAvgKmPerL.f(), "km/l", Modifier.weight(1f))
             Metric("Combustível usado", ui.tripLiters.f(2), "L", Modifier.weight(1f))
             Metric("Velocidade média", ui.tripAvgSpeed.f(0), "km/h", Modifier.weight(1f))
         }
-        Text("Custo da viagem: R$ ${(ui.tripLiters * ui.fuelPrice).f(2)} · ${ui.tripAvgL100.f(1)} L/100 km · ${ui.tripMinutes} min")
+        Text("Custo do trajeto: R$ ${(ui.tripLiters * ui.fuelPrice).f(2)} · ${ui.tripAvgL100.f(1)} L/100 km")
         Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
             Column(Modifier.padding(16.dp)) {
                 Text("km/l nos últimos minutos", fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -431,7 +439,7 @@ private fun ConsumoScreen(ui: UiState, vm: MonitorEngine) {
         }
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
             Button(onClick = { dialog = true }, enabled = !ui.moving, modifier = Modifier.height(60.dp)) { Text("Registrar abastecimento", fontSize = 18.sp) }
-            OutlinedButton(onClick = vm::resetTrip, modifier = Modifier.height(60.dp)) { Text("Zerar viagem", fontSize = 18.sp) }
+            OutlinedButton(onClick = { confirmReset = true }, modifier = Modifier.height(60.dp)) { Text("Zerar trajeto", fontSize = 18.sp) }
             if (ui.moving) Text("Pare o carro para registrar.")
         }
         Text("Abastecimentos", fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
@@ -443,6 +451,13 @@ private fun ConsumoScreen(ui: UiState, vm: MonitorEngine) {
         }
     }
     if (dialog) RefuelDialog(ui.fuelPrice, onDismiss = { dialog = false }) { l, p, full -> vm.registerRefuel(l, p, full); dialog = false }
+    if (confirmReset) AlertDialog(
+        onDismissRequest = { confirmReset = false },
+        title = { Text("Zerar trajeto") },
+        text = { Text("Apaga a soma de ${Math.round(ui.tripKm)} km: média de consumo, velocidade média, combustível e custo. Os abastecimentos e a Saúde não são apagados.") },
+        confirmButton = { TextButton(onClick = { vm.resetTrip(); confirmReset = false }) { Text("Zerar") } },
+        dismissButton = { TextButton(onClick = { confirmReset = false }) { Text("Cancelar") } },
+    )
 }
 
 @Composable

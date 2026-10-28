@@ -67,4 +67,16 @@ class TripAndMaintenanceTest {
         assertEquals(MaintState.OK, s.state)
         assertEquals(null, s.kmLeft)
     }
+
+    // O trajeto soma viagens: grava os quatro valores e continua de onde parou.
+    @Test fun tripRestoresAndKeepsSumming() {
+        val a = TripAccumulator()
+        a.add(3600.0, 60.0, 6.0) // 60 km, 6 L
+        val b = TripAccumulator()
+        b.restore(a.distanceKm, a.liters, a.seconds, a.kmWithFuel)
+        b.add(3600.0, 40.0, 4.0) // +40 km, +4 L
+        assertEquals(100.0, b.distanceKm, 1e-9)
+        assertEquals(10.0, b.avgKmPerL!!, 1e-9)
+        assertEquals(50.0, b.avgSpeedKmh, 1e-9)
+    }
 }

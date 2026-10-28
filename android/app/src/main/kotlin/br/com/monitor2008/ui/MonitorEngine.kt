@@ -50,6 +50,8 @@ data class UiState(
     val tripLiters: Double = 0.0,
     val tripAvgSpeed: Double = 0.0,
     val tripMinutes: Int = 0,
+    /** Dia em que o trajeto foi zerado (null = nunca ou simulação). */
+    val tripSinceDay: Long? = null,
     val odometerKm: Double = 0.0,
     val ethanolFraction: Double = 0.30,
     val calibration: Double = 1.0,
@@ -96,7 +98,13 @@ class MonitorEngine private constructor(private val app: Application) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
 
     private val store = Store(app)
-    private val trip = TripAccumulator()
+    // Trajeto real: soma todas as viagens e fica gravado até "Zerar trajeto". A simulação usa outro,
+    // que zera a cada início, para não misturar dados de teste com os do carro.
+    private val realTrip = TripAccumulator().also { t ->
+        store.loadTrip()?.let { t.restore(it[0], it[1], it[2], it[3]) }
+    }
+    private val simTrip = TripAccumulator()
+    private val trip: TripAccumulator get() = if (store.useSimulated) simTrip else realTrip
     private var source: ObdSource? = null
     private var sourceJob: Job? = null
     private var infoJob: Job? = null
@@ -134,7 +142,7 @@ class MonitorEngine private constructor(private val app: Application) {
     fun start() {
         closeTrip()
         sourceJob?.cancel(); infoJob?.cancel()
-        trip.reset(); history.clear(); lastTimeMs = 0L
+        simTrip.reset(); history.clear(); lastTimeMs = 0L
         lastSample = null; lastKmPerL = null; lastLph = null; lastMethod = null; dtcs = null; pendingDtcs = null
 
         val src: ObdSource = if (store.useSimulated) {
@@ -165,7 +173,8 @@ class MonitorEngine private constructor(private val app: Application) {
         val raw = FuelCalc.estimate(s, FuelBlend(store.ethanolFraction), engine, calibration = 1.0)
         val lph = raw?.let { it.litersPerHour * store.calibration }
 
-        trip.add(dt, speed, lph)
+        // Só com o motor ligado (ou andando): parado com a ignição ligada não puxa a média para baixo.
+        if ((s.rpm ?: 0.0) > 400 || speed > 1) trip.add(dt, speed, lph)
         val km = speed * dt / 3600.0
         odometerKm += km
         kmSinceFull += km
@@ -183,7 +192,7 @@ class MonitorEngine private constructor(private val app: Application) {
         if (!store.useSimulated) recordHealth(s, dt)
 
         if (s.timeMs - lastSaveMs > 20_000) {
-            store.saveProgress(odometerKm, uncalLiters, kmSinceFull)
+            saveNow()
             lastSaveMs = s.timeMs
         }
         publish()
@@ -245,7 +254,12 @@ class MonitorEngine private constructor(private val app: Application) {
 
     fun diagnosticLog(): List<String> = source?.diagnosticLog().orEmpty()
 
-    fun resetTrip() { trip.reset(); history.clear(); publish() }
+    fun resetTrip() {
+        trip.reset(); history.clear()
+        if (!store.useSimulated) store.tripSinceDay = LocalDate.now().toEpochDay()
+        saveNow()
+        publish()
+    }
 
     fun registerRefuel(liters: Double, price: Double, full: Boolean) {
         if (_ui.value.moving) return
@@ -313,9 +327,10 @@ class MonitorEngine private constructor(private val app: Application) {
         start()
     }
 
-    /** Grava o progresso (odômetro e acumuladores) quando o app sai da tela. A viagem continua. */
+    /** Grava o progresso (odômetro, acumuladores e trajeto). Chamado a cada 20 s e quando o app sai da tela. */
     fun saveNow() {
         store.saveProgress(odometerKm, uncalLiters, kmSinceFull)
+        realTrip.let { store.saveTrip(it.distanceKm, it.liters, it.seconds, it.kmWithFuel) }
     }
 
     // ---------- estado exposto ----------
@@ -341,6 +356,7 @@ class MonitorEngine private constructor(private val app: Application) {
             tripLiters = trip.liters,
             tripAvgSpeed = trip.avgSpeedKmh,
             tripMinutes = (trip.seconds / 60).toInt(),
+            tripSinceDay = if (store.useSimulated) null else store.tripSinceDay,
             odometerKm = odometerKm,
             ethanolFraction = store.ethanolFraction,
             calibration = store.calibration,

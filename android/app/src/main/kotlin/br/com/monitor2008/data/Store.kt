@@ -59,6 +59,19 @@ class Store(context: Context) {
         get() = p.getString("adapterName", "") ?: ""
         set(v) { p.edit().putString("adapterName", v).apply() }
 
+    // Trajeto: soma de todas as viagens até o usuário zerar.
+    fun loadTrip(): DoubleArray? =
+        p.getString("trip", null)?.split(';')?.mapNotNull { it.toDoubleOrNull() }?.takeIf { it.size == 4 }?.toDoubleArray()
+
+    fun saveTrip(distanceKm: Double, liters: Double, seconds: Double, kmWithFuel: Double) {
+        p.edit().putString("trip", "$distanceKm;$liters;$seconds;$kmWithFuel").apply()
+    }
+
+    /** Dia em que o trajeto foi zerado pela última vez (null = nunca). */
+    var tripSinceDay: Long?
+        get() = if (p.contains("tripSinceDay")) p.getLong("tripSinceDay", 0) else null
+        set(v) { if (v == null) p.edit().remove("tripSinceDay").apply() else p.edit().putLong("tripSinceDay", v).apply() }
+
     // Troca de óleo
     val oilConfigured: Boolean get() = p.contains("oilLastDay")
     var oilLastKm: Double
