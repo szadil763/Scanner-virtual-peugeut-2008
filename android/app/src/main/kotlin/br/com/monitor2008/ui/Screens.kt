@@ -1,6 +1,9 @@
 package br.com.monitor2008.ui
 
 import android.app.Application
+import android.app.Activity
+import android.content.Context
+import android.content.ContextWrapper
 import android.content.Intent
 import android.widget.Toast
 import android.provider.Settings
@@ -118,15 +121,20 @@ fun MonitorApp(vm: MonitorEngine) {
                     )
                 }
             }
-            Box(Modifier.fillMaxSize().padding(if (compact) 10.dp else 16.dp)) {
-                when (tab) {
-                    Tab.PAINEL -> if (compact) PainelCompact(ui) else PainelScreen(ui)
-                    Tab.CONSUMO -> ConsumoScreen(ui, vm)
-                    Tab.SAUDE -> SaudeScreen(ui, compact)
-                    Tab.MANUTENCAO -> ManutencaoScreen(ui, vm)
-                    Tab.DIAGNOSTICO -> DiagnosticoScreen(ui, vm)
-                    Tab.AJUSTES -> AjustesScreen(ui, vm)
+            Column(Modifier.fillMaxSize().padding(if (compact) 10.dp else 16.dp)) {
+                Box(Modifier.fillMaxWidth().weight(1f)) {
+                    when (tab) {
+                        Tab.PAINEL -> if (compact) PainelCompact(ui) else PainelScreen(ui)
+                        Tab.CONSUMO -> ConsumoScreen(ui, vm)
+                        Tab.SAUDE -> SaudeScreen(ui, compact)
+                        Tab.MANUTENCAO -> ManutencaoScreen(ui, vm)
+                        Tab.DIAGNOSTICO -> DiagnosticoScreen(ui, vm)
+                        Tab.AJUSTES -> AjustesScreen(ui, vm)
+                    }
                 }
+                // Mapa, música e mini player em todas as abas.
+                Spacer(Modifier.height(8.dp))
+                MediaBar(compact)
             }
         }
     }
@@ -245,7 +253,6 @@ private fun PainelScreen(ui: UiState) {
             Metric("Ar de admissão", s?.intakeC?.let { Math.round(it).toString() } ?: "--", "°C", Modifier.fillMaxWidth())
         }
     }
-    MediaBar(compact = false)
     }
 }
 
@@ -278,7 +285,6 @@ private fun PainelCompact(ui: UiState) {
         if (alerts + warns > 0) {
             Text("Saúde: $alerts alerta(s), $warns atenção", color = if (alerts > 0) Bad else Warn, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
         }
-        MediaBar(compact = true)
     }
 }
 
@@ -294,13 +300,14 @@ private fun MediaBar(compact: Boolean) {
     val app = ctx.applicationContext as Application
     val media = remember { MediaWatcher.get(app) }
     val launcher = remember { AppLauncher(app) }
+    val activity = remember(ctx) { ctx.findActivity() }
     val now by media.now.collectAsStateWithLifecycle()
     val allowed by media.allowed.collectAsStateWithLifecycle()
     fun open(result: String?) { if (result != null) Toast.makeText(ctx, result, Toast.LENGTH_LONG).show() }
 
     val buttons: @Composable () -> Unit = {
-        Button({ open(launcher.openMap()) }, Modifier.height(56.dp)) { Text("Mapa ao lado", fontSize = 17.sp) }
-        OutlinedButton({ open(launcher.openMusic()) }, Modifier.height(56.dp)) { Text("Música", fontSize = 17.sp) }
+        Button({ open(launcher.openMap(activity)) }, Modifier.height(56.dp)) { Text("Mapa", fontSize = 17.sp) }
+        OutlinedButton({ open(launcher.openMusic(activity)) }, Modifier.height(56.dp)) { Text("Música", fontSize = 17.sp) }
     }
     val player: @Composable (Modifier) -> Unit = { mod ->
         Row(mod, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -341,6 +348,12 @@ private fun MediaBar(compact: Boolean) {
     }
 }
 
+private tailrec fun Context.findActivity(): Activity? = when (this) {
+    is Activity -> this
+    is ContextWrapper -> baseContext.findActivity()
+    else -> null
+}
+
 @Composable
 private fun MediaKey(symbol: String, onClick: () -> Unit) {
     OutlinedButton(onClick, Modifier.size(56.dp), contentPadding = PaddingValues(0.dp)) { Text(symbol, fontSize = 22.sp) }
@@ -360,7 +373,8 @@ private fun MapMusicSettings() {
     var musicPkg by remember { mutableStateOf(launcher.musicPackage ?: musics.firstOrNull()?.pkg) }
 
     Text("Mapa e música", fontSize = 22.sp, fontWeight = FontWeight.Bold)
-    Text("Os botões do Painel abrem o app escolhido na outra metade da tela; abrir um troca pelo outro.",
+    Text("Com a tela dividida (pelo botão de apps recentes), os botões Mapa e Música abrem o app na outra metade; " +
+        "abrir um troca pelo outro. Com o Monitor em tela cheia, o app abre em tela cheia e o Monitor vira janela flutuante.",
         color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 15.sp)
     Text("App de mapa", fontSize = 18.sp)
     AppChips(maps, mapPkg, "Nenhum app de mapa instalado.") { mapPkg = it; launcher.mapPackage = it }
