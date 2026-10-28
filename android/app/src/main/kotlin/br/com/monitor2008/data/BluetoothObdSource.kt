@@ -148,7 +148,8 @@ class BluetoothObdSource(
         val fast = listOf(Pid.RPM, Pid.SPEED, Pid.FUEL_RATE, Pid.MAF, Pid.MAP, Pid.LOAD)
         val slow = listOf(Pid.COOLANT_TEMP, Pid.INTAKE_TEMP, Pid.MODULE_VOLTAGE, Pid.FUEL_LEVEL, Pid.THROTTLE)
         val wanted = if (cycle % 10 == 0) fast + slow else fast
-        return if (supported.isEmpty()) wanted else wanted.filter { it.code in supported }
+        // Se o filtro esvaziar a lista (máscara mal lida), consulta tudo: o que não existir volta NO DATA.
+        return wanted.filter { it.code in supported }.ifEmpty { wanted }
     }
 
     private fun toSample(v: Map<Pid, Double>) = Sample(

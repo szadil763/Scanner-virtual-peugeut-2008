@@ -26,21 +26,25 @@ const PID = {
   0x5e: (d) => (256 * d[0] + d[1]) / 20,
 };
 
-function payload(raw, prefix) {
+// Uma linha por central que respondeu (no 2008 automático, motor e câmbio respondem juntos).
+function payloads(raw, prefix) {
   const linhas = raw.split(/[\r\n]+/).map((l) => l.replace(/\s/g, '').toUpperCase()).filter((l) => l && l !== '>');
+  const out = [];
   for (const l of linhas) {
     if (!l.startsWith(prefix)) continue;
     const hex = l.slice(prefix.length);
     if (hex.length % 2) continue;
     const bytes = hex.match(/../g)?.map((h) => parseInt(h, 16)) ?? [];
     if (bytes.some(Number.isNaN)) continue;
-    return bytes;
+    out.push(bytes);
   }
-  return null;
+  return out;
 }
+const payload = (raw, prefix) => payloads(raw, prefix)[0] ?? null;
+const BYTES = { 0x04: 1, 0x05: 1, 0x0b: 1, 0x0c: 2, 0x0d: 1, 0x0f: 1, 0x10: 2, 0x11: 1, 0x2f: 1, 0x42: 2, 0x5e: 2 };
 const hex2 = (n) => n.toString(16).toUpperCase().padStart(2, '0');
 const parse = (pid, raw) => {
-  const b = payload(raw, '41' + hex2(pid));
+  const b = payloads(raw, '41' + hex2(pid)).find((x) => x.length >= BYTES[pid]);
   return b ? PID[pid](b) : null;
 };
 
@@ -57,17 +61,23 @@ assert.strictEqual(parse(0x0c, '?\r\r>'), null); ok++; console.log('ok  "?" -> n
 
 // ---------- PIDs suportados ----------
 function suportados(base, raw) {
-  const b = payload(raw, '41' + hex2(base));
-  if (!b || b.length < 4) return [];
-  const mask = ((b[0] << 24) | (b[1] << 16) | (b[2] << 8) | b[3]) >>> 0;
-  const out = [];
-  for (let i = 0; i < 32; i++) if ((mask >>> (31 - i)) & 1) out.push(base + 1 + i);
-  return out;
+  const out = new Set();
+  for (const b of payloads(raw, '41' + hex2(base))) {
+    if (b.length < 4) continue;
+    const mask = ((b[0] << 24) | (b[1] << 16) | (b[2] << 8) | b[3]) >>> 0;
+    for (let i = 0; i < 32; i++) if ((mask >>> (31 - i)) & 1) out.add(base + 1 + i);
+  }
+  return [...out].sort((a, b) => a - b);
 }
 const s = suportados(0x00, '41 00 BE 3F A8 13');
 assert.deepStrictEqual(s.slice(0, 7), [0x01, 0x03, 0x04, 0x05, 0x06, 0x07, 0x0b]); ok++;
 console.log('ok  PIDs suportados 41 00 BE 3F A8 13 ->', s.map(hex2).join(' '));
 assert.ok(s.includes(0x20)); ok++; console.log('ok  indica faixa 0x20 disponível');
+// Resposta real do 2008 automático: o câmbio responde primeiro e quase não declara nada.
+const s2 = suportados(0x00, '41 00 80 00 00 00 \r41 00 BE 3E B8 11 \r\r>');
+assert.ok([0x01, 0x04, 0x05, 0x0b, 0x0c, 0x0d, 0x0f, 0x11, 0x20].every((p) => s2.includes(p))); ok++;
+console.log('ok  junta as centrais (câmbio + motor) ->', s2.map(hex2).join(' '));
+near(parse(0x0c, '41 0C 1A\r41 0C 1A F8\r\r>'), 1726, 1e-9, 'RPM pula linha incompleta de outra central');
 
 // ---------- Falhas (modo 03, CAN) ----------
 function dtcs(raw) {

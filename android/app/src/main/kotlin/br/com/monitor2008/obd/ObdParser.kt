@@ -7,40 +7,48 @@ package br.com.monitor2008.obd
  */
 object ObdParser {
 
-    /** Devolve os bytes que vêm depois de [prefix] na primeira linha válida, ou null. */
-    fun payload(raw: String, prefix: String): IntArray? {
+    /**
+     * Devolve os bytes que vêm depois de [prefix] em cada linha válida. Há uma linha por central que
+     * respondeu: no 2008 automático, o motor e o câmbio respondem juntos às consultas do modo 01.
+     */
+    fun payloads(raw: String, prefix: String): List<IntArray> {
         val lines = raw.split('\r', '\n')
             .map { it.replace(" ", "").replace(">", "").uppercase() }
             .filter { it.isNotEmpty() }
+        val out = mutableListOf<IntArray>()
         for (line in lines) {
             if (!line.startsWith(prefix)) continue
             val hex = line.substring(prefix.length)
             if (hex.length % 2 != 0) continue
             val bytes = hex.chunked(2).map { it.toIntOrNull(16) }
             if (bytes.any { it == null }) continue
-            return bytes.map { it!! }.toIntArray()
+            out += bytes.map { it!! }.toIntArray()
         }
-        return null
+        return out
     }
 
-    /** Decodifica um PID. Null se a resposta for "NO DATA", "?" ou estiver incompleta. */
+    /** Bytes da primeira linha válida, ou null. */
+    fun payload(raw: String, prefix: String): IntArray? = payloads(raw, prefix).firstOrNull()
+
+    /** Decodifica um PID. Null se a resposta for "NO DATA", "?" ou estiver incompleta. Usa a primeira central com resposta completa. */
     fun parse(pid: Pid, raw: String): Double? {
-        val bytes = payload(raw, pid.responsePrefix) ?: return null
-        if (bytes.size < pid.dataBytes) return null
+        val bytes = payloads(raw, pid.responsePrefix).firstOrNull { it.size >= pid.dataBytes } ?: return null
         return pid.decode(bytes)
     }
 
     /**
      * Lê a máscara de PIDs suportados (consultas 0100, 0120, 0140, 0160).
-     * [base] é o PID consultado (0x00, 0x20...). Devolve os PIDs que o carro declarou suportar.
+     * [base] é o PID consultado (0x00, 0x20...). Junta o que todas as centrais declararam:
+     * ler só a primeira linha pegava o câmbio, que quase não declara nada, e o painel ficava vazio.
      */
     fun supportedFrom(base: Int, raw: String): Set<Int> {
-        val b = payload(raw, "41" + Pid.hex2(base)) ?: return emptySet()
-        if (b.size < 4) return emptySet()
-        val mask = (b[0].toLong() shl 24) or (b[1].toLong() shl 16) or (b[2].toLong() shl 8) or b[3].toLong()
         val out = mutableSetOf<Int>()
-        for (i in 0 until 32) {
-            if (((mask shr (31 - i)) and 1L) == 1L) out += base + 1 + i
+        for (b in payloads(raw, "41" + Pid.hex2(base))) {
+            if (b.size < 4) continue
+            val mask = (b[0].toLong() shl 24) or (b[1].toLong() shl 16) or (b[2].toLong() shl 8) or b[3].toLong()
+            for (i in 0 until 32) {
+                if (((mask shr (31 - i)) and 1L) == 1L) out += base + 1 + i
+            }
         }
         return out
     }
