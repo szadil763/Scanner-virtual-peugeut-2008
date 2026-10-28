@@ -139,7 +139,7 @@ class BluetoothObdSource(
     /** Guarda no registro a primeira resposta de cada dado, para ver o que o carro realmente devolve. */
     private fun note(pid: Pid, raw: String, value: Double?) {
         if (!seen.add(pid)) return
-        val shown = raw.replace('\r', ' ').replace('\n', ' ').trim()
+        val shown = raw.shownRaw()
         log("${pid.command} (${pid.label}) -> $shown => ${value ?: "sem valor"}")
     }
 
@@ -220,8 +220,12 @@ class BluetoothObdSource(
     }
 
     private fun exchanged(cmd: String, resp: String) {
-        if (logging) log("$cmd -> ${resp.replace('\r', ' ').replace('\n', ' ').trim()}")
+        if (logging) log("$cmd -> ${resp.shownRaw()}")
     }
+
+    /** Resposta para o registro: "|" marca cada quebra de linha, para ver como as centrais chegam. */
+    private fun String.shownRaw() = trim().replace("\r\n", "|").replace('\r', '|').replace('\n', '|')
+        .replace(Regex("[\\x00-\\x1F]"), "·")
 
     private fun matches(n: String?): Boolean {
         if (n == null) return false

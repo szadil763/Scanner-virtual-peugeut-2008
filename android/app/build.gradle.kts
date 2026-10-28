@@ -12,8 +12,10 @@ android {
         applicationId = "br.com.monitor2008"
         minSdk = 26
         targetSdk = 34
-        versionCode = 1
-        versionName = "0.1.0"
+        // Cada build do GitHub ganha um número novo, mostrado na tela Diagnóstico.
+        val build = System.getenv("GITHUB_RUN_NUMBER")?.toIntOrNull() ?: 1
+        versionCode = build
+        versionName = "0.1.$build"
     }
 
     // Chave de debug fixa e pública (não é segredo): mantém a mesma assinatura em todo APK gerado,

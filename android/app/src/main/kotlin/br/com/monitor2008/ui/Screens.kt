@@ -291,6 +291,11 @@ private fun ManutencaoScreen(ui: UiState, vm: MonitorViewModel) {
 private fun DiagnosticoScreen(ui: UiState, vm: MonitorViewModel) {
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Text("Diagnóstico", fontSize = 26.sp, fontWeight = FontWeight.Bold)
+        val context = LocalContext.current
+        val version = remember {
+            try { context.packageManager.getPackageInfo(context.packageName, 0).versionName } catch (_: Exception) { null }
+        }
+        Text("Versão do app: ${version ?: "?"}", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 16.sp)
         val c = ui.conn
         val color = when (c.state) { ConnState.CONNECTED -> OkGreen; ConnState.ERROR -> Bad; else -> Warn }
         Text("Conexão: ${c.message.ifBlank { "aguardando" }}${if (c.protocol.isNotBlank()) " · protocolo ${c.protocol}" else ""}", color = color, fontSize = 18.sp)

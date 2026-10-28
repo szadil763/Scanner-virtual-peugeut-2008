@@ -44,6 +44,15 @@ class ObdParserTest {
         assertTrue(s.containsAll(listOf(0x01, 0x04, 0x05, 0x0B, 0x0C, 0x0D, 0x0F, 0x11, 0x20)))
     }
 
+    // As duas respostas grudadas na mesma linha, como podem chegar pelo BLE.
+    @Test fun supportedPidsSplitsEcusOnSameLine() {
+        val s = ObdParser.supportedFrom(0x00, "41 00 80 00 00 00 41 00 BE 3E B8 11 \r\r>")
+        assertTrue(s.containsAll(listOf(0x01, 0x04, 0x05, 0x0B, 0x0C, 0x0D, 0x0F, 0x11, 0x20)))
+    }
+
+    @Test fun rpmWithTwoEcusOnSameLine() =
+        assertEquals(758.5, ObdParser.parse(Pid.RPM, "41 0C 0B DA 41 0C 0B DA\r\r>")!!, 1e-9)
+
     @Test fun parseSkipsIncompleteEcuLine() =
         assertEquals(1726.0, ObdParser.parse(Pid.RPM, "41 0C 1A\r41 0C 1A F8\r\r>")!!, 1e-9)
 

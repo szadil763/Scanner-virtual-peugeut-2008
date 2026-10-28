@@ -26,17 +26,30 @@ const PID = {
   0x5e: (d) => (256 * d[0] + d[1]) / 20,
 };
 
-// Uma linha por central que respondeu (no 2008 automático, motor e câmbio respondem juntos).
-function payloads(raw, prefix) {
-  const linhas = raw.split(/[\r\n]+/).map((l) => l.replace(/\s/g, '').toUpperCase()).filter((l) => l && l !== '>');
+// Um bloco por central que respondeu (no 2008 automático, motor e câmbio respondem juntos).
+// Com `size` (bytes de dados), também separa respostas grudadas na mesma linha.
+function payloads(raw, prefix, size) {
+  const linhas = raw.split(/[\r\n]+/)
+    .map((l) => l.toUpperCase().replace(/[^0-9A-Z.?]/g, '').replace(/^SEARCHING\.\.\./, ''))
+    .filter((l) => l);
+  const bytesDe = (hex) => {
+    if (hex.length % 2) return null;
+    const b = hex.match(/../g)?.map((h) => parseInt(h, 16)) ?? [];
+    return b.some(Number.isNaN) ? null : b;
+  };
   const out = [];
   for (const l of linhas) {
-    if (!l.startsWith(prefix)) continue;
-    const hex = l.slice(prefix.length);
-    if (hex.length % 2) continue;
-    const bytes = hex.match(/../g)?.map((h) => parseInt(h, 16)) ?? [];
-    if (bytes.some(Number.isNaN)) continue;
-    out.push(bytes);
+    if (size === undefined) {
+      if (!l.startsWith(prefix)) continue;
+      const b = bytesDe(l.slice(prefix.length));
+      if (b) out.push(b);
+      continue;
+    }
+    const frame = prefix.length + 2 * size;
+    for (let pos = 0; l.startsWith(prefix, pos) && pos + frame <= l.length; pos += frame) {
+      const b = bytesDe(l.slice(pos + prefix.length, pos + frame));
+      if (b) out.push(b);
+    }
   }
   return out;
 }
@@ -44,7 +57,7 @@ const payload = (raw, prefix) => payloads(raw, prefix)[0] ?? null;
 const BYTES = { 0x04: 1, 0x05: 1, 0x0b: 1, 0x0c: 2, 0x0d: 1, 0x0f: 1, 0x10: 2, 0x11: 1, 0x2f: 1, 0x42: 2, 0x5e: 2 };
 const hex2 = (n) => n.toString(16).toUpperCase().padStart(2, '0');
 const parse = (pid, raw) => {
-  const b = payloads(raw, '41' + hex2(pid)).find((x) => x.length >= BYTES[pid]);
+  const b = payloads(raw, '41' + hex2(pid), BYTES[pid])[0];
   return b ? PID[pid](b) : null;
 };
 
@@ -62,8 +75,7 @@ assert.strictEqual(parse(0x0c, '?\r\r>'), null); ok++; console.log('ok  "?" -> n
 // ---------- PIDs suportados ----------
 function suportados(base, raw) {
   const out = new Set();
-  for (const b of payloads(raw, '41' + hex2(base))) {
-    if (b.length < 4) continue;
+  for (const b of payloads(raw, '41' + hex2(base), 4)) {
     const mask = ((b[0] << 24) | (b[1] << 16) | (b[2] << 8) | b[3]) >>> 0;
     for (let i = 0; i < 32; i++) if ((mask >>> (31 - i)) & 1) out.add(base + 1 + i);
   }
@@ -78,6 +90,11 @@ const s2 = suportados(0x00, '41 00 80 00 00 00 \r41 00 BE 3E B8 11 \r\r>');
 assert.ok([0x01, 0x04, 0x05, 0x0b, 0x0c, 0x0d, 0x0f, 0x11, 0x20].every((p) => s2.includes(p))); ok++;
 console.log('ok  junta as centrais (câmbio + motor) ->', s2.map(hex2).join(' '));
 near(parse(0x0c, '41 0C 1A\r41 0C 1A F8\r\r>'), 1726, 1e-9, 'RPM pula linha incompleta de outra central');
+// As duas respostas grudadas na mesma linha, como podem chegar pelo BLE.
+const s3 = suportados(0x00, '41 00 80 00 00 00 41 00 BE 3E B8 11 \r\r>');
+assert.ok([0x01, 0x04, 0x05, 0x0b, 0x0c, 0x0d, 0x0f, 0x11, 0x20].every((p) => s3.includes(p))); ok++;
+console.log('ok  separa centrais grudadas na mesma linha ->', s3.map(hex2).join(' '));
+near(parse(0x0c, '41 0C 0B DA 41 0C 0B DA\r\r>'), 758.5, 1e-9, 'RPM com duas centrais na mesma linha');
 
 // ---------- Falhas (modo 03, CAN) ----------
 function dtcs(raw) {

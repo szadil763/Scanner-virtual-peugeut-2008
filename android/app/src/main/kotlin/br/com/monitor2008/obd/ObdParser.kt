@@ -8,23 +8,40 @@ package br.com.monitor2008.obd
 object ObdParser {
 
     /**
-     * Devolve os bytes que vêm depois de [prefix] em cada linha válida. Há uma linha por central que
-     * respondeu: no 2008 automático, o motor e o câmbio respondem juntos às consultas do modo 01.
+     * Devolve os bytes que vêm depois de [prefix], um bloco por central que respondeu: no 2008
+     * automático, o motor e o câmbio respondem juntos às consultas do modo 01.
+     *
+     * Com [size] (bytes de dados de cada resposta), também separa respostas que chegam grudadas
+     * na mesma linha, como "41 00 80 00 00 00 41 00 BE 3E B8 11". Sem [size], pega o resto da linha.
      */
-    fun payloads(raw: String, prefix: String): List<IntArray> {
+    fun payloads(raw: String, prefix: String, size: Int? = null): List<IntArray> {
         val lines = raw.split('\r', '\n')
-            .map { it.replace(" ", "").replace(">", "").uppercase() }
+            .map { it.uppercase().replace(NOISE, "").removePrefix("SEARCHING...") }
             .filter { it.isNotEmpty() }
         val out = mutableListOf<IntArray>()
         for (line in lines) {
-            if (!line.startsWith(prefix)) continue
-            val hex = line.substring(prefix.length)
-            if (hex.length % 2 != 0) continue
-            val bytes = hex.chunked(2).map { it.toIntOrNull(16) }
-            if (bytes.any { it == null }) continue
-            out += bytes.map { it!! }.toIntArray()
+            if (size == null) {
+                if (!line.startsWith(prefix)) continue
+                hexBytes(line.substring(prefix.length))?.let { out += it }
+                continue
+            }
+            var pos = 0
+            val frame = prefix.length + 2 * size
+            while (line.startsWith(prefix, pos) && pos + frame <= line.length) {
+                hexBytes(line.substring(pos + prefix.length, pos + frame))?.let { out += it }
+                pos += frame
+            }
         }
         return out
+    }
+
+    private val NOISE = Regex("[^0-9A-Z.?]") // espaços, ">", e qualquer caractere de controle
+
+    private fun hexBytes(hex: String): IntArray? {
+        if (hex.length % 2 != 0) return null
+        val bytes = hex.chunked(2).map { it.toIntOrNull(16) }
+        if (bytes.any { it == null }) return null
+        return bytes.map { it!! }.toIntArray()
     }
 
     /** Bytes da primeira linha válida, ou null. */
@@ -32,7 +49,7 @@ object ObdParser {
 
     /** Decodifica um PID. Null se a resposta for "NO DATA", "?" ou estiver incompleta. Usa a primeira central com resposta completa. */
     fun parse(pid: Pid, raw: String): Double? {
-        val bytes = payloads(raw, pid.responsePrefix).firstOrNull { it.size >= pid.dataBytes } ?: return null
+        val bytes = payloads(raw, pid.responsePrefix, pid.dataBytes).firstOrNull() ?: return null
         return pid.decode(bytes)
     }
 
@@ -43,8 +60,7 @@ object ObdParser {
      */
     fun supportedFrom(base: Int, raw: String): Set<Int> {
         val out = mutableSetOf<Int>()
-        for (b in payloads(raw, "41" + Pid.hex2(base))) {
-            if (b.size < 4) continue
+        for (b in payloads(raw, "41" + Pid.hex2(base), 4)) {
             val mask = (b[0].toLong() shl 24) or (b[1].toLong() shl 16) or (b[2].toLong() shl 8) or b[3].toLong()
             for (i in 0 until 32) {
                 if (((mask shr (31 - i)) and 1L) == 1L) out += base + 1 + i
