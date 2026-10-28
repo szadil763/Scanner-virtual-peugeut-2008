@@ -82,6 +82,14 @@ class Store(context: Context) {
         p.edit().putString("maint_${id}_km", km.toString()).putLong("maint_${id}_day", epochDay).apply()
     }
 
+    /** Último adaptador BLE que conectou: o app conecta direto nele, sem precisar procurar. */
+    var bleAddress: String?
+        get() = p.getString("bleAddress", null)
+        set(v) { p.edit().putString("bleAddress", v).apply() }
+    var bleName: String?
+        get() = p.getString("bleName", null)
+        set(v) { p.edit().putString("bleName", v).apply() }
+
     /** Ao sair do app, continuar numa janela flutuante (picture-in-picture). */
     var pipOnLeave: Boolean
         get() = p.getBoolean("pipOnLeave", false)

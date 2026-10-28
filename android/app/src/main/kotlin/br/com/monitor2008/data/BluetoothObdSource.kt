@@ -1,6 +1,8 @@
 package br.com.monitor2008.data
 
 import android.annotation.SuppressLint
+import android.bluetooth.BluetoothAdapter
+import android.bluetooth.BluetoothDevice
 import android.bluetooth.BluetoothManager
 import android.bluetooth.BluetoothSocket
 import android.content.Context
@@ -43,6 +45,7 @@ class BluetoothObdSource(
     private val _info = MutableStateFlow(ConnectionInfo())
     override val info: StateFlow<ConnectionInfo> = _info.asStateFlow()
 
+    private val store = Store(context)
     private var socket: BluetoothSocket? = null
     private var bleLink: BleLink? = null
     private var client: Elm327Client? = null
@@ -230,19 +233,55 @@ class BluetoothObdSource(
         }
 
         // 2) BLE (por exemplo "OBDBLE"): não precisa parear nem de PIN.
-        _info.value = ConnectionInfo(ConnState.CONNECTING, "Procurando o adaptador BLE...")
         val ble = try {
-            BleLink.find(adapter, ::matches)?.let { BleLink.open(context, it, ::log) }
+            connectBle(adapter)
         } catch (e: SecurityException) {
             return fail("Sem permissão para procurar o adaptador. Toque em Permitir Bluetooth em Ajustes.")
         }
         if (ble == null) {
-            val names = bonded.joinToString(", ") { it.name ?: it.address }.ifBlank { "nenhum" }
-            return fail("Adaptador não encontrado (nem pareado, nem por BLE). Pareados: $names. Ligue a ignição e confira o adaptador.")
+            return fail(
+                "Adaptador não encontrado. Ligue a ignição. Se o Monitor estiver aberto em outro aparelho (celular), " +
+                    "feche lá: o adaptador aceita uma conexão por vez. Tentando de novo...",
+            )
         }
         log("Dispositivo BLE: ${ble.deviceName}")
         bleLink = ble
         return Elm327Client(ble.input, ble.output, ::exchanged).also { client = it }
+    }
+
+    /**
+     * Conecta por BLE. Primeiro direto no endereço que já conectou antes (sem busca: com o celular
+     * tocando música pelo multimídia, a busca fica lenta e às vezes não acha o adaptador); se falhar,
+     * procura pelo nome. Cada conexão tenta 3 vezes, porque o chip do multimídia costuma falhar a
+     * primeira (status 133) quando já tem áudio Bluetooth ativo.
+     */
+    private fun connectBle(adapter: BluetoothAdapter): BleLink? {
+        val addr = store.bleAddress
+        if (addr != null && BluetoothAdapter.checkBluetoothAddress(addr) && matches(store.bleName)) {
+            _info.value = ConnectionInfo(ConnState.CONNECTING, "Conectando no adaptador ${store.bleName}...")
+            log("BLE: conectando direto em ${store.bleName} ($addr)")
+            openWithRetry(adapter.getRemoteDevice(addr))?.let { return it }
+        }
+
+        _info.value = ConnectionInfo(ConnState.CONNECTING, "Procurando o adaptador BLE...")
+        val seen = mutableSetOf<String>()
+        val device = BleLink.find(adapter, ::matches, seen = seen)
+        if (device == null) {
+            log("BLE: a busca não achou o adaptador. Aparelhos BLE vistos: ${synchronized(seen) { seen.joinToString(", ") }.ifBlank { "nenhum" }}")
+            return null
+        }
+        return openWithRetry(device)?.also {
+            store.bleAddress = device.address
+            store.bleName = it.deviceName
+        }
+    }
+
+    private fun openWithRetry(device: BluetoothDevice): BleLink? {
+        repeat(3) { attempt ->
+            BleLink.open(context, device, ::log)?.let { return it }
+            if (attempt < 2) Thread.sleep(1_500)
+        }
+        return null
     }
 
     private fun exchanged(cmd: String, resp: String) {

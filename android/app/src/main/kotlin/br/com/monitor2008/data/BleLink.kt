@@ -105,14 +105,20 @@ class BleLink private constructor(private val gatt: BluetoothGatt) {
         /** Serviços padrão do BLE que nunca são o canal de dados. */
         private val STANDARD = setOf("00001800", "00001801", "0000180a", "0000180f")
 
-        /** Procura um adaptador BLE cujo nome satisfaça [matches] por até [scanMs]. */
-        fun find(adapter: BluetoothAdapter, matches: (String) -> Boolean, scanMs: Long = 10_000): BluetoothDevice? {
+        /**
+         * Procura um adaptador BLE cujo nome satisfaça [matches] por até [scanMs]. Os nomes vistos
+         * vão para [seen], para o registro mostrar se o adaptador chegou a aparecer.
+         */
+        fun find(
+            adapter: BluetoothAdapter, matches: (String) -> Boolean, scanMs: Long = 15_000, seen: MutableSet<String>? = null,
+        ): BluetoothDevice? {
             val scanner = adapter.bluetoothLeScanner ?: return null
             var found: BluetoothDevice? = null
             val latch = CountDownLatch(1)
             val callback = object : ScanCallback() {
                 override fun onScanResult(callbackType: Int, result: ScanResult) {
                     val name = result.device.name ?: result.scanRecord?.deviceName ?: return
+                    seen?.let { synchronized(it) { it.add(name) } }
                     if (found == null && matches(name)) {
                         found = result.device
                         latch.countDown()
@@ -142,6 +148,8 @@ class BleLink private constructor(private val gatt: BluetoothGatt) {
                         connectedOk = true
                         connected.countDown()
                     } else if (newState == BluetoothProfile.STATE_DISCONNECTED) {
+                        // Status 133 = falha genérica do chip, comum com áudio Bluetooth ativo; vale tentar de novo.
+                        log("BLE: desconectado (status $status)")
                         link?.closed = true
                         connected.countDown(); discovered.countDown(); descriptorDone.countDown()
                     }
@@ -170,6 +178,8 @@ class BleLink private constructor(private val gatt: BluetoothGatt) {
                 log("BLE: sem resposta ao conectar")
                 l.close(); return null
             }
+            // Prioridade alta: respostas mais rápidas quando o chip divide o tempo com o áudio do celular.
+            gatt.requestConnectionPriority(BluetoothGatt.CONNECTION_PRIORITY_HIGH)
             gatt.discoverServices()
             if (!discovered.await(10, TimeUnit.SECONDS) || l.closed) {
                 log("BLE: não achou os serviços")
