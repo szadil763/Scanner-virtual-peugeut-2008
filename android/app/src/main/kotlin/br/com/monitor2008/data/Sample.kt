@@ -14,6 +14,15 @@ data class Sample(
     val fuelLevelPct: Double? = null,
     val batteryV: Double? = null,
     val fuelRateLph: Double? = null,
+    val stftPct: Double? = null,
+    val ltftPct: Double? = null,
+    val timingDeg: Double? = null,
+    val o2s1V: Double? = null,
+    val o2s2V: Double? = null,
+    /** Luz de injeção acesa (PID 01). */
+    val milOn: Boolean? = null,
+    /** Quantidade de falhas armazenadas que a central informa (PID 01). */
+    val dtcCount: Int? = null,
 )
 
 enum class ConnState { IDLE, CONNECTING, CONNECTED, ERROR }

@@ -70,6 +70,13 @@ class SimulatedSource(private val tickMs: Long = 500) : ObdSource {
                     mafGs = maf,
                     fuelLevelPct = fuel,
                     batteryV = 14.1 + sin(t / 7) * 0.1,
+                    stftPct = sin(t * 1.3) * 4,
+                    ltftPct = 3.1,
+                    timingDeg = 14 - min(8.0, max(0.0, accel) * 2),
+                    o2s1V = if (sin(t * 2.1) > 0) 0.78 else 0.14,
+                    o2s2V = 0.62 + sin(t / 9) * 0.04,
+                    milOn = false,
+                    dtcCount = 0,
                 ),
             )
             delay(tickMs)

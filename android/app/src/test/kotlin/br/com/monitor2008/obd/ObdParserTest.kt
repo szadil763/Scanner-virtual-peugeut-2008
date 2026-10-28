@@ -62,6 +62,27 @@ class ObdParserTest {
         assertNull(ObdParser.voltage("?\r\r>"))
     }
 
+    @Test fun fuelTrims() {
+        assertEquals(0.0, ObdParser.parse(Pid.STFT, "41 06 80")!!, 1e-9)
+        assertEquals(12.5, ObdParser.parse(Pid.LTFT, "41 07 90")!!, 1e-9)
+        assertEquals(-25.0, ObdParser.parse(Pid.LTFT, "41 07 60")!!, 1e-9)
+    }
+
+    @Test fun timingAdvance() = assertEquals(10.0, ObdParser.parse(Pid.TIMING, "41 0E 94")!!, 1e-9)
+
+    @Test fun o2Sensor() = assertEquals(0.45, ObdParser.parse(Pid.O2_S1, "41 14 5A FF")!!, 1e-9)
+
+    // Motor e câmbio respondem ao PID 01: a luz acesa do motor não pode sumir atrás da resposta do câmbio.
+    @Test fun monitorStatusJoinsEcus() {
+        val a = ObdParser.monitorStatus("41 01 00 04 00 00\r41 01 82 07 65 04\r\r>")!!.toInt()
+        assertTrue((a and 0x80) != 0)
+        assertEquals(2, a and 0x7F)
+        assertEquals(0.0, ObdParser.monitorStatus("41 01 00 04 00 00 41 01 00 07 65 04")!!, 1e-9)
+        assertNull(ObdParser.monitorStatus("NO DATA"))
+    }
+
+    @Test fun pendingDtcs() = assertEquals(listOf("P0171"), ObdParser.dtcs("47 01 01 71 00 00 00 00", "47"))
+
     @Test fun dtcsInCanFormat() =
         assertEquals(listOf("P0133", "P0200"), ObdParser.dtcs("43 02 01 33 02 00 00 00"))
 

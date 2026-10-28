@@ -1,6 +1,9 @@
 package br.com.monitor2008
 
+import android.app.PictureInPictureParams
+import android.content.pm.PackageManager
 import android.os.Bundle
+import android.util.Rational
 import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -45,6 +48,18 @@ class MainActivity : ComponentActivity() {
                     MonitorApp(vm)
                 }
             }
+        }
+    }
+
+    /** Ao tocar em Início: se ligado em Ajustes, continua numa janela flutuante sobre o mapa ou a música. */
+    override fun onUserLeaveHint() {
+        super.onUserLeaveHint()
+        if (!vm.ui.value.pipOnLeave) return
+        if (!packageManager.hasSystemFeature(PackageManager.FEATURE_PICTURE_IN_PICTURE)) return
+        try {
+            enterPictureInPictureMode(PictureInPictureParams.Builder().setAspectRatio(Rational(16, 9)).build())
+        } catch (_: Exception) {
+            // Alguns multimídias não suportam janela flutuante: segue normal.
         }
     }
 }

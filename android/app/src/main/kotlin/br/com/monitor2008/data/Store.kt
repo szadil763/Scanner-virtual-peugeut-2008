@@ -74,6 +74,19 @@ class Store(context: Context) {
         get() = p.getInt("oilIntervalMonths", 12)
         set(v) { p.edit().putInt("oilIntervalMonths", v).apply() }
 
+    // Outros itens de manutenção (filtros, velas, correia...): última troca por km e data.
+    fun maintConfigured(id: String): Boolean = p.contains("maint_${id}_day")
+    fun maintLastKm(id: String): Double = p.getString("maint_${id}_km", null)?.toDoubleOrNull() ?: odometerKm
+    fun maintLastDay(id: String): Long = p.getLong("maint_${id}_day", java.time.LocalDate.now().toEpochDay())
+    fun setMaintDone(id: String, km: Double, epochDay: Long) {
+        p.edit().putString("maint_${id}_km", km.toString()).putLong("maint_${id}_day", epochDay).apply()
+    }
+
+    /** Ao sair do app, continuar numa janela flutuante (picture-in-picture). */
+    var pipOnLeave: Boolean
+        get() = p.getBoolean("pipOnLeave", false)
+        set(v) { p.edit().putBoolean("pipOnLeave", v).apply() }
+
     // Abastecimentos
     fun refuels(): List<Refuel> {
         val arr = JSONArray(p.getString("refuels", "[]"))

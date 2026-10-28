@@ -7,7 +7,9 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import br.com.monitor2008.data.BluetoothObdSource
 import br.com.monitor2008.data.BtPermissions
+import br.com.monitor2008.data.ConnState
 import br.com.monitor2008.data.ConnectionInfo
+import br.com.monitor2008.data.HealthStore
 import br.com.monitor2008.data.ObdSource
 import br.com.monitor2008.data.Refuel
 import br.com.monitor2008.data.Sample
@@ -17,11 +19,18 @@ import br.com.monitor2008.domain.EngineConfig
 import br.com.monitor2008.domain.FlowMethod
 import br.com.monitor2008.domain.FuelBlend
 import br.com.monitor2008.domain.FuelCalc
+import br.com.monitor2008.domain.HealthItem
+import br.com.monitor2008.domain.HealthRecorder
+import br.com.monitor2008.domain.HealthRules
+import br.com.monitor2008.domain.ItemStatus
+import br.com.monitor2008.domain.MaintCatalog
+import br.com.monitor2008.domain.MaintItem
 import br.com.monitor2008.domain.Maintenance
 import br.com.monitor2008.domain.OilPlan
 import br.com.monitor2008.domain.OilStatus
 import br.com.monitor2008.domain.RefuelState
 import br.com.monitor2008.domain.TripAccumulator
+import br.com.monitor2008.domain.TripHealth
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -54,11 +63,19 @@ data class UiState(
     val paired: PairedList = PairedList(),
     val conn: ConnectionInfo = ConnectionInfo(),
     val dtcs: List<String>? = null,
+    val pendingDtcs: List<String>? = null,
+    val health: List<HealthItem> = emptyList(),
+    val tripsRecorded: Int = 0,
+    val maint: List<MaintRow> = emptyList(),
+    val pipOnLeave: Boolean = false,
     val history: List<Double> = emptyList(),
 ) {
     /** Com o carro andando, o app não aceita digitação nem registros. */
     val moving: Boolean get() = (sample?.speedKmh ?: 0.0) > 0.5
 }
+
+/** Item de manutenção por km/data e sua situação. [status] null = ainda não informado. */
+data class MaintRow(val item: MaintItem, val status: ItemStatus?)
 
 /** Aparelhos pareados no Bluetooth, para escolher o adaptador em Ajustes. */
 data class PairedList(
@@ -90,6 +107,14 @@ class MonitorViewModel(app: Application) : AndroidViewModel(app) {
     private var dtcs: List<String>? = null
     private val history = ArrayDeque<Double>()
     private var paired = PairedList()
+    private var pendingDtcs: List<String>? = null
+
+    // Saúde: viagens gravadas (só com o adaptador real) e a viagem em andamento.
+    private val healthStore = HealthStore(app)
+    private var trips: List<TripHealth> = healthStore.load()
+    private var recorder = HealthRecorder()
+    private var tripDtcsRead = false
+    private var engineOffSince = 0L
     private var refuelList: List<Refuel> = store.refuels().asReversed() // mais recente primeiro
 
     private val _ui = MutableStateFlow(snapshot())
@@ -99,9 +124,10 @@ class MonitorViewModel(app: Application) : AndroidViewModel(app) {
 
     /** (Re)inicia a leitura com a fonte escolhida nos Ajustes. */
     fun start() {
+        closeTrip()
         sourceJob?.cancel(); infoJob?.cancel()
         trip.reset(); history.clear(); lastTimeMs = 0L
-        lastSample = null; lastKmPerL = null; lastLph = null; lastMethod = null; dtcs = null
+        lastSample = null; lastKmPerL = null; lastLph = null; lastMethod = null; dtcs = null; pendingDtcs = null
 
         val src: ObdSource = if (store.useSimulated) {
             SimulatedSource()
@@ -110,7 +136,12 @@ class MonitorViewModel(app: Application) : AndroidViewModel(app) {
         }
         source = src
         infoJob = viewModelScope.launch {
-            src.info.collect { conn = it; publish() }
+            src.info.collect {
+                // Conexão perdida ou carro desligado: a viagem termina aqui.
+                if (it.state != ConnState.CONNECTED) closeTrip()
+                conn = it
+                publish()
+            }
         }
         sourceJob = viewModelScope.launch {
             src.samples().collect { onSample(it) }
@@ -141,11 +172,48 @@ class MonitorViewModel(app: Application) : AndroidViewModel(app) {
             if (history.size > 120) history.removeFirst()
         }
 
+        if (!store.useSimulated) recordHealth(s, dt)
+
         if (s.timeMs - lastSaveMs > 20_000) {
             store.saveProgress(odometerKm, uncalLiters, kmSinceFull)
             lastSaveMs = s.timeMs
         }
         publish()
+    }
+
+    /** Alimenta a viagem da tela Saúde. Simulação não grava (não pode sujar o histórico do carro). */
+    private fun recordHealth(s: Sample, dt: Double) {
+        recorder.add(s, dt)
+        val running = (s.rpm ?: 0.0) > 400
+        if (running) {
+            engineOffSince = 0L
+            // Falhas armazenadas e pendentes: uma leitura por viagem, logo que o motor liga.
+            if (!tripDtcsRead) {
+                tripDtcsRead = true
+                val src = source ?: return
+                viewModelScope.launch {
+                    val stored = src.readDtcs()
+                    val pending = src.readPendingDtcs()
+                    recorder.setDtcs(stored, pending)
+                    dtcs = stored; pendingDtcs = pending
+                    publish()
+                }
+            }
+        } else if (recorder.started) {
+            if (engineOffSince == 0L) engineOffSince = s.timeMs
+            if (s.timeMs - engineOffSince > ENGINE_OFF_TRIP_END_MS) closeTrip()
+        }
+    }
+
+    /** Fecha a viagem em andamento e grava o resumo, se ela durou o suficiente. */
+    private fun closeTrip() {
+        recorder.finish()?.let { t ->
+            trips = (trips + t).takeLast(400)
+            healthStore.save(trips)
+        }
+        recorder = HealthRecorder()
+        tripDtcsRead = false
+        engineOffSince = 0L
     }
 
     // ---------- ações das telas ----------
@@ -154,9 +222,18 @@ class MonitorViewModel(app: Application) : AndroidViewModel(app) {
         val src = source ?: return
         viewModelScope.launch {
             dtcs = src.readDtcs()
+            pendingDtcs = src.readPendingDtcs()
             publish()
         }
     }
+
+    fun registerMaintDone(id: String) {
+        if (_ui.value.moving) return
+        store.setMaintDone(id, odometerKm, LocalDate.now().toEpochDay())
+        publish()
+    }
+
+    fun setPipOnLeave(on: Boolean) { store.pipOnLeave = on; publish() }
 
     fun diagnosticLog(): List<String> = source?.diagnosticLog().orEmpty()
 
@@ -229,6 +306,7 @@ class MonitorViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     override fun onCleared() {
+        closeTrip()
         store.saveProgress(odometerKm, uncalLiters, kmSinceFull)
         super.onCleared()
     }
@@ -270,7 +348,24 @@ class MonitorViewModel(app: Application) : AndroidViewModel(app) {
             paired = paired,
             conn = conn,
             dtcs = dtcs,
+            pendingDtcs = pendingDtcs,
+            health = HealthRules.evaluate(trips, lastSample),
+            tripsRecorded = trips.size,
+            maint = MaintCatalog.items.map { item ->
+                MaintRow(
+                    item,
+                    if (store.maintConfigured(item.id)) {
+                        Maintenance.itemStatus(item, store.maintLastKm(item.id), store.maintLastDay(item.id), odometerKm, today)
+                    } else null,
+                )
+            },
+            pipOnLeave = store.pipOnLeave,
             history = history.toList(),
         )
+    }
+
+    private companion object {
+        /** Motor parado por mais que isso = fim da viagem. */
+        const val ENGINE_OFF_TRIP_END_MS = 30_000L
     }
 }

@@ -4,6 +4,7 @@ Resultado do primeiro teste no carro (28/10/2026, adaptador ELM327 v2.1 por BLE,
 
 | PID | Dado | Fórmula | Unidade | Carro responde? |
 |---|---|---|---|---|
+| 01 | Status: luz de injeção (bit 7 de A) e nº de falhas (A & 0x7F) | — | — | Sim (motor e câmbio; o app junta os dois) |
 | 04 | Carga do motor | A × 100 / 255 | % | Sim |
 | 05 | Temperatura do líquido de arrefecimento | A − 40 | °C | Sim |
 | 06 | Correção curta de combustível (banco 1) | (A − 128) × 100 / 128 | % | Sim |
@@ -11,9 +12,12 @@ Resultado do primeiro teste no carro (28/10/2026, adaptador ELM327 v2.1 por BLE,
 | 0B | Pressão do coletor (MAP) | A | kPa | Sim |
 | 0C | Rotação | (256 A + B) / 4 | rpm | Sim |
 | 0D | Velocidade | A | km/h | Sim |
+| 0E | Avanço de ignição | A / 2 − 64 | ° | Sim |
 | 0F | Temperatura do ar de admissão | A − 40 | °C | Sim |
 | 10 | Fluxo de ar (MAF) | (256 A + B) / 100 | g/s | **Não** |
 | 11 | Posição do acelerador | A × 100 / 255 | % | Sim |
+| 14 | Sonda lambda antes do catalisador | A / 200 | V | Sim |
+| 15 | Sonda lambda depois do catalisador | A / 200 | V | Sim |
 | 2F | Nível de combustível | A × 100 / 255 | % | **Não** |
 | 42 | Tensão do módulo (bateria) | (256 A + B) / 1000 | V | **Não** (app usa ATRV) |
 | 46 | Temperatura ambiente | A − 40 | °C | **Não** |
@@ -22,9 +26,9 @@ Resultado do primeiro teste no carro (28/10/2026, adaptador ELM327 v2.1 por BLE,
 
 A e B são o primeiro e o segundo byte de dados da resposta.
 
-## Modo 03 (falhas armazenadas)
+## Modo 03 (falhas armazenadas) e 07 (pendentes)
 
-Em CAN (ISO 15765-4) a resposta é `43 NN` seguido de `NN` pares de bytes. Cada par vira um código: os 2 bits mais altos escolhem a letra (P, C, B, U), os 2 seguintes o primeiro dígito, e o restante forma 3 dígitos hexadecimais. Exemplo: `01 33` → `P0133`.
+Em CAN (ISO 15765-4) a resposta é `43 NN` seguido de `NN` pares de bytes. Cada par vira um código: os 2 bits mais altos escolhem a letra (P, C, B, U), os 2 seguintes o primeiro dígito, e o restante forma 3 dígitos hexadecimais. Exemplo: `01 33` → `P0133`. O modo 07 (falhas pendentes, ainda sem acender a luz) tem o mesmo formato com prefixo `47`.
 
 ## Observações
 

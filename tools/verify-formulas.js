@@ -14,6 +14,11 @@ const near = (a, b, tol, nome) => {
 // ---------- PIDs ----------
 const PID = {
   0x04: (d) => (d[0] * 100) / 255,
+  0x06: (d) => ((d[0] - 128) * 100) / 128,
+  0x07: (d) => ((d[0] - 128) * 100) / 128,
+  0x0e: (d) => d[0] / 2 - 64,
+  0x14: (d) => d[0] / 200,
+  0x15: (d) => d[0] / 200,
   0x05: (d) => d[0] - 40,
   0x0b: (d) => d[0],
   0x0c: (d) => (256 * d[0] + d[1]) / 4,
@@ -54,7 +59,7 @@ function payloads(raw, prefix, size) {
   return out;
 }
 const payload = (raw, prefix) => payloads(raw, prefix)[0] ?? null;
-const BYTES = { 0x04: 1, 0x05: 1, 0x0b: 1, 0x0c: 2, 0x0d: 1, 0x0f: 1, 0x10: 2, 0x11: 1, 0x2f: 1, 0x42: 2, 0x5e: 2 };
+const BYTES = { 0x06: 1, 0x07: 1, 0x0e: 1, 0x14: 2, 0x15: 2, 0x04: 1, 0x05: 1, 0x0b: 1, 0x0c: 2, 0x0d: 1, 0x0f: 1, 0x10: 2, 0x11: 1, 0x2f: 1, 0x42: 2, 0x5e: 2 };
 const hex2 = (n) => n.toString(16).toUpperCase().padStart(2, '0');
 const parse = (pid, raw) => {
   const b = payloads(raw, '41' + hex2(pid), BYTES[pid])[0];
@@ -71,6 +76,26 @@ near(parse(0x5e, '41 5E 00 C8'), 10.0, 1e-9, 'Taxa combustível 41 5E 00 C8');
 near(parse(0x0c, '410C1AF8'), 1726, 1e-9, 'RPM sem espaços');
 assert.strictEqual(parse(0x0c, 'NO DATA\r\r>'), null); ok++; console.log('ok  NO DATA -> null');
 assert.strictEqual(parse(0x0c, '?\r\r>'), null); ok++; console.log('ok  "?" -> null');
+
+near(parse(0x06, '41 06 80'), 0, 1e-9, 'Correção curta 41 06 80');
+near(parse(0x07, '41 07 90'), 12.5, 1e-9, 'Correção longa 41 07 90');
+near(parse(0x07, '41 07 60'), -25, 1e-9, 'Correção longa 41 07 60');
+near(parse(0x0e, '41 0E 94'), 10, 1e-9, 'Avanço 41 0E 94');
+near(parse(0x14, '41 14 5A FF'), 0.45, 1e-9, 'Sonda lambda 41 14 5A FF');
+
+// PID 01 de todas as centrais: luz acesa em alguma (bit 7) e soma das falhas.
+function monitorStatus(raw) {
+  const all = payloads(raw, '4101', 4);
+  if (!all.length) return null;
+  const mil = all.some((b) => b[0] & 0x80);
+  const n = Math.min(0x7f, all.reduce((s, b) => s + (b[0] & 0x7f), 0));
+  return (mil ? 0x80 : 0) | n;
+}
+const ms = monitorStatus('41 01 00 04 00 00\r41 01 82 07 65 04\r\r>');
+assert.ok(ms & 0x80); assert.strictEqual(ms & 0x7f, 2); ok++;
+console.log('ok  PID 01 junta motor e câmbio: luz acesa, 2 falhas');
+assert.strictEqual(monitorStatus('41 01 00 04 00 00 41 01 00 07 65 04'), 0); ok++;
+console.log('ok  PID 01 sem luz, respostas grudadas');
 
 // ---------- PIDs suportados ----------
 function suportados(base, raw) {
@@ -107,8 +132,8 @@ near(tensao('14,1 V'), 14.1, 1e-9, 'ATRV 14,1 V');
 assert.strictEqual(tensao('?\r\r>'), null); ok++; console.log('ok  ATRV "?" -> null');
 
 // ---------- Falhas (modo 03, CAN) ----------
-function dtcs(raw) {
-  const b = payload(raw, '43');
+function dtcs(raw, prefix = '43') {
+  const b = payload(raw, prefix);
   if (!b || b.length < 1) return [];
   const n = b[0];
   const out = [];
@@ -126,6 +151,8 @@ assert.deepStrictEqual(dtcs('43 00 00 00 00 00 00 00'), []); ok++;
 console.log('ok  sem falhas -> lista vazia');
 assert.deepStrictEqual(dtcs('43 01 C1 00 00 00 00 00'), ['U0100']); ok++;
 console.log('ok  DTC C1 00 -> U0100');
+assert.deepStrictEqual(dtcs('47 01 01 71 00 00 00 00', '47'), ['P0171']); ok++;
+console.log('ok  falha pendente (modo 07) 47 01 01 71 -> P0171');
 
 // ---------- Consumo ----------
 const AFR_GASOLINA = 14.7, AFR_ETANOL = 9.0, DENS_GASOLINA = 745, DENS_ETANOL = 789;

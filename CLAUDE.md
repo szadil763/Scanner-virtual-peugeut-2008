@@ -42,4 +42,8 @@ App compilado pelo GitHub Actions (`.github/workflows/build-apk.yml`, roda em `m
 
 O APK sai em Releases (`latest`); a versão (0.1.N, N = número do build) aparece na tela Diagnóstico. Ver `docs/INSTALACAO.md`.
 
-Pendências conhecidas: serviço em primeiro plano (a leitura pode pausar com outro app na frente), leitura de códigos pendentes (modo 07), registro de falhas com foto dos dados, ícone do app.
+Tela **Saúde** (manutenção preventiva, etapas 1 e 2): grava um resumo por viagem e avalia mistura, sondas, catalisador, marcha lenta, borboleta, vácuo, arrefecimento, bateria e falhas (modos 03 e 07). Regras e limites em `docs/SAUDE.md`; código puro e testado em `domain/Health.kt`. A aba Manutenção tem itens por km/data (filtros, velas, correia, fluidos). Etapa 3 (previsões por tendência) depende de semanas de dados.
+
+Tela dividida e janela flutuante: abaixo de 800 dp de largura o app usa layout compacto; em janela pequena (picture-in-picture, ligado em Ajustes) mostra só velocidade, km/l, rotação e temperatura.
+
+Pendências conhecidas: serviço em primeiro plano (com outro app em tela inteira na frente, o Android pode encerrar o app e a viagem não é gravada; em tela dividida ou janela flutuante ele segue ativo), leitura de códigos pendentes (modo 07), registro de falhas com foto dos dados, ícone do app.

@@ -16,4 +16,7 @@ interface ObdSource {
 
     /** Falhas armazenadas (modo 03). Somente leitura. */
     suspend fun readDtcs(): List<String>
+
+    /** Falhas pendentes (modo 07). Somente leitura. */
+    suspend fun readPendingDtcs(): List<String> = emptyList()
 }

@@ -70,6 +70,19 @@ object ObdParser {
     }
 
     /**
+     * PID 01 de todas as centrais juntas: devolve o byte A combinado (bit 7 = luz de injeção acesa em
+     * alguma central; bits 0..6 = soma das falhas). No 2008 o câmbio também responde ao PID 01, e ler
+     * só a primeira resposta podia esconder a luz acesa pelo motor.
+     */
+    fun monitorStatus(raw: String): Double? {
+        val all = payloads(raw, Pid.MONITOR_STATUS.responsePrefix, Pid.MONITOR_STATUS.dataBytes)
+        if (all.isEmpty()) return null
+        val mil = all.any { (it[0] and 0x80) != 0 }
+        val count = all.sumOf { it[0] and 0x7F }.coerceAtMost(0x7F)
+        return ((if (mil) 0x80 else 0) or count).toDouble()
+    }
+
+    /**
      * Tensão medida pelo próprio adaptador no pino 16 da tomada OBD (comando ATRV), por exemplo
      * "12.4V". Serve de bateria quando o carro não informa o PID 42, como no 2008.
      */
@@ -78,11 +91,11 @@ object ObdParser {
             ?.groupValues?.get(1)?.replace(',', '.')?.toDoubleOrNull()
 
     /**
-     * Decodifica a resposta do modo 03 (falhas armazenadas) em CAN (ISO 15765-4):
-     * "43 NN" seguido de NN pares de bytes. Pares 00 00 são preenchimento.
+     * Decodifica a resposta do modo 03 (falhas armazenadas, prefixo "43") ou 07 (pendentes, "47")
+     * em CAN (ISO 15765-4): prefixo, "NN" e NN pares de bytes. Pares 00 00 são preenchimento.
      */
-    fun dtcs(raw: String): List<String> {
-        val b = payload(raw, "43") ?: return emptyList()
+    fun dtcs(raw: String, prefix: String = "43"): List<String> {
+        val b = payload(raw, prefix) ?: return emptyList()
         if (b.isEmpty()) return emptyList()
         val count = b[0]
         val out = mutableListOf<String>()

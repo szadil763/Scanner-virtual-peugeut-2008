@@ -93,7 +93,7 @@ class BluetoothObdSource(
                     while (currentCoroutineContext().isActive) {
                         for (pid in plan(cycle, supported)) {
                             val raw = synchronized(lock) { c.send(pid.command) }
-                            val v = ObdParser.parse(pid, raw)
+                            val v = if (pid == Pid.MONITOR_STATUS) ObdParser.monitorStatus(raw) else ObdParser.parse(pid, raw)
                             note(pid, raw, v)
                             if (v != null) values[pid] = v
                         }
@@ -143,6 +143,11 @@ class BluetoothObdSource(
         synchronized(lock) { c.readDtcs() }
     }
 
+    override suspend fun readPendingDtcs(): List<String> = withContext(Dispatchers.IO) {
+        val c = client ?: return@withContext emptyList()
+        synchronized(lock) { c.readPendingDtcs() }
+    }
+
     /** Guarda no registro a primeira resposta de cada dado, para ver o que o carro realmente devolve. */
     private fun note(pid: Pid, raw: String, value: Double?) {
         if (!seen.add(pid)) return
@@ -150,10 +155,17 @@ class BluetoothObdSource(
         log("${pid.command} (${pid.label}) -> $shown => ${value ?: "sem valor"}")
     }
 
-    /** PIDs rápidos a cada ciclo; os lentos (temperaturas, bateria, nível) a cada 10 ciclos. */
+    /**
+     * PIDs rápidos a cada ciclo; os lentos (temperaturas, bateria, nível) a cada 10 ciclos.
+     * A sonda antes do catalisador e a correção curta ficam nos rápidos: a saúde da sonda é medida
+     * pelo quanto ela oscila.
+     */
     private fun plan(cycle: Int, supported: Set<Int>): List<Pid> {
-        val fast = listOf(Pid.RPM, Pid.SPEED, Pid.FUEL_RATE, Pid.MAF, Pid.MAP, Pid.LOAD)
-        val slow = listOf(Pid.COOLANT_TEMP, Pid.INTAKE_TEMP, Pid.MODULE_VOLTAGE, Pid.FUEL_LEVEL, Pid.THROTTLE)
+        val fast = listOf(Pid.RPM, Pid.SPEED, Pid.FUEL_RATE, Pid.MAF, Pid.MAP, Pid.LOAD, Pid.O2_S1, Pid.STFT)
+        val slow = listOf(
+            Pid.COOLANT_TEMP, Pid.INTAKE_TEMP, Pid.MODULE_VOLTAGE, Pid.FUEL_LEVEL, Pid.THROTTLE,
+            Pid.LTFT, Pid.TIMING, Pid.O2_S2, Pid.MONITOR_STATUS,
+        )
         val wanted = if (cycle % 10 == 0) fast + slow else fast
         // Se o filtro esvaziar a lista (máscara mal lida), consulta tudo: o que não existir volta NO DATA.
         return wanted.filter { it.code in supported }.ifEmpty { wanted }
@@ -172,6 +184,13 @@ class BluetoothObdSource(
         fuelLevelPct = v[Pid.FUEL_LEVEL],
         batteryV = v[Pid.MODULE_VOLTAGE] ?: adapterVolts,
         fuelRateLph = v[Pid.FUEL_RATE],
+        stftPct = v[Pid.STFT],
+        ltftPct = v[Pid.LTFT],
+        timingDeg = v[Pid.TIMING],
+        o2s1V = v[Pid.O2_S1],
+        o2s2V = v[Pid.O2_S2],
+        milOn = v[Pid.MONITOR_STATUS]?.let { (it.toInt() and 0x80) != 0 },
+        dtcCount = v[Pid.MONITOR_STATUS]?.let { it.toInt() and 0x7F },
     )
 
     private fun fail(msg: String): Elm327Client? {

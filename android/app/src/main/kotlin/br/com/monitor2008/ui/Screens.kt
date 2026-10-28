@@ -7,6 +7,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -54,6 +55,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.LifecycleResumeEffect
@@ -61,6 +63,9 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import br.com.monitor2008.data.BtPermissions
 import br.com.monitor2008.data.ConnState
 import br.com.monitor2008.domain.FlowMethod
+import br.com.monitor2008.domain.HealthItem
+import br.com.monitor2008.domain.HealthStatus
+import br.com.monitor2008.domain.RefLine
 import br.com.monitor2008.domain.MaintState
 import br.com.monitor2008.obd.Pid
 import kotlinx.coroutines.delay
@@ -77,48 +82,84 @@ private fun Double?.f(d: Int = 1): String = this?.f(d) ?: "--"
 private fun parse(s: String): Double? = s.trim().replace(',', '.').toDoubleOrNull()
 
 enum class Tab(val label: String) {
-    PAINEL("Painel"), CONSUMO("Consumo"), MANUTENCAO("Manutenção"), DIAGNOSTICO("Diagnóstico"), AJUSTES("Ajustes")
+    PAINEL("Painel"), CONSUMO("Consumo"), SAUDE("Saúde"), MANUTENCAO("Manutenção"), DIAGNOSTICO("Diagnóstico"), AJUSTES("Ajustes")
 }
+
+/**
+ * Três tamanhos: tela inteira; tela dividida com mapas ou música (layout compacto, abaixo de
+ * [COMPACT_WIDTH]); e janela flutuante (só os números principais).
+ */
+private val COMPACT_WIDTH = 800.dp
 
 @Composable
 fun MonitorApp(vm: MonitorViewModel) {
     val ui by vm.ui.collectAsStateWithLifecycle()
     var tab by remember { mutableStateOf(Tab.PAINEL) }
 
-    Row(Modifier.fillMaxSize()) {
-        NavigationRail {
-            Tab.values().forEach { t ->
-                NavigationRailItem(
-                    selected = tab == t,
-                    onClick = { tab = t },
-                    icon = {},
-                    label = { Text(t.label, fontSize = 16.sp) },
-                    alwaysShowLabel = true,
-                    modifier = Modifier.height(72.dp),
-                )
+    BoxWithConstraints(Modifier.fillMaxSize()) {
+        val compact = maxWidth < COMPACT_WIDTH
+        if (maxWidth < 420.dp || maxHeight < 320.dp) MiniPanel(ui) else Row(Modifier.fillMaxSize()) {
+            NavigationRail {
+                Tab.values().forEach { t ->
+                    NavigationRailItem(
+                        selected = tab == t,
+                        onClick = { tab = t },
+                        icon = {},
+                        label = { Text(t.label, fontSize = if (compact) 13.sp else 16.sp) },
+                        alwaysShowLabel = true,
+                        modifier = Modifier.height(if (compact) 60.dp else 68.dp),
+                    )
+                }
+            }
+            Box(Modifier.fillMaxSize().padding(if (compact) 10.dp else 16.dp)) {
+                when (tab) {
+                    Tab.PAINEL -> if (compact) PainelCompact(ui) else PainelScreen(ui)
+                    Tab.CONSUMO -> ConsumoScreen(ui, vm)
+                    Tab.SAUDE -> SaudeScreen(ui, compact)
+                    Tab.MANUTENCAO -> ManutencaoScreen(ui, vm)
+                    Tab.DIAGNOSTICO -> DiagnosticoScreen(ui, vm)
+                    Tab.AJUSTES -> AjustesScreen(ui, vm)
+                }
             }
         }
-        Box(Modifier.fillMaxSize().padding(16.dp)) {
-            when (tab) {
-                Tab.PAINEL -> PainelScreen(ui)
-                Tab.CONSUMO -> ConsumoScreen(ui, vm)
-                Tab.MANUTENCAO -> ManutencaoScreen(ui, vm)
-                Tab.DIAGNOSTICO -> DiagnosticoScreen(ui, vm)
-                Tab.AJUSTES -> AjustesScreen(ui, vm)
-            }
+    }
+}
+
+/** Janela flutuante: só o que importa dirigindo, em letra grande. */
+@Composable
+private fun MiniPanel(ui: UiState) {
+    val s = ui.sample
+    Column(Modifier.fillMaxSize().padding(8.dp), verticalArrangement = Arrangement.SpaceEvenly) {
+        Row(verticalAlignment = Alignment.Bottom) {
+            Text(s?.speedKmh?.let { Math.round(it).toString() } ?: "--", fontSize = 40.sp, fontWeight = FontWeight.Bold)
+            Text(" km/h", fontSize = 14.sp, modifier = Modifier.padding(bottom = 6.dp))
+            Spacer(Modifier.weight(1f))
+            Text(ui.kmPerL.f(), fontSize = 40.sp, fontWeight = FontWeight.Bold, color = if ((ui.kmPerL ?: 99.0) < 7) Warn else OkGreen)
+            Text(" km/l", fontSize = 14.sp, modifier = Modifier.padding(bottom = 6.dp))
         }
+        Row {
+            Text("${s?.rpm?.let { Math.round(it).toString() } ?: "--"} rpm", fontSize = 16.sp)
+            Spacer(Modifier.weight(1f))
+            val hot = (s?.coolantC ?: 0.0) > 105
+            Text("${s?.coolantC?.let { Math.round(it).toString() } ?: "--"} °C", fontSize = 16.sp, color = if (hot) Bad else Color.Unspecified)
+        }
+        val alerts = ui.health.count { it.status == HealthStatus.ALERTA }
+        if (alerts > 0) Text("$alerts alerta(s) em Saúde", color = Bad, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
     }
 }
 
 // ---------- componentes ----------
 
 @Composable
-private fun Metric(label: String, value: String, unit: String, modifier: Modifier = Modifier, big: Boolean = false, color: Color = Color.Unspecified) {
+private fun Metric(
+    label: String, value: String, unit: String, modifier: Modifier = Modifier, big: Boolean = false,
+    color: Color = Color.Unspecified, valueSize: TextUnit = if (big) 96.sp else 40.sp,
+) {
     Card(modifier, colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
         Column(Modifier.padding(16.dp)) {
             Text(label.uppercase(), fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, fontWeight = FontWeight.SemiBold)
             Row(verticalAlignment = Alignment.Bottom) {
-                Text(value, fontSize = if (big) 96.sp else 40.sp, fontWeight = FontWeight.Bold, color = color)
+                Text(value, fontSize = valueSize, fontWeight = FontWeight.Bold, color = color)
                 Spacer(Modifier.width(6.dp))
                 Text(unit, fontSize = 20.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(bottom = if (big) 14.dp else 6.dp))
             }
@@ -200,6 +241,38 @@ private fun PainelScreen(ui: UiState) {
     }
 }
 
+/** Painel para meia tela (ao lado de mapas ou música): os mesmos dados, em duas colunas. */
+@Composable
+private fun PainelCompact(ui: UiState) {
+    val s = ui.sample
+    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        if (ui.simulated) {
+            Text("DADOS SIMULADOS", color = Warn, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+        } else if (ui.conn.state != ConnState.CONNECTED) {
+            Text(ui.conn.message.ifBlank { "Aguardando o adaptador..." }, color = Warn, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+        }
+        val gap = Arrangement.spacedBy(10.dp)
+        Row(horizontalArrangement = gap) {
+            Metric("Velocidade", s?.speedKmh?.let { Math.round(it).toString() } ?: "--", "km/h", Modifier.weight(1f), valueSize = 56.sp)
+            Metric("Consumo", ui.kmPerL.f(), "km/l", Modifier.weight(1f), valueSize = 56.sp, color = if ((ui.kmPerL ?: 99.0) < 7) Warn else OkGreen)
+        }
+        Row(horizontalArrangement = gap) {
+            Metric("Rotação", s?.rpm?.let { Math.round(it).toString() } ?: "--", "rpm", Modifier.weight(1f), valueSize = 32.sp)
+            Metric("Temp. motor", s?.coolantC?.let { Math.round(it).toString() } ?: "--", "°C", Modifier.weight(1f), valueSize = 32.sp,
+                color = if ((s?.coolantC ?: 0.0) > 105) Bad else Color.Unspecified)
+        }
+        Row(horizontalArrangement = gap) {
+            Metric("Média viagem", ui.tripAvgKmPerL.f(), "km/l", Modifier.weight(1f), valueSize = 32.sp)
+            Metric("Bateria", s?.batteryV.f(1), "V", Modifier.weight(1f), valueSize = 32.sp)
+        }
+        val alerts = ui.health.count { it.status == HealthStatus.ALERTA }
+        val warns = ui.health.count { it.status == HealthStatus.ATENCAO }
+        if (alerts + warns > 0) {
+            Text("Saúde: $alerts alerta(s), $warns atenção", color = if (alerts > 0) Bad else Warn, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+        }
+    }
+}
+
 private fun methodLabel(m: FlowMethod?) = when (m) {
     FlowMethod.FUEL_RATE -> "taxa de combustível"
     FlowMethod.MAF -> "fluxo de ar (MAF)"
@@ -262,9 +335,109 @@ private fun RefuelDialog(price: Double, onDismiss: () -> Unit, onSave: (Double, 
     )
 }
 
+// ---------- Saúde (manutenção preventiva) ----------
+
+private fun statusColor(st: HealthStatus) = when (st) {
+    HealthStatus.OK -> OkGreen
+    HealthStatus.ATENCAO -> Warn
+    HealthStatus.ALERTA -> Bad
+    HealthStatus.APRENDENDO -> Color(0xFF94A3B8)
+}
+
+private fun statusLabel(st: HealthStatus) = when (st) {
+    HealthStatus.OK -> "OK"
+    HealthStatus.ATENCAO -> "ATENÇÃO"
+    HealthStatus.ALERTA -> "ALERTA"
+    HealthStatus.APRENDENDO -> "APRENDENDO"
+}
+
+@Composable
+private fun SaudeScreen(ui: UiState, compact: Boolean) {
+    // Alertas primeiro, depois atenção; "aprendendo" por último.
+    val order = listOf(HealthStatus.ALERTA, HealthStatus.ATENCAO, HealthStatus.OK, HealthStatus.APRENDENDO)
+    val items = ui.health.sortedBy { order.indexOf(it.status) }
+    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Text("Saúde do carro", fontSize = 26.sp, fontWeight = FontWeight.Bold)
+        val alerts = items.count { it.status == HealthStatus.ALERTA }
+        val warns = items.count { it.status == HealthStatus.ATENCAO }
+        Text(
+            when {
+                alerts > 0 -> "$alerts alerta(s) e $warns ponto(s) de atenção"
+                warns > 0 -> "$warns ponto(s) de atenção"
+                else -> "Nenhum alerta"
+            },
+            fontSize = 20.sp, fontWeight = FontWeight.SemiBold,
+            color = if (alerts > 0) Bad else if (warns > 0) Warn else OkGreen,
+        )
+        Text(
+            "Baseado em ${ui.tripsRecorded} viagem(ns) gravada(s). Indicadores que costumam mudar antes de uma falha; " +
+                "não substituem o diagnóstico de um mecânico.",
+            color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 15.sp,
+        )
+        if (ui.simulated) {
+            Text("Dados simulados: as viagens só são gravadas com o adaptador conectado.", color = Warn, fontSize = 15.sp)
+        }
+        val perRow = if (compact) 1 else 2
+        items.chunked(perRow).forEach { row ->
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                row.forEach { HealthCard(it, Modifier.weight(1f)) }
+                repeat(perRow - row.size) { Spacer(Modifier.weight(1f)) }
+            }
+        }
+    }
+}
+
+@Composable
+private fun HealthCard(item: HealthItem, modifier: Modifier = Modifier) {
+    val color = statusColor(item.status)
+    Card(modifier, colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
+        Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(item.title, fontSize = 17.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
+                Text(statusLabel(item.status), color = color, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+            }
+            Text(item.value, fontSize = 24.sp, fontWeight = FontWeight.Bold, color = if (item.status == HealthStatus.OK) Color.Unspecified else color)
+            if (item.series.count { it != null } >= 2) {
+                TrendChart(item.series, item.lines, color, Modifier.fillMaxWidth().height(80.dp))
+                Text("Últimas ${item.series.size} viagens · ${item.unit}", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            Text(item.advice, fontSize = 15.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+    }
+}
+
+/** Um ponto por viagem; linhas tracejadas = limites de atenção (amarelo) e alerta (vermelho). */
+@Composable
+private fun TrendChart(values: List<Double?>, lines: List<RefLine>, color: Color, modifier: Modifier = Modifier) {
+    Canvas(modifier) {
+        val all = values.filterNotNull() + lines.map { it.value }
+        var lo = all.minOrNull() ?: return@Canvas
+        var hi = all.maxOrNull() ?: return@Canvas
+        val pad = ((hi - lo) * 0.1).coerceAtLeast(0.5)
+        lo -= pad; hi += pad
+        fun y(v: Double) = (size.height - (v - lo) / (hi - lo) * size.height).toFloat()
+        val step = if (values.size > 1) size.width / (values.size - 1) else 0f
+        val dash = androidx.compose.ui.graphics.PathEffect.dashPathEffect(floatArrayOf(10f, 8f))
+        lines.forEach { l ->
+            drawLine(if (l.alert) Bad else Warn, Offset(0f, y(l.value)), Offset(size.width, y(l.value)), 2f, pathEffect = dash)
+        }
+        val path = Path()
+        var open = false
+        values.forEachIndexed { i, v ->
+            if (v == null) { open = false; return@forEachIndexed }
+            val p = Offset(step * i, y(v))
+            if (open) path.lineTo(p.x, p.y) else path.moveTo(p.x, p.y)
+            open = true
+            drawCircle(color, 4f, p)
+        }
+        drawPath(path, color, style = Stroke(width = 4f, cap = StrokeCap.Round))
+    }
+}
+
 @Composable
 private fun ManutencaoScreen(ui: UiState, vm: MonitorViewModel) {
     var confirm by remember { mutableStateOf(false) }
+    var itemToConfirm by remember { mutableStateOf<MaintRow?>(null) }
     val oil = ui.oil
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(16.dp)) {
         Text("Manutenção", fontSize = 26.sp, fontWeight = FontWeight.Bold)
@@ -277,6 +450,20 @@ private fun ManutencaoScreen(ui: UiState, vm: MonitorViewModel) {
         }
         Button(onClick = { confirm = true }, enabled = !ui.moving, modifier = Modifier.height(60.dp)) { Text("Registrei a troca", fontSize = 18.sp) }
         Text("O app não lê o nível de óleo pelo OBD2; o controle é por km rodados desde a última troca e por data.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+
+        Text("Outros itens", fontSize = 22.sp, fontWeight = FontWeight.Bold)
+        Text("Intervalos comuns para o 2008 1.6 flex automático: confirme no manual e no plano de revisões da Peugeot.",
+            color = MaterialTheme.colorScheme.onSurfaceVariant)
+        ui.maint.forEach { row -> MaintCard(row, ui.moving) { itemToConfirm = row } }
+    }
+    itemToConfirm?.let { row ->
+        AlertDialog(
+            onDismissRequest = { itemToConfirm = null },
+            title = { Text(row.item.name) },
+            text = { Text("Registrar que foi feito hoje, com a quilometragem atual do app. O prazo volta a contar a partir de agora.") },
+            confirmButton = { TextButton(onClick = { vm.registerMaintDone(row.item.id); itemToConfirm = null }) { Text("Confirmar") } },
+            dismissButton = { TextButton(onClick = { itemToConfirm = null }) { Text("Cancelar") } },
+        )
     }
     if (confirm) AlertDialog(
         onDismissRequest = { confirm = false },
@@ -285,6 +472,35 @@ private fun ManutencaoScreen(ui: UiState, vm: MonitorViewModel) {
         confirmButton = { TextButton(onClick = { vm.registerOilChange(); confirm = false }) { Text("Confirmar") } },
         dismissButton = { TextButton(onClick = { confirm = false }) { Text("Cancelar") } },
     )
+}
+
+@Composable
+private fun MaintCard(row: MaintRow, moving: Boolean, onDone: () -> Unit) {
+    val st = row.status
+    val color = when (st?.state) { MaintState.OK -> OkGreen; MaintState.SOON -> Warn; MaintState.DUE -> Bad; null -> Color(0xFF94A3B8) }
+    Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
+        Row(Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text(row.item.name, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
+                val interval = listOfNotNull(
+                    row.item.intervalKm?.let { "${String.format(BR, "%,d", it)} km" },
+                    row.item.intervalMonths?.let { "$it meses" },
+                ).joinToString(" ou ")
+                val left = if (st == null) {
+                    "Informe a última troca (toque em \"Fiz agora\" se foi hoje) · a cada $interval"
+                } else {
+                    listOfNotNull(
+                        st.kmLeft?.let { if (it <= 0) "vencido por km" else "${String.format(BR, "%,d", Math.round(it))} km" },
+                        st.daysLeft?.let { if (it <= 0) "vencido por data" else "$it dias" },
+                    ).joinToString(" · ") + " · a cada $interval"
+                }
+                Text(left, color = color, fontSize = 15.sp)
+                Text(row.item.why, color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 14.sp)
+            }
+            Spacer(Modifier.width(12.dp))
+            OutlinedButton(onClick = onDone, enabled = !moving, modifier = Modifier.height(56.dp)) { Text("Fiz agora", fontSize = 16.sp) }
+        }
+    }
 }
 
 @Composable
@@ -304,6 +520,10 @@ private fun DiagnosticoScreen(ui: UiState, vm: MonitorViewModel) {
         when (val d = ui.dtcs) {
             null -> Text("Toque em \"Ler falhas\" para consultar a central.")
             else -> Text(if (d.isEmpty()) "Nenhuma falha armazenada." else d.joinToString(", "))
+        }
+        ui.pendingDtcs?.let { p ->
+            Text(if (p.isEmpty()) "Nenhuma falha pendente." else "Pendentes (ainda sem luz): " + p.joinToString(", "),
+                color = if (p.isEmpty()) Color.Unspecified else Warn)
         }
         Button(onClick = vm::readDtcs, modifier = Modifier.height(60.dp)) { Text("Ler falhas", fontSize = 18.sp) }
         Text("Somente leitura. O app não apaga falhas.", color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -358,6 +578,16 @@ private fun AjustesScreen(ui: UiState, vm: MonitorViewModel) {
             Switch(!ui.simulated, { vm.setSimulated(!it) }, enabled = !ui.moving)
             Spacer(Modifier.width(12.dp))
             Text(if (ui.simulated) "Dados simulados (ligue para usar o adaptador)" else "Usando o adaptador Bluetooth", fontSize = 18.sp)
+        }
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Switch(ui.pipOnLeave, { vm.setPipOnLeave(it) })
+            Spacer(Modifier.width(12.dp))
+            Column {
+                Text("Janela flutuante ao sair do app", fontSize = 18.sp)
+                Text("Ao tocar em Início, o monitor continua numa janelinha sobre o mapa ou a música. " +
+                    "Para tela dividida, use o botão de apps recentes do multimídia.",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 14.sp)
+            }
         }
         if (!ui.simulated && ui.conn.message.isNotBlank()) {
             Text(ui.conn.message, color = if (ui.conn.state == ConnState.ERROR) Warn else MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 16.sp)

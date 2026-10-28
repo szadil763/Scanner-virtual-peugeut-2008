@@ -51,4 +51,20 @@ class TripAndMaintenanceTest {
 
     @Test fun oilDueByDate() =
         assertEquals(MaintState.DUE, Maintenance.oilStatus(plan, 9_000.0, 20_366L).state)
+
+    private val belt = MaintCatalog.items.first { it.id == "correia" }
+    private val brakeFluid = MaintCatalog.items.first { it.id == "fluido_freio" }
+
+    @Test fun itemOk() = assertEquals(MaintState.OK, Maintenance.itemStatus(belt, 0.0, 0, 10_000.0, 100).state)
+
+    // Aviso antecipado: 10% do intervalo (6.000 km para a correia de 60.000 km).
+    @Test fun itemSoonByKm() = assertEquals(MaintState.SOON, Maintenance.itemStatus(belt, 0.0, 0, 55_000.0, 100).state)
+
+    @Test fun itemDueByDate() = assertEquals(MaintState.DUE, Maintenance.itemStatus(belt, 0.0, 0, 1_000.0, 1_830).state)
+
+    @Test fun dateOnlyItemIgnoresKm() {
+        val s = Maintenance.itemStatus(brakeFluid, 0.0, 0, 90_000.0, 100)
+        assertEquals(MaintState.OK, s.state)
+        assertEquals(null, s.kmLeft)
+    }
 }
