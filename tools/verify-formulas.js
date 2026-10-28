@@ -96,6 +96,16 @@ assert.ok([0x01, 0x04, 0x05, 0x0b, 0x0c, 0x0d, 0x0f, 0x11, 0x20].every((p) => s3
 console.log('ok  separa centrais grudadas na mesma linha ->', s3.map(hex2).join(' '));
 near(parse(0x0c, '41 0C 0B DA 41 0C 0B DA\r\r>'), 758.5, 1e-9, 'RPM com duas centrais na mesma linha');
 
+// ---------- Bateria pelo adaptador (ATRV) ----------
+// O 2008 não informa o PID 42; o ELM327 mede a tensão no pino 16 da tomada OBD.
+function tensao(raw) {
+  const m = /(\d{1,2}(?:[.,]\d+)?)\s*V/i.exec(raw);
+  return m ? parseFloat(m[1].replace(',', '.')) : null;
+}
+near(tensao('12.4V\r\r>'), 12.4, 1e-9, 'ATRV 12.4V');
+near(tensao('14,1 V'), 14.1, 1e-9, 'ATRV 14,1 V');
+assert.strictEqual(tensao('?\r\r>'), null); ok++; console.log('ok  ATRV "?" -> null');
+
 // ---------- Falhas (modo 03, CAN) ----------
 function dtcs(raw) {
   const b = payload(raw, '43');

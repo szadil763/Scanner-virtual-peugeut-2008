@@ -56,6 +56,12 @@ class ObdParserTest {
     @Test fun parseSkipsIncompleteEcuLine() =
         assertEquals(1726.0, ObdParser.parse(Pid.RPM, "41 0C 1A\r41 0C 1A F8\r\r>")!!, 1e-9)
 
+    @Test fun adapterVoltage() {
+        assertEquals(12.4, ObdParser.voltage("12.4V\r\r>")!!, 1e-9)
+        assertEquals(14.1, ObdParser.voltage("14,1 V")!!, 1e-9)
+        assertNull(ObdParser.voltage("?\r\r>"))
+    }
+
     @Test fun dtcsInCanFormat() =
         assertEquals(listOf("P0133", "P0200"), ObdParser.dtcs("43 02 01 33 02 00 00 00"))
 

@@ -70,6 +70,14 @@ object ObdParser {
     }
 
     /**
+     * Tensão medida pelo próprio adaptador no pino 16 da tomada OBD (comando ATRV), por exemplo
+     * "12.4V". Serve de bateria quando o carro não informa o PID 42, como no 2008.
+     */
+    fun voltage(raw: String): Double? =
+        Regex("""(\d{1,2}(?:[.,]\d+)?)\s*V""", RegexOption.IGNORE_CASE).find(raw)
+            ?.groupValues?.get(1)?.replace(',', '.')?.toDoubleOrNull()
+
+    /**
      * Decodifica a resposta do modo 03 (falhas armazenadas) em CAN (ISO 15765-4):
      * "43 NN" seguido de NN pares de bytes. Pares 00 00 são preenchimento.
      */

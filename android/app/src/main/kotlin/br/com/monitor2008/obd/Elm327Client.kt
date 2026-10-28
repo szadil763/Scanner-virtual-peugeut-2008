@@ -7,7 +7,7 @@ import java.io.OutputStream
  * Conversa com o ELM327 por um par de streams (o socket Bluetooth fornece os dois).
  * Chamadas bloqueantes: use sempre fora da thread principal (Dispatchers.IO).
  *
- * Somente leitura: o app envia apenas comandos AT de configuração e consultas dos modos 01 e 03.
+ * Somente leitura: o app envia apenas comandos AT de configuração e leitura (ATRV) e consultas dos modos 01 e 03.
  */
 class Elm327Client(
     private val input: InputStream,
@@ -65,6 +65,9 @@ class Elm327Client(
     }
 
     fun query(pid: Pid): Double? = ObdParser.parse(pid, send(pid.command))
+
+    /** Tensão da bateria medida pelo adaptador (ATRV). Somente leitura. */
+    fun adapterVoltage(): Double? = ObdParser.voltage(send("ATRV"))
 
     /** Modo 03: falhas armazenadas. Somente leitura. */
     fun readDtcs(): List<String> = ObdParser.dtcs(send("03", 4_000))

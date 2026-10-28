@@ -87,6 +87,7 @@ class BluetoothObdSource(
                     _info.value = ConnectionInfo(ConnState.CONNECTED, "Conectado", protocol, supported)
 
                     val values = mutableMapOf<Pid, Double>()
+                    var adapterVolts: Double? = null
                     var cycle = 0
                     var stoppedSince = 0L
                     while (currentCoroutineContext().isActive) {
@@ -96,7 +97,13 @@ class BluetoothObdSource(
                             note(pid, raw, v)
                             if (v != null) values[pid] = v
                         }
-                        emit(toSample(values))
+                        // O 2008 não informa o PID 42: a bateria vem da medição do próprio adaptador.
+                        if (cycle % 10 == 0 && Pid.MODULE_VOLTAGE.code !in supported) {
+                            val raw = synchronized(lock) { c.send("ATRV") }
+                            ObdParser.voltage(raw)?.let { adapterVolts = it }
+                            if (cycle == 0) log("ATRV (Bateria pelo adaptador) -> ${raw.shownRaw()} => ${adapterVolts ?: "sem valor"}")
+                        }
+                        emit(toSample(values, adapterVolts))
                         cycle++
 
                         val rpm = values[Pid.RPM]
@@ -152,7 +159,7 @@ class BluetoothObdSource(
         return wanted.filter { it.code in supported }.ifEmpty { wanted }
     }
 
-    private fun toSample(v: Map<Pid, Double>) = Sample(
+    private fun toSample(v: Map<Pid, Double>, adapterVolts: Double?) = Sample(
         timeMs = System.currentTimeMillis(),
         rpm = v[Pid.RPM],
         speedKmh = v[Pid.SPEED],
@@ -163,7 +170,7 @@ class BluetoothObdSource(
         mafGs = v[Pid.MAF],
         throttlePct = v[Pid.THROTTLE],
         fuelLevelPct = v[Pid.FUEL_LEVEL],
-        batteryV = v[Pid.MODULE_VOLTAGE],
+        batteryV = v[Pid.MODULE_VOLTAGE] ?: adapterVolts,
         fuelRateLph = v[Pid.FUEL_RATE],
     )
 

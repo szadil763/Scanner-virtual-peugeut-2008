@@ -38,8 +38,8 @@ O protótipo em `prototype/index.html` não tem build: basta abrir no navegador.
 
 ## Estado
 
-App Android escrito, **nunca compilado nem testado no carro** até o primeiro build do GitHub Actions (`.github/workflows/build-apk.yml`). Primeira tarefa: ver o resultado do workflow, corrigir erros de compilação e rodar os testes.
+App compilado pelo GitHub Actions (`.github/workflows/build-apk.yml`, roda em `main` e na branch de desenvolvimento) e **testado no carro em 28/10/2026 (versão 0.1.6)**: conecta pelo BLE (`OBDBLE`) e o painel mostra rotação, velocidade, temperaturas e consumo pelo método MAP. O que o carro responde está em `docs/PIDS.md`: sem MAF, sem nível de combustível, sem PID 42 (a bateria vem do `ATRV`). Motor e câmbio respondem juntos às consultas do modo 01, por isso o parser junta as respostas de todas as centrais.
 
-O APK sai em Releases (`latest`); ver `docs/INSTALACAO.md`. Depois do primeiro teste no carro, usar o "Registro do adaptador" (tela Diagnóstico) para ver o que o carro responde e atualizar `docs/PIDS.md`.
+O APK sai em Releases (`latest`); a versão (0.1.N, N = número do build) aparece na tela Diagnóstico. Ver `docs/INSTALACAO.md`.
 
 Pendências conhecidas: serviço em primeiro plano (a leitura pode pausar com outro app na frente), leitura de códigos pendentes (modo 07), registro de falhas com foto dos dados, ícone do app.
