@@ -75,6 +75,7 @@ import br.com.monitor2008.data.AppLauncher
 import br.com.monitor2008.data.BtPermissions
 import br.com.monitor2008.data.MediaWatcher
 import br.com.monitor2008.data.PlaceFinder
+import br.com.monitor2008.data.Store
 import br.com.monitor2008.data.ConnState
 import br.com.monitor2008.domain.DtcInfo
 import br.com.monitor2008.domain.FlowMethod
@@ -91,17 +92,17 @@ import kotlinx.coroutines.delay
 import java.time.LocalDate
 import java.util.Locale
 
-private val OkGreen = Color(0xFF4ADE80)
-private val Warn = Color(0xFFFBBF24)
-private val Bad = Color(0xFFF87171)
+internal val OkGreen = Color(0xFF4ADE80)
+internal val Warn = Color(0xFFFBBF24)
+internal val Bad = Color(0xFFF87171)
 
 private val BR = Locale("pt", "BR")
-private fun Double.f(d: Int = 1): String = String.format(BR, "%.${d}f", this)
-private fun Double?.f(d: Int = 1): String = this?.f(d) ?: "--"
+internal fun Double.f(d: Int = 1): String = String.format(BR, "%.${d}f", this)
+internal fun Double?.f(d: Int = 1): String = this?.f(d) ?: "--"
 private fun parse(s: String): Double? = s.trim().replace(',', '.').toDoubleOrNull()
 
 enum class Tab(val label: String) {
-    PAINEL("Painel"), CONSUMO("Consumo"), POSTOS("Postos"), SAUDE("Saúde"), MANUTENCAO("Manutenção"), DIAGNOSTICO("Diagnóstico"), AJUSTES("Ajustes")
+    PAINEL("Painel"), MIDIAS("Mídias"), CONSUMO("Consumo"), POSTOS("Postos"), SAUDE("Saúde"), MANUTENCAO("Manutenção"), DIAGNOSTICO("Diagnóstico"), AJUSTES("Ajustes")
 }
 
 /**
@@ -114,6 +115,9 @@ private val COMPACT_WIDTH = 800.dp
 fun MonitorApp(vm: MonitorEngine) {
     val ui by vm.ui.collectAsStateWithLifecycle()
     var tab by remember { mutableStateOf(Tab.PAINEL) }
+    val ctx = LocalContext.current
+    val store = remember { Store(ctx.applicationContext) }
+    var painelMusica by remember { mutableStateOf(store.painelMusica) }
 
     BoxWithConstraints(Modifier.fillMaxSize()) {
         val compact = maxWidth < COMPACT_WIDTH
@@ -134,7 +138,12 @@ fun MonitorApp(vm: MonitorEngine) {
             Column(Modifier.fillMaxSize().padding(start = if (compact) 10.dp else 16.dp, top = 10.dp, bottom = 10.dp, end = 32.dp)) {
                 Box(Modifier.fillMaxWidth().weight(1f)) {
                     when (tab) {
-                        Tab.PAINEL -> if (compact) PainelCompact(ui) else PainelScreen(ui)
+                        Tab.PAINEL -> when {
+                            compact -> PainelCompact(ui)
+                            painelMusica -> PainelMusicaScreen(ui)
+                            else -> PainelScreen(ui)
+                        }
+                        Tab.MIDIAS -> MidiasScreen(ui, compact, painelMusica) { painelMusica = it; store.painelMusica = it }
                         Tab.CONSUMO -> ConsumoScreen(ui, vm)
                         Tab.POSTOS -> PostosScreen(ui, vm)
                         Tab.SAUDE -> SaudeScreen(ui, vm, compact)
@@ -143,9 +152,9 @@ fun MonitorApp(vm: MonitorEngine) {
                         Tab.AJUSTES -> AjustesScreen(ui, vm)
                     }
                 }
-                // Mapa, música e mini player em todas as abas.
+                // Mapa, música e mini player em todas as abas (sem o mini player onde o player grande já aparece).
                 Spacer(Modifier.height(8.dp))
-                MediaBar(compact)
+                MediaBar(compact, showPlayer = !(tab == Tab.MIDIAS || (tab == Tab.PAINEL && painelMusica && !compact)))
             }
         }
     }
@@ -181,10 +190,10 @@ private fun MiniPanel(ui: UiState) {
  * Azul mais escuro com texto branco nos botões preenchidos e na opção selecionada. O azul claro
  * padrão com texto escuro ficou branco e ilegível na tela do multimídia à noite (fotos da 0.1.17).
  */
-private val StrongBlue = Color(0xFF0369A1)
+internal val StrongBlue = Color(0xFF0369A1)
 
 @Composable
-private fun Button(
+internal fun Button(
     onClick: () -> Unit, modifier: Modifier = Modifier, enabled: Boolean = true, content: @Composable RowScope.() -> Unit,
 ) = M3Button(
     onClick, modifier, enabled,
@@ -193,7 +202,7 @@ private fun Button(
 )
 
 @Composable
-private fun FilterChip(
+internal fun FilterChip(
     selected: Boolean, onClick: () -> Unit, label: @Composable () -> Unit, modifier: Modifier = Modifier, enabled: Boolean = true,
 ) = M3FilterChip(
     selected = selected, onClick = onClick, label = label, modifier = modifier, enabled = enabled,
@@ -201,7 +210,7 @@ private fun FilterChip(
 )
 
 @Composable
-private fun Metric(
+internal fun Metric(
     label: String, value: String, unit: String, modifier: Modifier = Modifier, big: Boolean = false,
     color: Color = Color.Unspecified, valueSize: TextUnit = if (big) 96.sp else 40.sp,
 ) {
@@ -251,9 +260,9 @@ private fun Spark(
 }
 
 /** Consumo para mostrar: andando = km/l; parado com o motor ligado = L/h; motor desligado = aviso. */
-private data class ConsumoView(val value: String, val unit: String, val note: String, val color: Color)
+internal data class ConsumoView(val value: String, val unit: String, val note: String, val color: Color)
 
-private fun consumoView(ui: UiState): ConsumoView {
+internal fun consumoView(ui: UiState): ConsumoView {
     val s = ui.sample
     val running = (s?.rpm ?: 0.0) > 400
     val moving = (s?.speedKmh ?: 0.0) >= 1
@@ -267,7 +276,7 @@ private fun consumoView(ui: UiState): ConsumoView {
 }
 
 /** Resumo da Saúde numa linha, para o Painel. Null = tudo ok. */
-private fun saudeResumo(ui: UiState): Pair<String, Color>? {
+internal fun saudeResumo(ui: UiState): Pair<String, Color>? {
     val alerts = ui.health.filter { it.status == HealthStatus.ALERTA }
     val warns = ui.health.filter { it.status == HealthStatus.ATENCAO }
     if (alerts.isEmpty() && warns.isEmpty()) return null
@@ -374,7 +383,7 @@ private fun PainelCompact(ui: UiState) {
  * tocando. No layout compacto (tela dividida) os botões ficam em cima e o player embaixo.
  */
 @Composable
-private fun MediaBar(compact: Boolean) {
+private fun MediaBar(compact: Boolean, showPlayer: Boolean) {
     val ctx = LocalContext.current
     val app = ctx.applicationContext as Application
     val media = remember { MediaWatcher.get(app) }
@@ -421,26 +430,28 @@ private fun MediaBar(compact: Boolean) {
         if (compact) {
             Column(Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) { buttons() }
-                player(Modifier.fillMaxWidth())
+                if (showPlayer) player(Modifier.fillMaxWidth())
             }
         } else {
             Row(Modifier.padding(10.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 buttons()
-                Spacer(Modifier.width(6.dp))
-                player(Modifier.weight(1f))
+                if (showPlayer) {
+                    Spacer(Modifier.width(6.dp))
+                    player(Modifier.weight(1f))
+                }
             }
         }
     }
 }
 
-private tailrec fun Context.findActivity(): Activity? = when (this) {
+internal tailrec fun Context.findActivity(): Activity? = when (this) {
     is Activity -> this
     is ContextWrapper -> baseContext.findActivity()
     else -> null
 }
 
 @Composable
-private fun MediaKey(symbol: String, onClick: () -> Unit) {
+internal fun MediaKey(symbol: String, onClick: () -> Unit) {
     OutlinedButton(onClick, Modifier.size(56.dp), contentPadding = PaddingValues(0.dp)) { Text(symbol, fontSize = 22.sp) }
 }
 

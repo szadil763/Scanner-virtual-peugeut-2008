@@ -16,6 +16,9 @@
     <!-- Leitura em segundo plano (serviço em primeiro plano com notificação). -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
+    <!-- Rádio pela internet e lista de rádios (aba Mídias). -->
+    <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
     <uses-feature android:name="android.hardware.bluetooth" android:required="false" />
@@ -33,6 +36,10 @@
         </intent>
         <intent>
             <action android:name="android.media.browse.MediaBrowserService" />
+        </intent>
+        <!-- Mandar "tocar" para o app de música escolhido na aba Mídias. -->
+        <intent>
+            <action android:name="android.intent.action.MEDIA_BUTTON" />
         </intent>
         <package android:name="com.google.android.apps.maps" />
         <package android:name="com.waze" />
@@ -54,6 +61,7 @@
     <application
         android:allowBackup="true"
         android:label="Monitor 2008"
+        android:usesCleartextTraffic="true"
         android:theme="@android:style/Theme.Material.NoActionBar">
 
         <!-- Android Auto: aparece na tela do carro quando o app está no celular. Ver docs/ANDROID-AUTO.md. -->
@@ -77,6 +85,16 @@
             android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE">
             <intent-filter>
                 <action android:name="android.service.notification.NotificationListenerService" />
+            </intent-filter>
+        </service>
+
+        <!-- Rádio pela internet em segundo plano; aparece no mini player e nos botões do volante. -->
+        <service
+            android:name=".data.RadioService"
+            android:exported="true"
+            android:foregroundServiceType="mediaPlayback">
+            <intent-filter>
+                <action android:name="androidx.media3.session.MediaSessionService" />
             </intent-filter>
         </service>
 

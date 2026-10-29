@@ -52,6 +52,8 @@ Tela dividida e janela flutuante: abaixo de 800 dp de largura o app usa layout c
 
 Também: hodômetro real (o dono informa o km do painel uma vez; `Store.odoOffset`, os km das trocas ficam gravados em km do app), preço do combustível em Ajustes, falhas lidas ao conectar e explicadas (`domain/DtcInfo`), relatório em texto para o mecânico (`domain/Report`, botão na Saúde, compartilha pelo WhatsApp) e serviço em primeiro plano (`data/ReadingService`, tipo connectedDevice) para seguir lendo com outro app em tela cheia. A margem direita é maior porque a moldura do multimídia cobre a borda direita da tela.
 
+**Mídias** (`docs/MIDIAS.md`, `ui/MediaScreens.kt`): aba com player grande (capa, tempo, botões grandes) do que estiver tocando, fontes (apps de música e os que já tocaram, como o Bluetooth do celular) e rádio pela internet tocando no próprio app (`data/RadioService` com Media3, lista do radio-browser.info, favoritas, da região, busca só parado). Modo **Painel + Música** (chave na aba Mídias): números à esquerda e player à direita, sem tela dividida.
+
 **Postos** (`docs/POSTOS.md`): o abastecimento guarda o posto (GPS do multimídia + endereço pelo Geocoder, `data/PlaceFinder`) e o combustível; a nota de qualidade compara, por tanque cheio, litros reais ÷ previstos pelo ar, avanço de ignição e correção longa com a mediana dos tanques do mesmo combustível (`domain/FuelQuality`, com testes). Aba Postos com ranking e "Ir" (abre o mapa no posto).
 
 Pendências conhecidas: registro de falhas com foto dos dados (freeze frame, modo 02), ícone do app, previsões por tendência (etapa 3 da Saúde), suporte a outros modelos (para comercializar).

@@ -1,6 +1,7 @@
 package br.com.monitor2008.data
 
 import android.content.Context
+import br.com.monitor2008.domain.RadioStation
 import br.com.monitor2008.domain.Station
 import org.json.JSONArray
 import org.json.JSONObject
@@ -130,6 +131,45 @@ class Store(context: Context) {
     var pipOnLeave: Boolean
         get() = p.getBoolean("pipOnLeave", false)
         set(v) { p.edit().putBoolean("pipOnLeave", v).apply() }
+
+    /** Painel + Música: o Painel divide a tela com o player grande, sem tela dividida do Android. */
+    var painelMusica: Boolean
+        get() = p.getBoolean("painelMusica", false)
+        set(v) { p.edit().putBoolean("painelMusica", v).apply() }
+
+    /** Apps que já tocaram algo (inclui o Bluetooth e o rádio do multimídia): viram fontes na aba Mídias. */
+    val mediaSeen: Set<String> get() = p.getStringSet("mediaSeen", emptySet()) ?: emptySet()
+
+    fun addMediaSeen(pkg: String) {
+        val now = mediaSeen
+        if (pkg !in now) p.edit().putStringSet("mediaSeen", now + pkg).apply()
+    }
+
+    // Rádio pela internet
+    private fun radioJson(st: RadioStation) = JSONObject()
+        .put("id", st.id).put("name", st.name).put("url", st.url).put("favicon", st.favicon ?: "")
+        .put("tags", st.tags).put("state", st.state).put("hls", st.hls)
+
+    private fun radioFrom(o: JSONObject) = RadioStation(
+        id = o.getString("id"), name = o.getString("name"), url = o.getString("url"),
+        favicon = o.optString("favicon").ifBlank { null }, tags = o.optString("tags"), state = o.optString("state"),
+        hls = o.optBoolean("hls", false),
+    )
+
+    var lastRadio: RadioStation?
+        get() = p.getString("lastRadio", null)?.let { runCatching { radioFrom(JSONObject(it)) }.getOrNull() }
+        set(v) { p.edit().putString("lastRadio", v?.let { radioJson(it).toString() }).apply() }
+
+    fun radioFavorites(): List<RadioStation> {
+        val arr = JSONArray(p.getString("radioFavorites", "[]"))
+        return (0 until arr.length()).mapNotNull { runCatching { radioFrom(arr.getJSONObject(it)) }.getOrNull() }
+    }
+
+    fun saveRadioFavorites(list: List<RadioStation>) {
+        val arr = JSONArray()
+        list.forEach { arr.put(radioJson(it)) }
+        p.edit().putString("radioFavorites", arr.toString()).apply()
+    }
 
     // Abastecimentos
     fun refuels(): List<Refuel> {

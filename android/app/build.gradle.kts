@@ -61,6 +61,10 @@ dependencies {
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.6")
     // Android Auto (telas de modelo). Ver docs/ANDROID-AUTO.md.
     implementation("androidx.car.app:app:1.4.0")
+    // Rádio pela internet (aba Mídias): player e sessão de mídia. Ver docs/MIDIAS.md.
+    implementation("androidx.media3:media3-exoplayer:1.4.1")
+    implementation("androidx.media3:media3-exoplayer-hls:1.4.1")
+    implementation("androidx.media3:media3-session:1.4.1")
 
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.8.1")

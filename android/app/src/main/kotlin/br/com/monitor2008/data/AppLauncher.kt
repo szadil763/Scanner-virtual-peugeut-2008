@@ -72,6 +72,9 @@ class AppLauncher(private val context: Context) {
         return start(intent, "mapa", activity)
     }
 
+    /** Abre um app qualquer (fonte de música da aba Mídias), com o mesmo comportamento de [openMusic]. */
+    fun openApp(pkg: String, activity: Activity?): String? = open(pkg, "música", activity)
+
     private fun open(pkg: String?, what: String, activity: Activity?): String? {
         pkg ?: return "Nenhum app de $what instalado."
         val intent = pm.getLaunchIntentForPackage(pkg) ?: return "O app de $what escolhido não está instalado."

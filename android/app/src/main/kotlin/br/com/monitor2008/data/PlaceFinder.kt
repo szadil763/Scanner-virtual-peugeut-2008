@@ -65,4 +65,16 @@ object PlaceFinder {
             null
         }
     }
+
+    /** Estado ("São Paulo"), para as rádios da região. Null sem internet. */
+    @Suppress("DEPRECATION")
+    suspend fun state(context: Context, lat: Double, lon: Double): String? = withContext(Dispatchers.IO) {
+        if (!Geocoder.isPresent()) return@withContext null
+        try {
+            Geocoder(context, Locale("pt", "BR")).getFromLocation(lat, lon, 1)?.firstOrNull()?.adminArea
+                ?.removePrefix("Estado de ")?.removePrefix("Estado do ")?.removePrefix("State of ")
+        } catch (e: Exception) {
+            null
+        }
+    }
 }
