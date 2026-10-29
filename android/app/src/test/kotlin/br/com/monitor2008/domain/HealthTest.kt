@@ -23,6 +23,7 @@ class HealthTest {
         o2Low: Double = 0.1,
         o2High: Double = 0.85,
         o2RearSwing: Double = 0.1,
+        fuelCuts: Boolean = false,
     ): TripHealth {
         val r = HealthRecorder()
         var t = 0L
@@ -33,7 +34,9 @@ class HealthTest {
             t += 1000
             coolant = minOf(90.0, coolant + 0.5)
             val idle = i >= driveS
-            val o2 = if (i % 2 == 0) o2Low else o2High
+            // A cada 10 s, um corte de injeção (pé fora do acelerador): carga baixa e as duas sondas a ~0 V.
+            val cut = fuelCuts && !idle && i % 10 == 9
+            val o2 = if (cut) 0.02 else if (i % 2 == 0) o2Low else o2High
             r.add(
                 Sample(
                     timeMs = t,
@@ -41,12 +44,13 @@ class HealthTest {
                     speedKmh = if (idle) 0.0 else 60.0,
                     coolantC = coolant,
                     mapKpa = if (idle) idleMap else 50.0,
+                    loadPct = if (idle) 18.0 else if (cut) 5.0 else 40.0,
                     throttlePct = if (idle) idleThrottle else 20.0,
                     stftPct = stft,
                     ltftPct = ltft,
                     timingDeg = 12.0,
                     o2s1V = o2,
-                    o2s2V = 0.6 + (if (i % 2 == 0) o2RearSwing / 2 else -o2RearSwing / 2),
+                    o2s2V = if (cut) 0.02 else 0.6 + (if (i % 2 == 0) o2RearSwing / 2 else -o2RearSwing / 2),
                     batteryV = runV,
                     milOn = false,
                 ),
@@ -97,6 +101,10 @@ class HealthTest {
 
     @Test fun lazyO2Sensor() =
         assertEquals(HealthStatus.ALERTA, item(listOf(trip(o2Low = 0.4, o2High = 0.6)), "o2").status)
+
+    // Defeito da 0.1.14: os cortes de injeção faziam um catalisador bom parecer ruim (97% no carro).
+    @Test fun fuelCutsDoNotFakeBadCatalyst() =
+        assertEquals(HealthStatus.OK, item(listOf(trip(fuelCuts = true)), "cat").status)
 
     @Test fun weakCatalyst() =
         assertEquals(HealthStatus.ALERTA, item(listOf(trip(o2RearSwing = 0.7)), "cat").status)

@@ -41,7 +41,7 @@ class HealthStore(context: Context) {
         opt("idleRpm", t.idleRpmAvg); opt("idleRpmSd", t.idleRpmSd); opt("idleMap", t.idleMapAvg)
         opt("idleThr", t.idleThrottleAvg); opt("idleTrim", t.idleTrimAvg); opt("ltft", t.ltftAvg); opt("stft", t.stftAvg)
         opt("o2Min", t.o2s1Min); opt("o2Max", t.o2s1Max); opt("o2Cross", t.o2s1CrossPerMin)
-        opt("o2bMin", t.o2s2Min); opt("o2bMax", t.o2s2Max); opt("timing", t.timingAvg)
+        opt("o2bMin", t.o2s2Min); opt("o2bMax", t.o2s2Max); opt("o2Sd", t.o2s1Sd); opt("o2bSd", t.o2s2Sd); opt("timing", t.timingAvg)
         opt("vRest", t.batteryRestV); opt("vRun", t.batteryRunAvgV); opt("vMin", t.batteryRunMinV); opt("vMax", t.batteryRunMaxV)
         t.milOn?.let { put("mil", it) }
         put("dtc", JSONArray(t.storedDtcs)); put("pend", JSONArray(t.pendingDtcs))
@@ -53,7 +53,7 @@ class HealthStore(context: Context) {
         idleRpmAvg = o.d("idleRpm"), idleRpmSd = o.d("idleRpmSd"), idleMapAvg = o.d("idleMap"),
         idleThrottleAvg = o.d("idleThr"), idleTrimAvg = o.d("idleTrim"), ltftAvg = o.d("ltft"), stftAvg = o.d("stft"),
         o2s1Min = o.d("o2Min"), o2s1Max = o.d("o2Max"), o2s1CrossPerMin = o.d("o2Cross"),
-        o2s2Min = o.d("o2bMin"), o2s2Max = o.d("o2bMax"), timingAvg = o.d("timing"),
+        o2s2Min = o.d("o2bMin"), o2s2Max = o.d("o2bMax"), o2s1Sd = o.d("o2Sd"), o2s2Sd = o.d("o2bSd"), timingAvg = o.d("timing"),
         batteryRestV = o.d("vRest"), batteryRunAvgV = o.d("vRun"), batteryRunMinV = o.d("vMin"), batteryRunMaxV = o.d("vMax"),
         milOn = if (o.has("mil")) o.getBoolean("mil") else null,
         storedDtcs = o.codes("dtc"), pendingDtcs = o.codes("pend"),

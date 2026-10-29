@@ -9,7 +9,7 @@ Indicadores que costumam mudar **antes** de uma falha. Não é diagnóstico: qua
 - Falhas armazenadas (modo 03) e pendentes (modo 07) são lidas uma vez por viagem, logo que o motor liga.
 - `HealthRules` avalia as **últimas 3 viagens** (média) contra limites fixos. Borboleta e vácuo comparam com o **normal do carro**: a mediana das primeiras 5 viagens; antes disso aparecem como "aprendendo".
 
-Definições: **marcha lenta** = parado, motor ligado e quente (≥ 80 °C). **Quente** = arrefecimento ≥ 70 °C (injeção em malha fechada).
+Definições: **marcha lenta** = parado, motor ligado e quente (≥ 80 °C). **Quente** = arrefecimento ≥ 70 °C (injeção em malha fechada). **Regime estável** = quente, ≥ 20 km/h e carga ≥ 20%: as sondas só são avaliadas assim, porque no corte de injeção (tirando o pé) as duas caem a ~0 V juntas. Na 0.1.14 isso não era filtrado e o catalisador do carro apareceu com 97% (alarme falso).
 
 ## Indicadores e limites
 
@@ -18,7 +18,7 @@ Definições: **marcha lenta** = parado, motor ligado e quente (≥ 80 °C). **Q
 | Luz de injeção e falhas | PID 01, modos 03 e 07 | falha pendente | luz acesa ou falha armazenada |
 | Mistura | correção longa (07); correção total em marcha lenta (06 + 07) | \|LTFT\| ≥ 10% | \|LTFT\| ≥ 20% |
 | Sonda lambda | faixa de oscilação da sonda 1 (14) | < 0,5 V | < 0,3 V |
-| Catalisador | oscilação da sonda 2 (15) ÷ sonda 1 | > 60% | > 80% |
+| Catalisador | desvio padrão da sonda 2 (15) ÷ sonda 1, só em regime estável (quente, ≥ 20 km/h, carga ≥ 20%) | > 50% | > 75% |
 | Marcha lenta | desvio da rotação; média | desvio ≥ 60 rpm ou média fora de 600–1000 | desvio ≥ 120 rpm |
 | Corpo de borboleta | abertura em marcha lenta (11) vs normal | +2 pontos | +4 pontos |
 | Vácuo do motor | MAP em marcha lenta (0B) vs normal | +5 kPa | +10 kPa |

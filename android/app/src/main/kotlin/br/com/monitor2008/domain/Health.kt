@@ -10,6 +10,8 @@ import kotlin.math.sqrt
  *
  * "Marcha lenta" = parado (velocidade < 1 km/h), motor ligado e quente (≥ 80 °C).
  * "Quente" = motor ligado com arrefecimento ≥ 70 °C (a injeção já está em malha fechada).
+ * "Regime estável" = quente, ≥ 20 km/h e carga ≥ 20%: fora dos cortes de injeção ao tirar o pé,
+ * quando as duas sondas caem juntas perto de 0 V e fariam o catalisador parecer ruim.
  */
 data class TripHealth(
     val startMs: Long,
@@ -34,6 +36,9 @@ data class TripHealth(
     val o2s1CrossPerMin: Double? = null,
     val o2s2Min: Double? = null,
     val o2s2Max: Double? = null,
+    /** Desvio padrão das sondas em regime estável: base da avaliação do catalisador. */
+    val o2s1Sd: Double? = null,
+    val o2s2Sd: Double? = null,
     val timingAvg: Double? = null,
     /** Tensão com o motor desligado, logo antes da partida. */
     val batteryRestV: Double? = null,
@@ -135,6 +140,10 @@ class HealthRecorder {
             ltft.add(s.ltftPct)
             stft.add(s.stftPct)
             timing.add(s.timingDeg)
+        }
+        // Sondas só em regime estável: no corte de injeção (tirando o pé) as duas vão a ~0 V juntas.
+        val steady = warm && speed >= 20 && (s.loadPct ?: 0.0) >= 20
+        if (steady) {
             s.o2s2V?.let { o2s2.add(it) }
             s.o2s1V?.let { v ->
                 o2s1.add(v)
@@ -176,6 +185,8 @@ class HealthRecorder {
             o2s1CrossPerMin = if (o2s1.n >= MIN_O2 && o2Seconds > 0) o2Crossings / (o2Seconds / 60.0) else null,
             o2s2Min = o2s2.minOrNull()?.takeIf { o2s2.n >= 3 },
             o2s2Max = o2s2.maxOrNull()?.takeIf { o2s2.n >= 3 },
+            o2s1Sd = o2s1.sd(MIN_O2),
+            o2s2Sd = o2s2.sd(3),
             timingAvg = timing.avg(3),
             batteryRestV = restV,
             batteryRunAvgV = runV.avg(2),
@@ -351,14 +362,14 @@ object HealthRules {
 
     private fun catalyst(trips: List<TripHealth>): HealthItem {
         val title = "Catalisador"
-        val front = recent(trips) { t -> if (t.o2s1Min != null && t.o2s1Max != null) t.o2s1Max - t.o2s1Min else null }
-        val rear = recent(trips) { t -> if (t.o2s2Min != null && t.o2s2Max != null) t.o2s2Max - t.o2s2Min else null }
-        if (front == null || rear == null) return noData("cat", title, "precisa das duas sondas com o motor quente.")
-        // Catalisador bom "acalma" o sinal: a sonda de trás oscila bem menos que a da frente.
-        val ratio = rear / front.coerceAtLeast(0.05)
+        // Catalisador bom "acalma" o sinal: a sonda de trás varia bem menos que a da frente.
+        // Desvio padrão em regime estável (viagens antigas, sem esse dado, ficam de fora).
+        fun ratioOf(t: TripHealth) = if (t.o2s1Sd != null && t.o2s2Sd != null) t.o2s2Sd / t.o2s1Sd.coerceAtLeast(0.05) else null
+        val ratio = recent(trips, ::ratioOf)
+            ?: return noData("cat", title, "precisa de alguns minutos andando acima de 20 km/h com o motor quente.")
         val status = when {
-            ratio > 0.8 -> HealthStatus.ALERTA
-            ratio > 0.6 -> HealthStatus.ATENCAO
+            ratio > 0.75 -> HealthStatus.ALERTA
+            ratio > 0.5 -> HealthStatus.ATENCAO
             else -> HealthStatus.OK
         }
         val advice = when (status) {
@@ -366,11 +377,7 @@ object HealthRules {
             else -> "A sonda de trás está oscilando quase como a da frente: o catalisador pode estar perdendo eficiência. Confirme com um mecânico antes de trocar."
         }
         return HealthItem("cat", title, status, "${fmt(ratio * 100, 0)}% da oscilação da frente", advice,
-            series(trips) { t ->
-                val f = if (t.o2s1Min != null && t.o2s1Max != null) t.o2s1Max - t.o2s1Min else null
-                val r = if (t.o2s2Min != null && t.o2s2Max != null) t.o2s2Max - t.o2s2Min else null
-                if (f != null && r != null) r / f.coerceAtLeast(0.05) * 100 else null
-            }, "%", listOf(RefLine(60.0, false), RefLine(80.0, true)))
+            series(trips) { t -> ratioOf(t)?.let { it * 100 } }, "%", listOf(RefLine(50.0, false), RefLine(75.0, true)))
     }
 
     private fun idle(trips: List<TripHealth>): HealthItem {
