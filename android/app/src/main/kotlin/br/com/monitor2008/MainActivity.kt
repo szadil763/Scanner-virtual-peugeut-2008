@@ -1,7 +1,9 @@
 package br.com.monitor2008
 
+import android.Manifest
 import android.app.PictureInPictureParams
 import android.content.pm.PackageManager
+import android.os.Build
 import android.os.Bundle
 import android.util.Rational
 import android.view.WindowManager
@@ -14,8 +16,10 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.core.content.ContextCompat
 import br.com.monitor2008.data.BtPermissions
 import br.com.monitor2008.data.MediaWatcher
+import br.com.monitor2008.data.ReadingService
 import br.com.monitor2008.ui.MonitorApp
 import br.com.monitor2008.ui.MonitorEngine
 
@@ -24,16 +28,27 @@ class MainActivity : ComponentActivity() {
     private val vm by lazy { MonitorEngine.get(application) }
 
     // O Android exige permissão em tempo de execução para procurar e falar com o adaptador Bluetooth.
-    private val askBluetooth = registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { result ->
-        if (result.values.all { it } && !vm.ui.value.simulated) vm.start()
+    // A notificação (Android 13+) vai no mesmo pedido: dois pedidos ao mesmo tempo, o Android ignora o segundo.
+    // Recusar a notificação não impede a leitura; só o Bluetooth conta para reconectar.
+    private val askPermissions = registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { result ->
+        val btOk = result.filterKeys { it in BtPermissions.needed }.values.all { it }
+        if (btOk && !vm.ui.value.simulated) {
+            vm.start()
+            ReadingService.update(this, enabled = true)
+        }
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
 
-        val missing = BtPermissions.missing(this)
-        if (missing.isNotEmpty()) askBluetooth.launch(missing.toTypedArray())
+        val missing = BtPermissions.missing(this).toMutableList()
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+        ) {
+            missing += Manifest.permission.POST_NOTIFICATIONS
+        }
+        if (missing.isNotEmpty()) askPermissions.launch(missing.toTypedArray())
 
         setContent {
             MaterialTheme(
@@ -67,6 +82,12 @@ class MainActivity : ComponentActivity() {
         super.onResume()
         // Ao voltar da tela de "acesso a notificações", o mini player já começa a mostrar a música.
         MediaWatcher.get(application).start()
+    }
+
+    override fun onStart() {
+        super.onStart()
+        // Com o app na tela o Android deixa iniciar o serviço que mantém a leitura em segundo plano.
+        if (!vm.ui.value.simulated) ReadingService.update(this, enabled = true)
     }
 
     override fun onStop() {

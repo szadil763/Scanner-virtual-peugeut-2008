@@ -12,6 +12,11 @@
     <!-- Até o Android 11, procurar aparelhos BLE exige a permissão de localização. -->
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" android:maxSdkVersion="30" />
 
+    <!-- Leitura em segundo plano (serviço em primeiro plano com notificação). -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
     <uses-feature android:name="android.hardware.bluetooth" android:required="false" />
     <uses-feature android:name="android.hardware.bluetooth_le" android:required="false" />
 
@@ -57,6 +62,11 @@
         <meta-data
             android:name="androidx.car.app.minCarApiLevel"
             android:value="1" />
+
+        <service
+            android:name=".data.ReadingService"
+            android:exported="false"
+            android:foregroundServiceType="connectedDevice" />
 
         <!-- Mini player: libera a leitura do que está tocando (o usuário ativa em "acesso a notificações"). -->
         <service

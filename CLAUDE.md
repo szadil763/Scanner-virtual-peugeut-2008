@@ -50,4 +50,6 @@ Tela **Saúde** (manutenção preventiva, etapas 1 e 2): grava um resumo por via
 
 Tela dividida e janela flutuante: abaixo de 800 dp de largura o app usa layout compacto; em janela pequena (picture-in-picture, ligado em Ajustes) mostra só velocidade, km/l, rotação e temperatura.
 
-Pendências conhecidas: serviço em primeiro plano (com outro app em tela inteira na frente, o Android pode encerrar o app e a viagem não é gravada; em tela dividida ou janela flutuante ele segue ativo), leitura de códigos pendentes (modo 07), registro de falhas com foto dos dados, ícone do app.
+Também: hodômetro real (o dono informa o km do painel uma vez; `Store.odoOffset`, os km das trocas ficam gravados em km do app), preço do combustível em Ajustes, falhas lidas ao conectar e explicadas (`domain/DtcInfo`), relatório em texto para o mecânico (`domain/Report`, botão na Saúde, compartilha pelo WhatsApp) e serviço em primeiro plano (`data/ReadingService`, tipo connectedDevice) para seguir lendo com outro app em tela cheia. A margem direita é maior porque a moldura do multimídia cobre a borda direita da tela.
+
+Pendências conhecidas: registro de falhas com foto dos dados (freeze frame, modo 02), ícone do app, previsões por tendência (etapa 3 da Saúde), suporte a outros modelos (para comercializar).

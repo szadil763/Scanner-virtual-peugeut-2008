@@ -579,8 +579,16 @@ private fun SaudeScreen(ui: UiState, vm: MonitorEngine, compact: Boolean) {
         if (ui.simulated) {
             Text("Dados simulados: as viagens só são gravadas com o adaptador conectado.", color = Warn, fontSize = 15.sp)
         }
+        val ctx = LocalContext.current
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             Button({ tips = vm.preventiveTips() }, Modifier.height(60.dp)) { Text("Gerar dicas de manutenção", fontSize = 18.sp) }
+            OutlinedButton({
+                val version = try { ctx.packageManager.getPackageInfo(ctx.packageName, 0).versionName } catch (_: Exception) { null }
+                val send = Intent(Intent.ACTION_SEND).setType("text/plain")
+                    .putExtra(Intent.EXTRA_SUBJECT, "Relatório do Peugeot 2008")
+                    .putExtra(Intent.EXTRA_TEXT, vm.mechanicReport(version ?: ""))
+                ctx.startActivity(Intent.createChooser(send, "Enviar relatório para o mecânico"))
+            }, Modifier.height(60.dp)) { Text("Relatório para o mecânico", fontSize = 18.sp) }
             if (tips != null) OutlinedButton({ tips = null }, Modifier.height(60.dp)) { Text("Fechar dicas", fontSize = 18.sp) }
         }
         tips?.let { list ->

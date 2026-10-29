@@ -8,6 +8,7 @@ import br.com.monitor2008.data.BtPermissions
 import br.com.monitor2008.data.ConnState
 import br.com.monitor2008.data.ConnectionInfo
 import br.com.monitor2008.data.HealthStore
+import br.com.monitor2008.data.ReadingService
 import br.com.monitor2008.data.ObdSource
 import br.com.monitor2008.data.Refuel
 import br.com.monitor2008.data.Sample
@@ -29,6 +30,8 @@ import br.com.monitor2008.domain.Maintenance
 import br.com.monitor2008.domain.OilPlan
 import br.com.monitor2008.domain.OilStatus
 import br.com.monitor2008.domain.RefuelState
+import br.com.monitor2008.domain.Report
+import br.com.monitor2008.domain.ReportInput
 import br.com.monitor2008.domain.Tip
 import br.com.monitor2008.domain.TripAccumulator
 import br.com.monitor2008.domain.TripHealth
@@ -279,6 +282,32 @@ class MonitorEngine private constructor(private val app: Application) {
         )
     }
 
+    /** Relatório em texto para o mecânico (botão da aba Saúde). */
+    fun mechanicReport(appVersion: String): String {
+        val u = _ui.value
+        val today = LocalDate.now()
+        val fuel = when {
+            store.ethanolFraction >= 0.9 -> "Etanol"
+            else -> "Gasolina E${Math.round(store.ethanolFraction * 100)}"
+        }
+        return Report.build(
+            ReportInput(
+                dateText = "%02d/%02d/%d".format(today.dayOfMonth, today.monthValue, today.year),
+                appVersion = appVersion,
+                carKm = u.carKm,
+                tripsRecorded = trips.size,
+                storedDtcs = dtcs ?: trips.lastOrNull()?.storedDtcs,
+                pendingDtcs = pendingDtcs ?: trips.lastOrNull()?.pendingDtcs,
+                health = u.health,
+                maint = u.maint.map { it.item to it.status },
+                tripKm = realTrip.distanceKm,
+                tripKmPerL = realTrip.avgKmPerL,
+                fuelName = fuel,
+                tips = preventiveTips(),
+            ),
+        )
+    }
+
     fun registerMaintDone(id: String) {
         if (_ui.value.moving) return
         store.setMaintDone(id, odometerKm, LocalDate.now().toEpochDay())
@@ -386,6 +415,7 @@ class MonitorEngine private constructor(private val app: Application) {
     fun setSimulated(simulated: Boolean) {
         if (store.useSimulated == simulated) return
         store.useSimulated = simulated
+        ReadingService.update(app, enabled = !simulated)
         start()
     }
 
