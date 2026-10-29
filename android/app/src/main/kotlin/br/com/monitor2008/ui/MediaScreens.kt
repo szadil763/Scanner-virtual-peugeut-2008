@@ -230,6 +230,7 @@ private fun RadioNowCard(modifier: Modifier) {
     val radio = remember { RadioPlayer.get(ctx.applicationContext as Application) }
     val rs by radio.state.collectAsStateWithLifecycle()
     val st = rs.station
+    val several = rs.favorites.size > 1
     Card(modifier, colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
         Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -248,7 +249,6 @@ private fun RadioNowCard(modifier: Modifier) {
                         color = if (rs.error != null) Bad else MaterialTheme.colorScheme.onSurfaceVariant)
                 }
                 if (rs.buffering) LinearProgressIndicator(Modifier.width(60.dp))
-                val several = rs.favorites.size > 1
                 BigKey("⏮", 64, enabled = several) { radio.step(forward = false) }
                 BigKey(if (rs.playing) "⏸" else "▶", 76, filled = true, enabled = st != null) { radio.toggle() }
                 BigKey("⏭", 64, enabled = several) { radio.step(forward = true) }
