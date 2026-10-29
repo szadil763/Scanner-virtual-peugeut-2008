@@ -1,0 +1,444 @@
+<title>Monitor do Carro</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700;900&family=Roboto+Condensed:wght@700;800&display=swap">
+<!--
+  Apresentação v2 (propaganda): problema -> benefícios -> prova real (fotos do 2008 do dono) -> segurança -> chamada.
+  Palco em dois formatos: deitado (1280x720) e em pé (720x1280, celular e status do WhatsApp).
+  ?frames&h ou ?frames&v mostra só o palco, para o marketing/render-v2.js gravar o MP4 quadro a quadro.
+-->
+<style>
+/* Layout: palco fixo escalado para caber; texto grande de um lado, uma única imagem do outro (em pé: texto em cima). */
+:root {
+  --page:#06090D; --panel:#101720; --line:#223041; --ink:#EEF3F8; --dim:#93A4B8;
+  --sky:#38BDF8; --amber:#FBBF24; --green:#4ADE80; --red:#F87171; --navy:#1E3A8A;
+  --display:"Roboto Condensed", "Roboto", "Arial Narrow", Arial, sans-serif;
+  --body:"Roboto", "Segoe UI", Arial, sans-serif;
+  color-scheme:dark;
+}
+html, body { background:var(--page); color:var(--ink); }
+body { font-family:var(--body); padding-left:max(16px, env(safe-area-inset-left, 0px)); padding-right:max(16px, env(safe-area-inset-right, 0px)); padding-block:20px; }
+
+/* player */
+.wrap { max-width:1280px; margin:0 auto; display:flex; flex-direction:column; gap:14px; }
+.wrap.portrait { max-width:520px; }
+header { display:flex; align-items:baseline; justify-content:space-between; gap:12px; flex-wrap:wrap; }
+header h1 { font-family:var(--display); font-size:24px; font-weight:800; }
+header h1 span { color:var(--sky); }
+header p { color:var(--dim); font-size:14px; }
+#frame { position:relative; width:100%; background:#000; border-radius:14px; overflow:hidden; cursor:pointer; }
+#frame.full { position:fixed; inset:0; width:100vw; height:100vh; border-radius:0; z-index:50; aspect-ratio:auto !important; }
+#frame:fullscreen { width:100vw; height:100vh; border-radius:0; aspect-ratio:auto !important; }
+#exitFull { display:none; position:absolute; top:max(12px, env(safe-area-inset-top, 0px)); right:max(12px, env(safe-area-inset-right, 0px));
+  width:52px; height:52px; border-radius:50%; border:0; background:rgba(0,0,0,.55); color:#fff; font-size:22px; cursor:pointer; z-index:2; }
+#frame.full #exitFull, #frame:fullscreen #exitFull { display:block; }
+.controls { display:flex; align-items:center; gap:10px; background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:10px 12px; flex-wrap:wrap; }
+.controls button { font:inherit; color:var(--ink); background:transparent; border:1.5px solid var(--line); border-radius:10px; cursor:pointer;
+  min-width:48px; height:48px; font-size:17px; font-weight:700; padding:0 14px; }
+.controls button.primary { background:var(--navy); border-color:var(--navy); color:#fff; }
+.controls button.on { border-color:var(--sky); color:var(--sky); }
+.controls button:focus-visible, #frame:focus-visible { outline:3px solid var(--sky); outline-offset:2px; }
+#seek { flex:1; min-width:120px; accent-color:var(--sky); height:28px; }
+#time { font-variant-numeric:tabular-nums; color:var(--dim); font-size:14px; }
+.note { color:var(--dim); font-size:13px; }
+
+/* palco */
+#stage { position:absolute; left:0; top:0; transform-origin:0 0; overflow:hidden; color:#F3F6FA; font-family:var(--body);
+  background: radial-gradient(900px 700px at 70% 35%, #11253b 0%, #080C11 65%); }
+#stage.h { width:1280px; height:720px; }
+#stage.v { width:720px; height:1280px; }
+:where(#stage *) { box-sizing:border-box; margin:0; padding:0; }
+.scene { position:absolute; inset:0; display:none; }
+#stage.h .scene { flex-direction:row; align-items:center; gap:56px; padding:0 64px; }
+#stage.v .scene { flex-direction:column; justify-content:center; gap:44px; padding:0 48px; }
+.txt { flex:0 0 auto; }
+#stage.h .txt { width:500px; }
+#stage.v .txt { width:100%; }
+.vis { flex:1; display:flex; align-items:center; justify-content:center; position:relative; min-width:0; }
+#stage.v .vis { flex:0 0 auto; width:100%; }
+.kick { font-size:20px; font-weight:700; letter-spacing:2.5px; text-transform:uppercase; color:var(--sky); margin-bottom:14px; }
+.big { font-family:var(--display); font-weight:800; line-height:1.02; letter-spacing:-.5px; }
+#stage.h .big { font-size:62px; }
+#stage.v .big { font-size:74px; }
+.sub { color:#C9D4E0; line-height:1.35; margin-top:18px; }
+#stage.h .sub { font-size:25px; }
+#stage.v .sub { font-size:30px; }
+.hl { color:var(--amber); }
+.tag { position:absolute; left:12px; bottom:12px; font-size:15px; font-weight:700; letter-spacing:1px; padding:6px 10px; border-radius:6px;
+  background:rgba(0,0,0,.65); color:#fff; text-transform:uppercase; }
+.tag.real { background:var(--green); color:#04210f; }
+.box { background:#121B26; border:1px solid #233246; border-radius:18px; }
+
+/* gancho */
+.hook { position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; gap:28px; padding:0 60px; }
+.hook .big { font-size:84px; }
+#stage.v .hook .big { font-size:86px; }
+
+/* foto real */
+.photo { position:relative; width:100%; border-radius:16px; overflow:hidden; box-shadow:0 24px 70px rgba(0,0,0,.6); aspect-ratio:1100/688; }
+.photo img { width:100%; height:100%; display:block; transform-origin:30% 40%; }
+.mark { position:absolute; border:5px solid var(--amber); border-radius:12px; box-shadow:0 0 0 9999px rgba(0,0,0,.45); opacity:0; }
+.callout { display:flex; gap:14px; align-items:flex-start; margin-top:16px; opacity:0; }
+.callout b { flex:none; width:34px; height:34px; border-radius:50%; background:var(--amber); color:#1a1200; font-size:20px; text-align:center; line-height:34px; }
+#stage.h .callout span { font-size:23px; line-height:1.3; }
+#stage.v .callout span { font-size:28px; line-height:1.3; }
+
+/* listas */
+.rows { display:flex; flex-direction:column; gap:18px; width:100%; }
+.rowi { display:flex; align-items:center; gap:20px; padding:20px 22px; opacity:0; }
+.rowi svg { flex:none; }
+.rowi div { font-size:27px; font-weight:700; line-height:1.25; }
+.rowi small { display:block; font-size:19px; font-weight:400; color:var(--dim); margin-top:2px; }
+.bul { list-style:none; margin-top:20px; display:flex; flex-direction:column; gap:12px; }
+.bul li { font-size:25px; line-height:1.3; padding-left:34px; position:relative; opacity:0; }
+#stage.v .bul li { font-size:29px; }
+.bul li::before { content:"✓"; position:absolute; left:0; color:var(--green); font-weight:900; }
+.disc { position:absolute; left:24px; right:24px; bottom:26px; text-align:center; font-size:18px; color:#8193a8; }
+</style>
+
+<div class="wrap" id="wrap">
+  <header>
+    <h1>Monitor <span>do Carro</span></h1>
+    <p>Apresentação · 1 minuto</p>
+  </header>
+  <div id="frame" tabindex="0" aria-label="Apresentação do app. Toque para pausar ou continuar.">
+    <div id="stage" class="h">
+
+      <!-- 1. Gancho -->
+      <div class="scene" data-a="0" data-b="5.2">
+        <div class="hook">
+          <svg id="mil" width="230" height="168" style="filter:drop-shadow(0 0 24px rgba(251,191,36,.55))" viewBox="0 0 120 88" aria-hidden="true">
+            <path fill="#FBBF24" d="M30 18h34v8h10l8 8h10v-6h8v34h-8v-6h-8l-12 14H40l-6-8h-8v8h-8V46h8v-8h8l6-8V26h-10z"/>
+          </svg>
+          <div class="big" id="hook1">A luz da injeção acendeu.</div>
+          <div class="big hl" id="hook2">E agora? Dá para seguir viagem?</div>
+        </div>
+      </div>
+
+      <!-- 2. Saber o que o carro tem -->
+      <div class="scene" data-a="5.2" data-b="13">
+        <div class="txt">
+          <div class="kick">Antes do mecânico</div>
+          <div class="big">Saiba o que o carro tem.</div>
+          <div class="sub">O app lê o código da falha, explica em português e monta um relatório para mandar ao mecânico.</div>
+        </div>
+        <div class="vis">
+          <div style="width:560px;position:relative">
+            <div class="box" id="dtc" style="padding:26px 28px">
+              <div style="font-size:17px;font-weight:700;letter-spacing:1.5px;color:var(--red)">FALHA ARMAZENADA</div>
+              <div style="font-family:var(--display);font-size:76px;font-weight:800;margin:4px 0 8px">P0171</div>
+              <div id="dtcTxt" style="font-size:24px;line-height:1.35;color:#D6DEE8">Mistura pobre: entrada de ar, bicos ou bomba de combustível fraca</div>
+            </div>
+            <div id="wa" style="margin:22px 0 0 70px;background:#0b141a;border-radius:16px;padding:16px 18px;box-shadow:0 18px 50px rgba(0,0,0,.6)">
+              <div style="font-size:16px;color:#25D366;font-weight:800;margin-bottom:8px">WhatsApp · Mecânico</div>
+              <div style="background:#005c4b;border-radius:12px;padding:12px 16px;font-size:19px;line-height:1.5">
+                <b>Relatório do carro</b><br>Falha P0171: mistura pobre<br>Bateria: 14,1 V (ok)<br>Consumo: 9,8 km/l</div>
+            </div>
+            <div class="tag" style="bottom:auto;top:-46px;left:0">Tela ilustrativa</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 3. Quanto custa -->
+      <div class="scene" data-a="13" data-b="19.6">
+        <div class="txt">
+          <div class="kick">Na hora</div>
+          <div class="big">Veja quanto cada viagem custa.</div>
+          <div class="sub">Consumo em km/l enquanto você dirige e o gasto do trajeto em reais.</div>
+        </div>
+        <div class="vis">
+          <div class="box" style="width:540px;padding:30px 32px;position:relative">
+            <div style="font-size:17px;font-weight:700;letter-spacing:1.5px;color:var(--dim)">CUSTO DO TRAJETO</div>
+            <div style="font-family:var(--display);font-size:110px;font-weight:800;line-height:1.05" id="cost">R$ 0,00</div>
+            <div style="display:flex;gap:30px;margin-top:10px">
+              <div><div style="font-size:15px;color:var(--dim);font-weight:700">CONSUMO AGORA</div><div style="font-size:44px;font-weight:900;color:var(--green)" id="kml">--</div></div>
+              <div><div style="font-size:15px;color:var(--dim);font-weight:700">DISTÂNCIA</div><div style="font-size:44px;font-weight:900" id="dist">0,0 km</div></div>
+            </div>
+            <svg width="476" height="90" style="margin-top:14px"><path id="kmlLine" fill="none" stroke="#4ADE80" stroke-width="4" stroke-linecap="round"/></svg>
+            <div class="tag">Tela ilustrativa</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 4. Postos -->
+      <div class="scene" data-a="19.6" data-b="26.6">
+        <div class="txt">
+          <div class="kick">Economia</div>
+          <div class="big">Descubra o posto que vende combustível bom.</div>
+          <div class="sub">Depois de alguns tanques, o próprio motor mostra a diferença entre um posto e outro.</div>
+        </div>
+        <div class="vis">
+          <div class="rows" style="width:560px;position:relative">
+            <div class="box rowi" id="po1">
+              <svg width="56" height="56" viewBox="0 0 56 56"><circle cx="28" cy="28" r="26" fill="#4ADE80"/><path d="M16 29l8 8 16-17" stroke="#052e14" stroke-width="6" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              <div>Posto Azul · Av. Central<small>Combustível bom: rendeu 4% mais</small></div>
+            </div>
+            <div class="box rowi" id="po2">
+              <svg width="56" height="56" viewBox="0 0 56 56"><circle cx="28" cy="28" r="26" fill="#F87171"/><path d="M19 19l18 18M37 19L19 37" stroke="#3b0a0a" stroke-width="6" stroke-linecap="round"/></svg>
+              <div>Posto da Estrada<small>Suspeito: gastou 8% mais combustível</small></div>
+            </div>
+            <div style="height:30px"></div>
+            <div class="tag" style="bottom:-8px">Nomes fictícios · tela ilustrativa</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 5a. Prova real: Saúde -->
+      <div class="scene" data-a="26.6" data-b="35">
+        <div class="txt">
+          <div class="kick">Funcionando de verdade</div>
+          <div class="big" style="font-size:52px">No Peugeot 2008 do Adilson, o app achou:</div>
+          <div class="callout" id="co1"><b>1</b><span>Uma falha guardada na central, sem a luz da injeção acesa no painel.</span></div>
+          <div class="callout" id="co2"><b>2</b><span>Mistura 31% pobre: apontou combustível, filtro ou bomba para verificar.</span></div>
+        </div>
+        <div class="vis">
+          <div class="photo" id="ph1">
+            <img src="fotos/saude.jpg" alt="Foto real da tela Saúde do app no multimídia do Peugeot 2008">
+            <div class="mark" id="mk1" style="left:10.5%;top:32.5%;width:43.5%;height:17.5%"></div>
+            <div class="mark" id="mk2" style="left:53.8%;top:33%;width:41.5%;height:22.5%"></div>
+            <div class="tag real">Foto real</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 5b. Prova real: Mídias -->
+      <div class="scene" data-a="35" data-b="40.5">
+        <div class="txt">
+          <div class="kick">Foto real, no multimídia</div>
+          <div class="big">Rádio ou música, com o painel do carro ao lado.</div>
+          <div class="sub">Spotify, YouTube Music, Bluetooth do celular e rádios do Brasil inteiro.</div>
+        </div>
+        <div class="vis">
+          <div class="photo" id="ph2"><img src="fotos/midias.jpg" alt="Foto real da aba Mídias do app com o painel ao lado"><div class="tag real">Foto real</div></div>
+        </div>
+      </div>
+
+      <!-- 6. Como funciona e segurança -->
+      <div class="scene" data-a="40.5" data-b="47.5">
+        <div class="txt">
+          <div class="kick">Simples e seguro</div>
+          <div class="big">Instala em poucos minutos. Não mexe no carro.</div>
+        </div>
+        <div class="vis">
+          <div class="rows" style="width:580px">
+            <div class="box rowi" id="r1">
+              <svg width="60" height="60" viewBox="0 0 60 60"><rect x="12" y="10" width="36" height="28" rx="6" fill="#38BDF8"/><rect x="18" y="38" width="24" height="12" rx="3" fill="#1d4f6b"/></svg>
+              <div>Adaptador de bolso<small>Encaixa na tomada de diagnóstico, embaixo do painel</small></div>
+            </div>
+            <div class="box rowi" id="r2">
+              <svg width="60" height="60" viewBox="0 0 60 60" fill="none" stroke="#38BDF8" stroke-width="5" stroke-linecap="round"><path d="M22 22q8 8 0 16"/><path d="M31 15q15 15 0 30"/><path d="M40 8q22 22 0 44"/><circle cx="13" cy="30" r="5" fill="#38BDF8"/></svg>
+              <div>Conecta sozinho<small>Ligou o carro, os dados aparecem no multimídia</small></div>
+            </div>
+            <div class="box rowi" id="r3">
+              <svg width="60" height="60" viewBox="0 0 60 60"><path d="M30 6l20 8v14c0 13-9 22-20 26C19 50 10 41 10 28V14z" fill="#4ADE80"/><path d="M21 30l7 7 12-13" stroke="#052e14" stroke-width="5" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              <div>Só lê as informações<small>Não altera nada na central do carro</small></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 7. E ainda -->
+      <div class="scene" data-a="47.5" data-b="53.5">
+        <div class="txt">
+          <div class="kick">E ainda</div>
+          <ul class="bul" style="margin-top:0">
+            <li>Troca de óleo e revisões no prazo</li>
+            <li>Saúde do carro avaliada a cada viagem</li>
+            <li>Rota até o posto com um toque</li>
+            <li>Peugeot 2008, Citroën C4 Lounge e outros modelos em breve</li>
+          </ul>
+        </div>
+        <div class="vis">
+          <div class="photo" id="ph3"><img src="fotos/manutencao.jpg" alt="Foto real da tela Manutenção do app"><div class="tag real">Foto real</div></div>
+        </div>
+      </div>
+
+      <!-- 8. Chamada -->
+      <div class="scene" data-a="53.5" data-b="60">
+        <div class="hook">
+          <div class="big" style="font-size:72px">Monitor <span style="color:var(--sky)">do Carro</span></div>
+          <div style="font-size:40px;font-weight:700" id="cta1">Quer no seu carro?</div>
+          <div style="font-size:34px;color:#C9D4E0" id="cta2">Fale com o <b style="color:var(--sky)">Adilson</b> e agende a instalação.</div>
+        </div>
+        <div class="disc">Fotos reais do app no Peugeot 2008. Telas animadas e nomes de postos são ilustrativos.</div>
+      </div>
+
+    </div>
+    <button id="exitFull" aria-label="Sair da tela cheia">✕</button>
+  </div>
+  <div class="controls" id="controls">
+    <button id="play" class="primary" aria-label="Pausar">❚❚</button>
+    <button id="restart" aria-label="Recomeçar">↺</button>
+    <input id="seek" type="range" min="0" max="60" step="0.1" value="0" aria-label="Posição na apresentação">
+    <span id="time">0:00 / 1:00</span>
+    <button id="fmtH" aria-label="Formato deitado">▭ Deitado</button>
+    <button id="fmtV" aria-label="Formato em pé">▯ Em pé</button>
+    <button id="full">⛶ Tela cheia</button>
+  </div>
+  <p class="note">Toque na apresentação para pausar. No celular, "Em pé" ocupa a tela toda sem girar o aparelho.</p>
+</div>
+
+<script>
+const TOTAL = 60;
+const $ = id => document.getElementById(id);
+const clamp = (x, a = 0, b = 1) => Math.max(a, Math.min(b, x));
+const seg = (t, a, b) => clamp((t - a) / (b - a));
+const ease = x => x < .5 ? 2 * x * x : 1 - Math.pow(-2 * x + 2, 2) / 2;
+const br = (v, d = 1) => v.toFixed(d).replace(".", ",");
+const appear = (el, p, dy = 18) => { el.style.opacity = p; el.style.transform = `translateY(${(1 - p) * dy}px)`; };
+const scenes = [...document.querySelectorAll(".scene")];
+
+function render(t) {
+  scenes.forEach(sc => {
+    const a = +sc.dataset.a, b = +sc.dataset.b;
+    const on = t >= a && t < b;
+    sc.style.display = on ? "flex" : "none";
+    if (!on) return;
+    sc.style.opacity = Math.min(seg(t, a, a + .5), 1 - seg(t, b - .45, b));
+    const txt = sc.querySelector(".txt");
+    if (txt) txt.style.transform = `translateY(${(1 - ease(seg(t, a, a + .7))) * 24}px)`;
+    const vis = sc.querySelector(".vis");
+    if (vis) vis.style.transform = `scale(${.94 + .06 * ease(seg(t, a + .1, a + .9))})`;
+  });
+
+  // 1. gancho: luz piscando, depois a pergunta
+  $("mil").style.opacity = Math.sin(t * 7) > -.2 ? 1 : .25;
+  appear($("hook1"), ease(seg(t, .2, .9)));
+  appear($("hook2"), ease(seg(t, 2, 2.7)));
+
+  // 2. falha e relatório
+  appear($("dtc"), ease(seg(t, 5.6, 6.3)));
+  $("dtcTxt").style.opacity = ease(seg(t, 6.8, 7.4));
+  appear($("wa"), ease(seg(t, 9, 9.7)), 30);
+
+  // 3. custo subindo
+  const c = ease(seg(t, 13.6, 17.6));
+  $("cost").textContent = "R$ " + br(24.05 * c, 2);
+  $("dist").textContent = br(20.6 * c) + " km";
+  $("kml").textContent = t < 13.8 ? "--" : br(9 + 3 * Math.sin(t * 1.9) + 1.5 * Math.sin(t * .7)) + " km/l";
+  let d = "";
+  const n = Math.floor(seg(t, 13.6, 18.6) * 60);
+  for (let i = 0; i <= n; i++) {
+    const v = 10 + 3 * Math.sin(i * .33) + 1.5 * Math.sin(i * .12);
+    d += (i ? "L" : "M") + (i / 60 * 476).toFixed(1) + "," + (86 - v / 18 * 80).toFixed(1);
+  }
+  $("kmlLine").setAttribute("d", d);
+
+  // 4. postos
+  appear($("po1"), ease(seg(t, 20.4, 21)), 24);
+  appear($("po2"), ease(seg(t, 22.2, 22.8)), 24);
+
+  // 5a. foto real: destaca a falha e depois a mistura, com zoom leve
+  const z = ease(seg(t, 27, 34.5));
+  $("ph1").querySelector("img").style.transform = `scale(${1 + .06 * z})`;
+  const m1 = seg(t, 28.2, 28.7) * (1 - seg(t, 31.2, 31.6));
+  const m2 = seg(t, 31.6, 32.1);
+  $("mk1").style.opacity = m1;
+  $("mk2").style.opacity = m2;
+  appear($("co1"), ease(seg(t, 28.2, 28.8)));
+  appear($("co2"), ease(seg(t, 31.6, 32.2)));
+
+  // 5b e 7: zoom lento nas fotos
+  $("ph2").querySelector("img").style.transform = `scale(${1 + .05 * seg(t, 35, 40.5)})`;
+  $("ph3").querySelector("img").style.transform = `scale(${1 + .05 * seg(t, 47.5, 53.5)})`;
+
+  // 6. passos
+  ["r1", "r2", "r3"].forEach((id, i) => appear($(id), ease(seg(t, 41.2 + i * 1.2, 41.8 + i * 1.2)), 24));
+
+  // 7. lista
+  document.querySelectorAll(".bul li").forEach((li, i) => appear(li, ease(seg(t, 48 + i * .7, 48.5 + i * .7)), 14));
+
+  // 8. chamada
+  appear($("cta1"), ease(seg(t, 54.3, 55)));
+  appear($("cta2"), ease(seg(t, 55.2, 55.9)));
+}
+
+// ---------- formato e escala ----------
+const frame = $("frame"), stage = $("stage");
+const q = location.search;
+let vertical = /[?&]v\b/.test(q) || (!/[?&]h\b/.test(q) && window.innerHeight > window.innerWidth);
+function setFormat(v) {
+  vertical = v;
+  stage.className = v ? "v" : "h";
+  frame.style.aspectRatio = v ? "9 / 16" : "16 / 9";
+  $("wrap").classList.toggle("portrait", v);
+  $("fmtH").classList.toggle("on", !v);
+  $("fmtV").classList.toggle("on", v);
+  fit();
+}
+function fit() {
+  const W = vertical ? 720 : 1280, H = vertical ? 1280 : 720;
+  const w = frame.clientWidth, h = frame.clientHeight;
+  const s = Math.min(w / W, h / H);
+  stage.style.transform = `translate(${(w - W * s) / 2}px, ${(h - H * s) / 2}px) scale(${s})`;
+}
+
+if (/[?&]frames\b/.test(q)) {
+  // gravação: só o palco, no tamanho real
+  document.body.style.padding = "0";
+  document.body.style.background = "#000";
+  document.body.appendChild(stage);
+  $("wrap").remove();
+  stage.className = vertical ? "v" : "h";
+  stage.style.transform = "none";
+  window.render = render;
+  window.TOTAL = TOTAL;
+  render(0);
+} else {
+  let t = 0, playing = !window.matchMedia("(prefers-reduced-motion: reduce)").matches, last = null;
+  const fmt = s => Math.floor(s / 60) + ":" + String(Math.floor(s % 60)).padStart(2, "0");
+  const paint = () => { render(t); $("seek").value = t; $("time").textContent = fmt(t) + " / " + fmt(TOTAL); };
+  const setPlaying = p => {
+    playing = p;
+    if (p && t >= TOTAL - .05) t = 0;
+    $("play").textContent = p ? "❚❚" : "▶";
+    $("play").setAttribute("aria-label", p ? "Pausar" : "Tocar");
+    last = null;
+  };
+  const seekTo = v => { t = clamp(v, 0, TOTAL); paint(); };
+  const tick = now => {
+    if (playing) {
+      if (last != null) t += (now - last) / 1000;
+      last = now;
+      if (t >= TOTAL) { t = TOTAL - .01; setPlaying(false); }
+    }
+    paint();
+    requestAnimationFrame(tick);
+  };
+  $("play").addEventListener("click", () => setPlaying(!playing));
+  $("restart").addEventListener("click", () => { seekTo(0); setPlaying(true); });
+  $("seek").addEventListener("input", e => seekTo(+e.target.value));
+  $("fmtH").addEventListener("click", () => setFormat(false));
+  $("fmtV").addEventListener("click", () => setFormat(true));
+  frame.addEventListener("click", () => setPlaying(!playing));
+  document.addEventListener("keydown", e => {
+    if (e.target.tagName === "INPUT") return;
+    if (e.key === " ") { e.preventDefault(); setPlaying(!playing); }
+    else if (e.key === "ArrowRight") seekTo(t + 5);
+    else if (e.key === "ArrowLeft") seekTo(t - 5);
+    else if (e.key === "Escape" && frame.classList.contains("full")) leaveFull();
+  });
+  // Tela cheia: a do navegador quando existe; senão (alguns celulares e apps), ocupa a janela inteira.
+  const leaveFull = () => { frame.classList.remove("full"); setTimeout(fit, 50); };
+  $("full").addEventListener("click", async () => {
+    try {
+      if (!frame.requestFullscreen) throw new Error("sem tela cheia");
+      await frame.requestFullscreen();
+    } catch (e) {
+      frame.classList.add("full");
+    }
+    setTimeout(fit, 80);
+  });
+  $("exitFull").addEventListener("click", e => {
+    e.stopPropagation();
+    if (document.fullscreenElement) document.exitFullscreen().catch(() => {}); else leaveFull();
+  });
+  document.addEventListener("fullscreenchange", () => setTimeout(fit, 80));
+  new ResizeObserver(fit).observe(frame);
+  window.addEventListener("resize", fit);
+  setFormat(vertical);
+  setPlaying(playing);
+  requestAnimationFrame(tick);
+}
+</script>
