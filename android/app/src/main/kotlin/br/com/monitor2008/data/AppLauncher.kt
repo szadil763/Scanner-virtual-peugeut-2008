@@ -38,6 +38,17 @@ class AppLauncher(private val context: Context) {
         return choices(KNOWN_MUSIC + services + activities)
     }
 
+    /**
+     * Fontes da aba Mídias: só apps de música de fato (os conhecidos e os da categoria música). Sem
+     * a busca por player de mídia, que trazia apps como o Adobe Acrobat (leitura em voz alta).
+     */
+    fun mediaApps(): List<AppChoice> {
+        val activities = pm.queryIntentActivities(
+            Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_APP_MUSIC), 0,
+        ).map { it.activityInfo.packageName }
+        return choices(KNOWN_MUSIC + activities)
+    }
+
     /** Só os instalados que abrem pelo ícone, sem repetir, na ordem da lista. */
     private fun choices(pkgs: List<String>): List<AppChoice> = pkgs.distinct()
         .filter { it != context.packageName && pm.getLaunchIntentForPackage(it) != null }

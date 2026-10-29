@@ -4,7 +4,6 @@ import android.app.Application
 import android.content.Intent
 import android.os.SystemClock
 import android.provider.Settings
-import android.widget.Toast
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -38,7 +37,6 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -88,7 +86,7 @@ private fun rememberSources(): List<Source> {
     return remember {
         val launcher = AppLauncher(ctx.applicationContext)
         val seen = Store(ctx.applicationContext).mediaSeen.filter { it != ctx.packageName }
-        (launcher.musicApps().map { Source(it.pkg, it.label) } + seen.map { Source(it, launcher.label(it)) })
+        (launcher.mediaApps().map { Source(it.pkg, it.label) } + seen.map { Source(it, launcher.label(it)) })
             .distinctBy { it.pkg }
             .map { if (it.label.contains("bluetooth", ignoreCase = true)) it.copy(label = "Bluetooth (celular)") else it }
     }
@@ -119,11 +117,11 @@ private fun BigKey(symbol: String, size: Int, filled: Boolean = false, enabled: 
 }
 
 /**
- * Player grande: capa, nome, tempo e botões de 68 a 84 dp. Mostra o rádio do app quando ele está
- * tocando (ou é o último usado); senão, a música de qualquer outro app.
+ * Player da música dos outros apps: capa, nome, tempo e botões de 68 a 96 dp. Se o que toca é o
+ * rádio do próprio app, aparece como rádio (os botões controlam a sessão dele também).
  */
 @Composable
-internal fun BigPlayer(modifier: Modifier, large: Boolean) {
+private fun MusicPlayer(modifier: Modifier, large: Boolean) {
     val ctx = LocalContext.current
     val app = ctx.applicationContext as Application
     val media = remember { MediaWatcher.get(app) }
@@ -132,7 +130,7 @@ internal fun BigPlayer(modifier: Modifier, large: Boolean) {
     val allowed by media.allowed.collectAsStateWithLifecycle()
     val rs by radio.state.collectAsStateWithLifecycle()
     val n = now
-    val showRadio = rs.station != null && (rs.playing || rs.buffering || rs.error != null || n == null || n.pkg == ctx.packageName)
+    val isRadio = n?.pkg == ctx.packageName
 
     // Relógio da barra de tempo: só anda com música tocando.
     var tick by remember { mutableLongStateOf(0L) }
@@ -152,20 +150,20 @@ internal fun BigPlayer(modifier: Modifier, large: Boolean) {
                     Modifier.size(artSize).clip(RoundedCornerShape(12.dp)).background(Color(0xFF1E293B)),
                     contentAlignment = Alignment.Center,
                 ) {
-                    val art = if (showRadio) null else n?.art
+                    val art = if (isRadio) null else n?.art
                     if (art != null) {
                         Image(art.asImageBitmap(), null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
                     } else {
-                        Text(if (showRadio) "RÁDIO" else "♪", fontSize = if (showRadio) 22.sp else 56.sp, fontWeight = FontWeight.Bold,
+                        Text(if (isRadio) "RÁDIO" else "♪", fontSize = if (isRadio) 22.sp else 56.sp, fontWeight = FontWeight.Bold,
                             color = Color(0xFF94A3B8))
                     }
                 }
                 Spacer(Modifier.width(16.dp))
                 Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     val (label, title, sub) = when {
-                        showRadio -> Triple("RÁDIO PELA INTERNET", rs.station!!.name, rs.streamTitle ?: rs.station!!.subtitle)
-                        n != null -> texts(n).let { (t, s) -> Triple(n.app.uppercase(), t, s) }
-                        else -> Triple("MÍDIAS", "Nada tocando", "Escolha uma fonte abaixo.")
+                        n == null -> Triple("MÚSICA", "Nada tocando", "Escolha um app abaixo.")
+                        isRadio -> Triple("RÁDIO PELA INTERNET", rs.station?.name ?: "Rádio", rs.streamTitle ?: rs.station?.subtitle ?: "")
+                        else -> texts(n).let { (t, s) -> Triple(n.app.uppercase(), t, s) }
                     }
                     Text(label, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurfaceVariant,
                         maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -174,52 +172,25 @@ internal fun BigPlayer(modifier: Modifier, large: Boolean) {
                         maxLines = 2, overflow = TextOverflow.Ellipsis)
                 }
             }
-
-            when {
-                showRadio && rs.error != null -> Text(rs.error!!, color = Bad, fontSize = 16.sp)
-                showRadio && rs.buffering -> {
-                    Text("Conectando à rádio...", color = Warn, fontSize = 16.sp)
-                    LinearProgressIndicator(Modifier.fillMaxWidth())
-                }
-                showRadio && rs.playing -> Text("AO VIVO", color = Bad, fontSize = 16.sp, fontWeight = FontWeight.Bold)
-                !showRadio && n != null && n.durationMs > 0 -> {
-                    val pos = if (tick >= 0) n.positionNow().coerceIn(0, n.durationMs) else 0L
-                    LinearProgressIndicator(progress = { pos.toFloat() / n.durationMs }, modifier = Modifier.fillMaxWidth().height(8.dp))
-                    Row {
-                        Text(time(pos), fontSize = 15.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        Spacer(Modifier.weight(1f))
-                        Text(time(n.durationMs), fontSize = 15.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
+            if (n != null && !isRadio && n.durationMs > 0) {
+                val pos = if (tick >= 0) n.positionNow().coerceIn(0, n.durationMs) else 0L
+                LinearProgressIndicator(progress = { pos.toFloat() / n.durationMs }, modifier = Modifier.fillMaxWidth().height(8.dp))
+                Row {
+                    Text(time(pos), fontSize = 15.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Spacer(Modifier.weight(1f))
+                    Text(time(n.durationMs), fontSize = 15.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
             Spacer(Modifier.weight(1f))
-
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp, Alignment.CenterHorizontally),
-                verticalAlignment = Alignment.CenterVertically) {
-                if (showRadio) {
-                    val several = rs.favorites.size > 1
-                    BigKey("⏮", keySize, enabled = several) { radio.step(forward = false) }
-                    BigKey(if (rs.playing) "⏸" else "▶", keySize + 12, filled = true) { radio.toggle() }
-                    BigKey("⏭", keySize, enabled = several) { radio.step(forward = true) }
-                } else if (n != null) {
-                    BigKey("⏮", keySize) { media.previous() }
+            if (n != null) {
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp, Alignment.CenterHorizontally),
+                    verticalAlignment = Alignment.CenterVertically) {
+                    BigKey("⏮", keySize) { if (isRadio) radio.step(forward = false) else media.previous() }
                     BigKey(if (n.playing) "⏸" else "▶", keySize + 12, filled = true) { media.playPause() }
-                    BigKey("⏭", keySize) { media.next() }
+                    BigKey("⏭", keySize) { if (isRadio) radio.step(forward = true) else media.next() }
                 }
             }
-            if (showRadio) {
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterHorizontally)) {
-                    val fav = rs.favorites.any { it.id == rs.station?.id }
-                    OutlinedButton({ rs.station?.let { radio.toggleFavorite(it) } }, Modifier.height(56.dp)) {
-                        Text(if (fav) "★ Favorita" else "☆ Favoritar", fontSize = 17.sp, color = if (fav) Warn else Color.Unspecified)
-                    }
-                    OutlinedButton({ radio.stop() }, Modifier.height(56.dp)) { Text("Parar", fontSize = 17.sp) }
-                }
-            }
-            if (showRadio && rs.favorites.size <= 1) {
-                Text("Com 2 ou mais favoritas, ⏮ e ⏭ trocam de rádio.", fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-            if (!allowed && !showRadio) {
+            if (!allowed) {
                 Text("Para ver e controlar a música dos outros apps, libere o \"acesso a notificações\" do Monitor 2008 " +
                     "(o app não lê nem guarda suas notificações).", fontSize = 15.sp, color = Warn)
                 Button({ ctx.startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)) }, Modifier.height(56.dp)) {
@@ -232,28 +203,78 @@ internal fun BigPlayer(modifier: Modifier, large: Boolean) {
 
 /** Botões das fontes: um toque começa a tocar no app, que fica em segundo plano. */
 @Composable
-private fun SourceButtons(onRadio: () -> Unit) {
+private fun SourceButtons() {
     val ctx = LocalContext.current
     val app = ctx.applicationContext as Application
     val media = remember { MediaWatcher.get(app) }
-    val radio = remember { RadioPlayer.get(app) }
     val activity = remember(ctx) { ctx.findActivity() }
     val now by media.now.collectAsStateWithLifecycle()
-    val rs by radio.state.collectAsStateWithLifecycle()
     val sources = rememberSources()
+    if (sources.isEmpty()) {
+        Text("Nenhum app de música instalado.", color = Warn, fontSize = 16.sp)
+        return
+    }
     Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
         sources.forEach { s ->
             val active = now?.let { it.pkg == s.pkg && it.playing } == true
             FilterChip(selected = active, onClick = { media.playOn(s.pkg, activity) },
                 label = { Text(s.label, fontSize = 18.sp) }, modifier = Modifier.height(60.dp))
         }
-        FilterChip(selected = rs.playing, onClick = onRadio, label = { Text("Rádio", fontSize = 18.sp) }, modifier = Modifier.height(60.dp))
+    }
+}
+
+/** Rádio tocando agora: nome, situação e botões. ⏮ e ⏭ trocam entre as favoritas. */
+@Composable
+private fun RadioNowCard(modifier: Modifier) {
+    val ctx = LocalContext.current
+    val radio = remember { RadioPlayer.get(ctx.applicationContext as Application) }
+    val rs by radio.state.collectAsStateWithLifecycle()
+    val st = rs.station
+    Card(modifier, colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
+        Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    val (label, color) = when {
+                        rs.error != null -> "SEM SINAL" to Bad
+                        rs.buffering -> "CONECTANDO..." to Warn
+                        rs.playing -> "AO VIVO" to Bad
+                        else -> "RÁDIO PELA INTERNET" to MaterialTheme.colorScheme.onSurfaceVariant
+                    }
+                    Text(label, fontSize = 14.sp, fontWeight = FontWeight.Bold, color = color)
+                    Text(st?.name ?: "Escolha uma rádio na lista", fontSize = 24.sp, fontWeight = FontWeight.Bold,
+                        maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    val sub = rs.error ?: rs.streamTitle ?: st?.subtitle ?: ""
+                    if (sub.isNotBlank()) Text(sub, fontSize = 15.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                        color = if (rs.error != null) Bad else MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                if (rs.buffering) LinearProgressIndicator(Modifier.width(60.dp))
+                val several = rs.favorites.size > 1
+                BigKey("⏮", 64, enabled = several) { radio.step(forward = false) }
+                BigKey(if (rs.playing) "⏸" else "▶", 76, filled = true, enabled = st != null) { radio.toggle() }
+                BigKey("⏭", 64, enabled = several) { radio.step(forward = true) }
+            }
+            if (st != null) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    val fav = rs.favorites.any { it.id == st.id }
+                    OutlinedButton({ radio.toggleFavorite(st) }, Modifier.height(56.dp)) {
+                        Text(if (fav) "★ Favorita" else "☆ Favoritar", fontSize = 17.sp, color = if (fav) Warn else Color.Unspecified)
+                    }
+                    OutlinedButton({ radio.stop() }, Modifier.height(56.dp)) { Text("Parar", fontSize = 17.sp) }
+                    if (!several) Text("Com 2 favoritas, ⏮ e ⏭ trocam de rádio.", fontSize = 14.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.weight(1f))
+                }
+            }
+        }
     }
 }
 
 private enum class RadioList(val label: String) { FAVORITAS("Favoritas"), POPULARES("Mais ouvidas"), REGIAO("Da região"), BUSCAR("Buscar") }
 
-/** Lista de rádios do Brasil: favoritas, mais ouvidas, do estado (pelo GPS) e busca por nome (só parado). */
+/**
+ * Lista de rádios do Brasil: favoritas, mais ouvidas, do estado (pelo GPS) e busca por nome (só parado).
+ * A estrela fica à esquerda: na direita a moldura do multimídia cobre parte da tela e o toque caía na
+ * linha (tocar) em vez da estrela (foto da 0.1.21).
+ */
 @Composable
 private fun RadioPanel(moving: Boolean, modifier: Modifier) {
     val ctx = LocalContext.current
@@ -300,7 +321,6 @@ private fun RadioPanel(moving: Boolean, modifier: Modifier) {
 
     Card(modifier, colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
         Column(Modifier.fillMaxSize().padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text("Rádio pela internet", fontSize = 20.sp, fontWeight = FontWeight.Bold)
             Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 RadioList.values().forEach { m ->
                     FilterChip(selected = mode == m, onClick = { mode = m }, label = { Text(m.label, fontSize = 17.sp) },
@@ -331,19 +351,18 @@ private fun RadioPanel(moving: Boolean, modifier: Modifier) {
                     val fav = rs.favorites.any { it.id == st.id }
                     Row(
                         Modifier.fillMaxWidth().heightIn(min = 64.dp).clip(RoundedCornerShape(10.dp))
-                            .background(if (current) StrongBlue.copy(alpha = 0.35f) else Color.Transparent)
-                            .clickable { radio.play(st) }
-                            .padding(horizontal = 10.dp),
+                            .background(if (current) StrongBlue.copy(alpha = 0.35f) else Color.Transparent),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        Column(Modifier.weight(1f)) {
-                            Text(st.name, fontSize = 19.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                            if (st.subtitle.isNotBlank()) Text(st.subtitle, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        }
                         OutlinedButton({ radio.toggleFavorite(st) }, Modifier.size(56.dp), contentPadding = PaddingValues(0.dp),
                             colors = ButtonDefaults.outlinedButtonColors(contentColor = if (fav) Warn else MaterialTheme.colorScheme.onSurfaceVariant)) {
                             Text(if (fav) "★" else "☆", fontSize = 24.sp)
+                        }
+                        Column(Modifier.weight(1f).heightIn(min = 64.dp).clickable { radio.play(st) }.padding(horizontal = 12.dp),
+                            verticalArrangement = Arrangement.Center) {
+                            Text(st.name, fontSize = 19.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            if (st.subtitle.isNotBlank()) Text(st.subtitle, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                     }
                 }
@@ -352,82 +371,80 @@ private fun RadioPanel(moving: Boolean, modifier: Modifier) {
     }
 }
 
-/** Aba Mídias: player grande e fontes à esquerda, rádios à direita. */
+/** Os números principais do Painel, para ficar ao lado da música ou do rádio. */
 @Composable
-internal fun MidiasScreen(ui: UiState, compact: Boolean, painelMusica: Boolean, onPainelMusica: (Boolean) -> Unit) {
-    val ctx = LocalContext.current
-    val radio = remember { RadioPlayer.get(ctx.applicationContext as Application) }
-    val onRadio: () -> Unit = { if (!radio.resume()) Toast.makeText(ctx, "Escolha uma rádio na lista.", Toast.LENGTH_LONG).show() }
-    val toggle: @Composable () -> Unit = {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Switch(painelMusica, onPainelMusica)
-            Spacer(Modifier.width(12.dp))
-            Text("Painel + Música: o Painel mostra este player ao lado dos números", fontSize = 16.sp)
-        }
-    }
-    if (compact) {
-        Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            BigPlayer(Modifier.fillMaxWidth().height(270.dp), large = false)
-            SourceButtons(onRadio)
-            RadioPanel(ui.moving, Modifier.fillMaxWidth().weight(1f))
-        }
-    } else {
-        Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-            Column(Modifier.weight(1f).fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                BigPlayer(Modifier.fillMaxWidth().weight(1f), large = true)
-                SourceButtons(onRadio)
-                toggle()
+private fun PainelNumbers(ui: UiState, modifier: Modifier) {
+    val s = ui.sample
+    BoxWithConstraints(modifier) {
+        val big = if (maxWidth > 480.dp) 72.sp else 52.sp
+        val mid = if (maxWidth > 480.dp) 48.sp else 36.sp
+        Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            if (ui.simulated) {
+                Text("DADOS SIMULADOS · ligue o adaptador em Ajustes", color = Warn, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+            } else if (ui.conn.state != ConnState.CONNECTED) {
+                Text(ui.conn.message.ifBlank { "Aguardando o adaptador..." }, color = Warn, fontSize = 15.sp, fontWeight = FontWeight.SemiBold,
+                    maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
-            RadioPanel(ui.moving, Modifier.weight(1f).fillMaxHeight())
+            Row(Modifier.fillMaxWidth().weight(1f), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                Metric("Velocidade", s?.speedKmh?.let { Math.round(it).toString() } ?: "—", "km/h",
+                    Modifier.weight(1f).fillMaxHeight(), valueSize = big)
+                val cv = consumoView(ui)
+                Metric("Consumo", cv.value, cv.unit, Modifier.weight(1f).fillMaxHeight(), valueSize = big, color = cv.color)
+            }
+            Row(Modifier.fillMaxWidth().weight(1f), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                Metric("Rotação", s?.rpm?.let { Math.round(it).toString() } ?: "—", "rpm", Modifier.weight(1f).fillMaxHeight(), valueSize = mid)
+                Metric("Temp. motor", s?.coolantC?.let { Math.round(it).toString() } ?: "--", "°C", Modifier.weight(1f).fillMaxHeight(),
+                    valueSize = mid, color = if ((s?.coolantC ?: 0.0) > 105) Bad else Color.Unspecified)
+            }
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                Metric("Média trajeto", ui.tripAvgKmPerL.f(), "km/l", Modifier.weight(1f), valueSize = 32.sp)
+                Metric("Distância", ui.tripKm.f(1), "km", Modifier.weight(1f), valueSize = 32.sp)
+            }
+            saudeResumo(ui)?.let { (t, c) ->
+                Text(t, color = c, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
         }
     }
 }
 
+private enum class MediaMode(val label: String) { MUSICA("Música"), RADIO("Rádio") }
+
 /**
- * Painel + Música: os números principais à esquerda e o player grande à direita, na mesma tela.
- * Dispensa a tela dividida do Android, que no multimídia deixava a música espremida.
+ * Aba Mídias: de um lado a música OU o rádio (conforme a escolha), do outro os números do Painel.
+ * Pedido do dono com foto da 0.1.21: música e rádio juntos dividiam a tela e o Painel sumia.
  */
 @Composable
-internal fun PainelMusicaScreen(ui: UiState) {
+internal fun MidiasScreen(ui: UiState, compact: Boolean) {
     val ctx = LocalContext.current
-    val radio = remember { RadioPlayer.get(ctx.applicationContext as Application) }
-    val s = ui.sample
-    BoxWithConstraints(Modifier.fillMaxSize()) {
-        val big = if (maxWidth > 1000.dp) 72.sp else 52.sp
-        val mid = if (maxWidth > 1000.dp) 48.sp else 36.sp
+    val store = remember { Store(ctx.applicationContext) }
+    var mode by remember { mutableStateOf(MediaMode.values().firstOrNull { it.name == store.mediaMode } ?: MediaMode.MUSICA) }
+    val media: @Composable (Modifier) -> Unit = { mod ->
+        Column(mod, verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                MediaMode.values().forEach { m ->
+                    FilterChip(selected = mode == m, onClick = { mode = m; store.mediaMode = m.name },
+                        label = { Text(m.label, fontSize = 19.sp, fontWeight = FontWeight.SemiBold) },
+                        modifier = Modifier.height(56.dp).width(130.dp))
+                }
+            }
+            when (mode) {
+                MediaMode.MUSICA -> {
+                    MusicPlayer(Modifier.fillMaxWidth().weight(1f), large = !compact)
+                    SourceButtons()
+                }
+                MediaMode.RADIO -> {
+                    RadioNowCard(Modifier.fillMaxWidth())
+                    RadioPanel(ui.moving, Modifier.fillMaxWidth().weight(1f))
+                }
+            }
+        }
+    }
+    if (compact) {
+        media(Modifier.fillMaxSize())
+    } else {
         Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-            Column(Modifier.weight(1f).fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                if (ui.simulated) {
-                    Text("DADOS SIMULADOS · ligue o adaptador em Ajustes", color = Warn, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
-                } else if (ui.conn.state != ConnState.CONNECTED) {
-                    Text(ui.conn.message.ifBlank { "Aguardando o adaptador..." }, color = Warn, fontSize = 15.sp, fontWeight = FontWeight.SemiBold,
-                        maxLines = 1, overflow = TextOverflow.Ellipsis)
-                }
-                Row(Modifier.fillMaxWidth().weight(1f), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Metric("Velocidade", s?.speedKmh?.let { Math.round(it).toString() } ?: "—", "km/h",
-                        Modifier.weight(1f).fillMaxHeight(), valueSize = big)
-                    val cv = consumoView(ui)
-                    Metric("Consumo", cv.value, cv.unit, Modifier.weight(1f).fillMaxHeight(), valueSize = big, color = cv.color)
-                }
-                Row(Modifier.fillMaxWidth().weight(1f), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Metric("Rotação", s?.rpm?.let { Math.round(it).toString() } ?: "—", "rpm", Modifier.weight(1f).fillMaxHeight(), valueSize = mid)
-                    Metric("Temp. motor", s?.coolantC?.let { Math.round(it).toString() } ?: "--", "°C", Modifier.weight(1f).fillMaxHeight(),
-                        valueSize = mid, color = if ((s?.coolantC ?: 0.0) > 105) Bad else Color.Unspecified)
-                }
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Metric("Média trajeto", ui.tripAvgKmPerL.f(), "km/l", Modifier.weight(1f), valueSize = 32.sp)
-                    Metric("Distância", ui.tripKm.f(1), "km", Modifier.weight(1f), valueSize = 32.sp)
-                }
-                saudeResumo(ui)?.let { (t, c) ->
-                    Text(t, color = c, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                }
-            }
-            Column(Modifier.weight(1f).fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                BigPlayer(Modifier.fillMaxWidth().weight(1f), large = false)
-                SourceButtons {
-                    if (!radio.resume()) Toast.makeText(ctx, "Escolha uma rádio na aba Mídias.", Toast.LENGTH_LONG).show()
-                }
-            }
+            media(Modifier.weight(1.15f).fillMaxHeight())
+            PainelNumbers(ui, Modifier.weight(1f).fillMaxHeight())
         }
     }
 }

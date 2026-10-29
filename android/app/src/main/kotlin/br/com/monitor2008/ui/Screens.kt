@@ -75,7 +75,6 @@ import br.com.monitor2008.data.AppLauncher
 import br.com.monitor2008.data.BtPermissions
 import br.com.monitor2008.data.MediaWatcher
 import br.com.monitor2008.data.PlaceFinder
-import br.com.monitor2008.data.Store
 import br.com.monitor2008.data.ConnState
 import br.com.monitor2008.domain.DtcInfo
 import br.com.monitor2008.domain.FlowMethod
@@ -115,9 +114,6 @@ private val COMPACT_WIDTH = 800.dp
 fun MonitorApp(vm: MonitorEngine) {
     val ui by vm.ui.collectAsStateWithLifecycle()
     var tab by remember { mutableStateOf(Tab.PAINEL) }
-    val ctx = LocalContext.current
-    val store = remember { Store(ctx.applicationContext) }
-    var painelMusica by remember { mutableStateOf(store.painelMusica) }
 
     BoxWithConstraints(Modifier.fillMaxSize()) {
         val compact = maxWidth < COMPACT_WIDTH
@@ -138,12 +134,8 @@ fun MonitorApp(vm: MonitorEngine) {
             Column(Modifier.fillMaxSize().padding(start = if (compact) 10.dp else 16.dp, top = 10.dp, bottom = 10.dp, end = 32.dp)) {
                 Box(Modifier.fillMaxWidth().weight(1f)) {
                     when (tab) {
-                        Tab.PAINEL -> when {
-                            compact -> PainelCompact(ui)
-                            painelMusica -> PainelMusicaScreen(ui)
-                            else -> PainelScreen(ui)
-                        }
-                        Tab.MIDIAS -> MidiasScreen(ui, compact, painelMusica) { painelMusica = it; store.painelMusica = it }
+                        Tab.PAINEL -> if (compact) PainelCompact(ui) else PainelScreen(ui)
+                        Tab.MIDIAS -> MidiasScreen(ui, compact)
                         Tab.CONSUMO -> ConsumoScreen(ui, vm)
                         Tab.POSTOS -> PostosScreen(ui, vm)
                         Tab.SAUDE -> SaudeScreen(ui, vm, compact)
@@ -154,7 +146,7 @@ fun MonitorApp(vm: MonitorEngine) {
                 }
                 // Mapa, música e mini player em todas as abas (sem o mini player onde o player grande já aparece).
                 Spacer(Modifier.height(8.dp))
-                MediaBar(compact, showPlayer = !(tab == Tab.MIDIAS || (tab == Tab.PAINEL && painelMusica && !compact)))
+                MediaBar(compact, showPlayer = tab != Tab.MIDIAS)
             }
         }
     }

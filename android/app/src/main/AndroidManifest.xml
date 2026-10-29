@@ -19,6 +19,8 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
     <!-- Rádio pela internet e lista de rádios (aba Mídias). -->
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- O player do rádio mantém o processador e o Wi-Fi acordados enquanto toca (sem isso o app fechava ao tocar, 0.1.21). -->
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
     <uses-feature android:name="android.hardware.bluetooth" android:required="false" />

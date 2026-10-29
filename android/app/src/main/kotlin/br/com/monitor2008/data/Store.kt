@@ -132,10 +132,10 @@ class Store(context: Context) {
         get() = p.getBoolean("pipOnLeave", false)
         set(v) { p.edit().putBoolean("pipOnLeave", v).apply() }
 
-    /** Painel + Música: o Painel divide a tela com o player grande, sem tela dividida do Android. */
-    var painelMusica: Boolean
-        get() = p.getBoolean("painelMusica", false)
-        set(v) { p.edit().putBoolean("painelMusica", v).apply() }
+    /** Aba Mídias: "MUSICA" ou "RADIO" ao lado dos números do Painel. */
+    var mediaMode: String
+        get() = p.getString("mediaMode", "MUSICA") ?: "MUSICA"
+        set(v) { p.edit().putString("mediaMode", v).apply() }
 
     /** Apps que já tocaram algo (inclui o Bluetooth e o rádio do multimídia): viram fontes na aba Mídias. */
     val mediaSeen: Set<String> get() = p.getStringSet("mediaSeen", emptySet()) ?: emptySet()
