@@ -74,12 +74,15 @@ import br.com.monitor2008.data.AppChoice
 import br.com.monitor2008.data.AppLauncher
 import br.com.monitor2008.data.BtPermissions
 import br.com.monitor2008.data.MediaWatcher
+import br.com.monitor2008.data.PlaceFinder
 import br.com.monitor2008.data.ConnState
 import br.com.monitor2008.domain.DtcInfo
 import br.com.monitor2008.domain.FlowMethod
+import br.com.monitor2008.domain.FuelGrade
 import br.com.monitor2008.domain.HealthItem
 import br.com.monitor2008.domain.HealthStatus
 import br.com.monitor2008.domain.RefLine
+import br.com.monitor2008.domain.Station
 import br.com.monitor2008.domain.Tip
 import br.com.monitor2008.domain.TipLevel
 import br.com.monitor2008.domain.MaintState
@@ -98,7 +101,7 @@ private fun Double?.f(d: Int = 1): String = this?.f(d) ?: "--"
 private fun parse(s: String): Double? = s.trim().replace(',', '.').toDoubleOrNull()
 
 enum class Tab(val label: String) {
-    PAINEL("Painel"), CONSUMO("Consumo"), SAUDE("Saúde"), MANUTENCAO("Manutenção"), DIAGNOSTICO("Diagnóstico"), AJUSTES("Ajustes")
+    PAINEL("Painel"), CONSUMO("Consumo"), POSTOS("Postos"), SAUDE("Saúde"), MANUTENCAO("Manutenção"), DIAGNOSTICO("Diagnóstico"), AJUSTES("Ajustes")
 }
 
 /**
@@ -123,7 +126,7 @@ fun MonitorApp(vm: MonitorEngine) {
                         icon = {},
                         label = { Text(t.label, fontSize = if (compact) 13.sp else 16.sp) },
                         alwaysShowLabel = true,
-                        modifier = Modifier.height(if (compact) 60.dp else 68.dp),
+                        modifier = Modifier.height(if (compact) 58.dp else 64.dp),
                     )
                 }
             }
@@ -133,6 +136,7 @@ fun MonitorApp(vm: MonitorEngine) {
                     when (tab) {
                         Tab.PAINEL -> if (compact) PainelCompact(ui) else PainelScreen(ui)
                         Tab.CONSUMO -> ConsumoScreen(ui, vm)
+                        Tab.POSTOS -> PostosScreen(ui, vm)
                         Tab.SAUDE -> SaudeScreen(ui, vm, compact)
                         Tab.MANUTENCAO -> ManutencaoScreen(ui, vm)
                         Tab.DIAGNOSTICO -> DiagnosticoScreen(ui, vm)
@@ -534,7 +538,9 @@ private fun ConsumoScreen(ui: UiState, vm: MonitorEngine) {
                 if (r.full) " · cheio" else " · parcial", r.realKmPerL?.let { " · ${it.f(1)} km/l real" } ?: ""))
         }
     }
-    if (dialog) RefuelDialog(ui.fuelPrice, onDismiss = { dialog = false }) { l, p, full -> vm.registerRefuel(l, p, full); dialog = false }
+    if (dialog) RefuelDialog(ui.fuelPrice, ui.ethanolFraction >= 0.9, vm, onDismiss = { dialog = false }) { l, p, full, eth, place ->
+        vm.registerRefuel(l, p, full, eth, place); dialog = false
+    }
     if (confirmReset) AlertDialog(
         onDismissRequest = { confirmReset = false },
         title = { Text("Zerar trajeto") },
@@ -544,26 +550,152 @@ private fun ConsumoScreen(ui: UiState, vm: MonitorEngine) {
     )
 }
 
+/**
+ * Abastecimento: litros, preço, tanque cheio, combustível e o posto. O local vem do GPS do
+ * multimídia e o endereço pela internet; se já houver posto registrado a menos de 150 m, é ele.
+ */
 @Composable
-private fun RefuelDialog(price: Double, onDismiss: () -> Unit, onSave: (Double, Double, Boolean) -> Unit) {
+private fun RefuelDialog(
+    price: Double, ethanolNow: Boolean, vm: MonitorEngine, onDismiss: () -> Unit,
+    onSave: (Double, Double, Boolean, Boolean, StationDraft?) -> Unit,
+) {
+    val ctx = LocalContext.current
     var liters by remember { mutableStateOf("") }
     var p by remember { mutableStateOf(price.f(2)) }
     var full by remember { mutableStateOf(true) }
+    var ethanol by remember { mutableStateOf(ethanolNow) }
+    var allowed by remember { mutableStateOf(PlaceFinder.allowed(ctx)) }
+    var loc by remember { mutableStateOf<Pair<Double, Double>?>(null) }
+    var locState by remember { mutableStateOf("Localizando o posto...") }
+    var name by remember { mutableStateOf("") }
+    var address by remember { mutableStateOf("") }
+    var known by remember { mutableStateOf<Station?>(null) }
+    var useLocation by remember { mutableStateOf(true) }
+    val askLocation = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { allowed = it }
+    LaunchedEffect(Unit) { if (!allowed) askLocation.launch(PlaceFinder.permission) }
+    LaunchedEffect(allowed) {
+        if (!allowed) { locState = "Sem permissão de localização: o abastecimento fica sem posto."; return@LaunchedEffect }
+        val fix = PlaceFinder.current(ctx)
+        if (fix == null) { locState = "GPS sem sinal agora: o abastecimento fica sem posto."; return@LaunchedEffect }
+        loc = fix.latitude to fix.longitude
+        val k = vm.stationNear(fix.latitude, fix.longitude)
+        known = k
+        if (k != null) {
+            name = k.name; address = k.address
+            locState = "Posto já registrado"
+        } else {
+            address = PlaceFinder.address(ctx, fix.latitude, fix.longitude) ?: ""
+            name = if (address.isNotBlank()) "Posto - " + address.substringBefore(" - ") else "Posto"
+            locState = if (address.isNotBlank()) "Posto novo: confira o nome (ex.: Shell, Ipiranga)" else "Posto novo (sem internet para o endereço)"
+        }
+    }
     val l = parse(liters)
     val pr = parse(p)
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("Registrar abastecimento") },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 OutlinedTextField(liters, { liters = it }, label = { Text("Litros") }, singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal))
                 OutlinedTextField(p, { p = it }, label = { Text("Preço por litro (R$)") }, singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal))
                 Row(verticalAlignment = Alignment.CenterVertically) { Switch(full, { full = it }); Spacer(Modifier.width(10.dp)); Text("Tanque cheio") }
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    FilterChip(selected = !ethanol, onClick = { ethanol = false }, label = { Text("Gasolina", fontSize = 17.sp) }, modifier = Modifier.height(56.dp))
+                    FilterChip(selected = ethanol, onClick = { ethanol = true }, label = { Text("Etanol", fontSize = 17.sp) }, modifier = Modifier.height(56.dp))
+                }
+                Text("Posto", fontWeight = FontWeight.SemiBold)
+                Text(locState, fontSize = 14.sp, color = if (loc == null) Warn else MaterialTheme.colorScheme.onSurfaceVariant)
+                if (loc != null) {
+                    if (address.isNotBlank()) Text(address, fontSize = 14.sp)
+                    OutlinedTextField(name, { name = it }, label = { Text("Nome do posto") }, singleLine = true)
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Switch(useLocation, { useLocation = it }); Spacer(Modifier.width(10.dp)); Text("Registrar este posto")
+                    }
+                }
+                if (!full) Text("Parcial não mede o combustível do posto (mistura com o que já havia). Para a nota, prefira tanque cheio.",
+                    fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         },
-        confirmButton = { TextButton(onClick = { onSave(l!!, pr!!, full) }, enabled = l != null && l > 0 && pr != null && pr > 0) { Text("Salvar") } },
+        confirmButton = {
+            TextButton(onClick = {
+                val place = loc?.takeIf { useLocation }?.let { (la, lo) -> StationDraft(la, lo, name, address) }
+                onSave(l!!, pr!!, full, ethanol, place)
+            }, enabled = l != null && l > 0 && pr != null && pr > 0) { Text("Salvar") }
+        },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancelar") } },
     )
+}
+
+// ---------- Postos (qualidade do combustível) ----------
+
+private fun gradeView(g: FuelGrade) = when (g) {
+    FuelGrade.BOA -> "COMBUSTÍVEL BOM" to OkGreen
+    FuelGrade.NORMAL -> "NORMAL" to Color(0xFF38BDF8)
+    FuelGrade.SUSPEITA -> "SUSPEITO · EVITAR" to Bad
+    FuelGrade.POUCOS_DADOS -> "POUCOS DADOS" to Color(0xFF94A3B8)
+}
+
+@Composable
+private fun PostosScreen(ui: UiState, vm: MonitorEngine) {
+    val ctx = LocalContext.current
+    val activity = remember(ctx) { ctx.findActivity() }
+    val launcher = remember { AppLauncher(ctx.applicationContext) }
+    var renaming by remember { mutableStateOf<Station?>(null) }
+    // Distância dos postos: pega a localização ao abrir a aba (se a permissão já foi dada no abastecimento).
+    LaunchedEffect(Unit) {
+        PlaceFinder.current(ctx, timeoutMs = 8_000)?.let { vm.updateLocation(it.latitude, it.longitude) }
+    }
+    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Text("Postos", fontSize = 26.sp, fontWeight = FontWeight.Bold)
+        Text(
+            "A nota vem do que o seu carro mostrou rodando com o combustível de cada posto: litros gastos para o ar " +
+                "admitido, avanço de ignição e correção da mistura, comparados com o normal do carro. É estimativa, não laudo.",
+            color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 15.sp,
+        )
+        if (ui.stationRatings.isEmpty()) {
+            Text("Nenhum posto ainda. Ao registrar um abastecimento (aba Consumo), o app guarda o posto pelo GPS.", fontSize = 17.sp)
+            Text("Para a nota: abasteça com tanque cheio. Depois de 3 tanques do mesmo combustível o app já compara.",
+                color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 15.sp)
+        }
+        ui.stationRatings.forEach { r ->
+            val (label, color) = gradeView(r.grade)
+            Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
+                Row(Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Text(label, color = color, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                        Text(r.station.name, fontSize = 20.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        val info = listOfNotNull(
+                            r.distanceKm?.let { if (it < 1) "${Math.round(it * 1000)} m" else "${it.f(1)} km" },
+                            r.lastPrice?.let { "R$ ${it.f(2)}/L" },
+                            "${r.visits} abastecimento(s)",
+                        ).joinToString(" · ")
+                        Text(info, fontSize = 15.sp)
+                        if (r.station.address.isNotBlank()) Text(r.station.address, fontSize = 14.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Text(r.summary, fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                    Spacer(Modifier.width(12.dp))
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Button({
+                            launcher.navigateTo(r.station.lat, r.station.lon, r.station.name, activity)
+                                ?.let { Toast.makeText(ctx, it, Toast.LENGTH_LONG).show() }
+                        }, Modifier.height(56.dp)) { Text("Ir", fontSize = 18.sp) }
+                        OutlinedButton({ renaming = r.station }, Modifier.height(56.dp), enabled = !ui.moving) { Text("Renomear", fontSize = 15.sp) }
+                    }
+                }
+            }
+        }
+    }
+    renaming?.let { st ->
+        var name by remember(st.id) { mutableStateOf(st.name) }
+        AlertDialog(
+            onDismissRequest = { renaming = null },
+            title = { Text("Nome do posto") },
+            text = { OutlinedTextField(name, { name = it }, label = { Text("Ex.: Shell Av. Brasil") }, singleLine = true) },
+            confirmButton = { TextButton(onClick = { vm.renameStation(st.id, name); renaming = null }, enabled = name.isNotBlank()) { Text("Salvar") } },
+            dismissButton = { TextButton(onClick = { renaming = null }) { Text("Cancelar") } },
+        )
+    }
 }
 
 // ---------- Saúde (manutenção preventiva) ----------

@@ -20,6 +20,10 @@ import br.com.monitor2008.domain.EngineConfig
 import br.com.monitor2008.domain.FlowMethod
 import br.com.monitor2008.domain.FuelBlend
 import br.com.monitor2008.domain.FuelCalc
+import br.com.monitor2008.domain.FuelQuality
+import br.com.monitor2008.domain.FuelStop
+import br.com.monitor2008.domain.Station
+import br.com.monitor2008.domain.StationRating
 import br.com.monitor2008.domain.HealthItem
 import br.com.monitor2008.domain.HealthRecorder
 import br.com.monitor2008.domain.HealthRules
@@ -79,6 +83,9 @@ data class UiState(
     val tripsRecorded: Int = 0,
     val maint: List<MaintRow> = emptyList(),
     val pipOnLeave: Boolean = false,
+    val stations: List<Station> = emptyList(),
+    /** Postos com nota de qualidade, os bons e mais perto primeiro. */
+    val stationRatings: List<StationRating> = emptyList(),
     val history: List<Double> = emptyList(),
     /** Velocidade nos últimos ~2 minutos, para o gráfico do Painel. */
     val speedHistory: List<Double> = emptyList(),
@@ -86,6 +93,9 @@ data class UiState(
     /** Com o carro andando, o app não aceita digitação nem registros. */
     val moving: Boolean get() = (sample?.speedKmh ?: 0.0) > 0.5
 }
+
+/** Posto informado no abastecimento: local do GPS, nome (editável) e endereço. */
+data class StationDraft(val lat: Double, val lon: Double, val name: String, val address: String)
 
 /** Item de manutenção por km/data e sua situação. [status] null = ainda não informado. */
 data class MaintRow(val item: MaintItem, val status: ItemStatus?)
@@ -148,6 +158,9 @@ class MonitorEngine private constructor(private val app: Application) {
     private var tripDtcsRead = false
     private var engineOffSince = 0L
     private var refuelList: List<Refuel> = store.refuels().asReversed() // mais recente primeiro
+    private var stationList: List<Station> = store.stations()
+    /** Onde o carro está (para a distância dos postos); atualizado pela aba Postos. */
+    private var here: Pair<Double, Double>? = null
 
     private val _ui = MutableStateFlow(snapshot())
     val ui: StateFlow<UiState> = _ui.asStateFlow()
@@ -346,8 +359,15 @@ class MonitorEngine private constructor(private val app: Application) {
         publish()
     }
 
-    fun registerRefuel(liters: Double, price: Double, full: Boolean) {
+    fun registerRefuel(liters: Double, price: Double, full: Boolean, ethanol: Boolean = store.ethanolFraction >= 0.9, place: StationDraft? = null) {
         if (_ui.value.moving) return
+        // Litros reais ÷ previstos do tanque que termina agora: só de cheio a cheio, sem parcial no meio.
+        val tankRatio = if (full && store.baselineValid && store.pendingRealLiters == 0.0 && uncalLiters > 1.0 && kmSinceFull > 20.0) {
+            liters / uncalLiters
+        } else null
+        val stationId = place?.let { saveStation(it) }
+        // O combustível escolhido no abastecimento passa a valer no cálculo do consumo.
+        if (ethanol) store.ethanolFraction = 0.95 else if (store.ethanolFraction >= 0.9) store.ethanolFraction = 0.32
         val before = RefuelState(
             baselineValid = store.baselineValid,
             uncalLiters = uncalLiters,
@@ -362,11 +382,40 @@ class MonitorEngine private constructor(private val app: Application) {
         uncalLiters = result.state.uncalLiters
         kmSinceFull = result.state.kmSinceFull
         store.fuelPrice = price
-        store.addRefuel(Refuel(LocalDate.now().toEpochDay(), liters, price, full, odometerKm, result.realKmPerL))
+        store.addRefuel(
+            Refuel(
+                LocalDate.now().toEpochDay(), liters, price, full, odometerKm, result.realKmPerL,
+                timeMs = System.currentTimeMillis(), stationId = stationId, ethanol = ethanol, tankRatio = tankRatio,
+            ),
+        )
         store.saveProgress(odometerKm, uncalLiters, kmSinceFull)
         refuelList = store.refuels().asReversed()
         publish()
     }
+
+    /** Posto já registrado a menos de 150 m vira o mesmo (atualiza o nome); senão cria um novo. Devolve o id. */
+    private fun saveStation(d: StationDraft): String {
+        val existing = FuelQuality.nearest(stationList, d.lat, d.lon)
+        stationList = if (existing != null) {
+            stationList.map { if (it.id == existing.id) it.copy(name = d.name.ifBlank { it.name }) else it }
+        } else {
+            stationList + Station(java.util.UUID.randomUUID().toString(), d.name.ifBlank { "Posto" }, d.address, d.lat, d.lon)
+        }
+        store.saveStations(stationList)
+        return existing?.id ?: stationList.last().id
+    }
+
+    /** Posto já registrado perto deste ponto (para o diálogo do abastecimento mostrar o nome). */
+    fun stationNear(lat: Double, lon: Double): Station? = FuelQuality.nearest(stationList, lat, lon)
+
+    fun renameStation(id: String, name: String) {
+        if (name.isBlank()) return
+        stationList = stationList.map { if (it.id == id) it.copy(name = name.trim()) else it }
+        store.saveStations(stationList)
+        publish()
+    }
+
+    fun updateLocation(lat: Double, lon: Double) { here = lat to lon; publish() }
 
     fun registerOilChange() {
         if (_ui.value.moving) return
@@ -439,6 +488,13 @@ class MonitorEngine private constructor(private val app: Application) {
         realTrip.let { store.saveTrip(it.distanceKm, it.liters, it.seconds, it.kmWithFuel) }
     }
 
+    private fun stationRatings(): List<StationRating> {
+        if (stationList.isEmpty()) return emptyList()
+        val stops = refuelList.map { FuelStop(it.timeMs, it.stationId, it.full, it.liters, it.pricePerLiter, it.ethanol, it.tankRatio) }
+        val evals = FuelQuality.tanks(stops, trips, System.currentTimeMillis())
+        return FuelQuality.rank(stationList, stops, evals, here)
+    }
+
     // ---------- estado exposto ----------
 
     private fun publish() { _ui.value = snapshot() }
@@ -490,6 +546,8 @@ class MonitorEngine private constructor(private val app: Application) {
                 )
             },
             pipOnLeave = store.pipOnLeave,
+            stations = stationList,
+            stationRatings = stationRatings(),
             history = history.toList(),
             speedHistory = speedHistory.toList(),
         )

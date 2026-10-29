@@ -9,8 +9,9 @@
     <!-- Procurar o adaptador BLE (ex.: OBDBLE). Não é usado para localização. -->
     <uses-permission android:name="android.permission.BLUETOOTH_SCAN" android:usesPermissionFlags="neverForLocation"
         tools:targetApi="s" />
-    <!-- Até o Android 11, procurar aparelhos BLE exige a permissão de localização. -->
-    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" android:maxSdkVersion="30" />
+    <!-- Localização: até o Android 11 para procurar o adaptador BLE; e para registrar o posto onde abastece. -->
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
 
     <!-- Leitura em segundo plano (serviço em primeiro plano com notificação). -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />

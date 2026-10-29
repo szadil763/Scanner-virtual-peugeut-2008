@@ -61,9 +61,24 @@ class AppLauncher(private val context: Context) {
 
     fun openMusic(activity: Activity?): String? = open(musicPackage ?: musicApps().firstOrNull()?.pkg, "música", activity)
 
+    /**
+     * Abre o app de mapa já com [name] em [lat], [lon] como destino (geo:, entendido por Maps e Waze).
+     * Mesmo comportamento de [openMap]: ao lado com a tela dividida; senão o Monitor vira janela flutuante.
+     */
+    fun navigateTo(lat: Double, lon: Double, name: String, activity: Activity?): String? {
+        val uri = Uri.parse("geo:$lat,$lon?q=$lat,$lon(${Uri.encode(name)})")
+        val intent = Intent(Intent.ACTION_VIEW, uri)
+        mapPackage?.let { pkg -> if (pm.getLaunchIntentForPackage(pkg) != null) intent.setPackage(pkg) }
+        return start(intent, "mapa", activity)
+    }
+
     private fun open(pkg: String?, what: String, activity: Activity?): String? {
         pkg ?: return "Nenhum app de $what instalado."
         val intent = pm.getLaunchIntentForPackage(pkg) ?: return "O app de $what escolhido não está instalado."
+        return start(intent, what, activity)
+    }
+
+    private fun start(intent: Intent, what: String, activity: Activity?): String? {
         intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         if (activity?.isInMultiWindowMode == true) {
             intent.addFlags(Intent.FLAG_ACTIVITY_LAUNCH_ADJACENT)

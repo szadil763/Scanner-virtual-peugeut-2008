@@ -1,6 +1,7 @@
 package br.com.monitor2008.data
 
 import android.content.Context
+import br.com.monitor2008.domain.Station
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -11,6 +12,12 @@ data class Refuel(
     val full: Boolean,
     val odometerKm: Double,
     val realKmPerL: Double?,
+    /** Hora do abastecimento (registros antigos: meio-dia do dia registrado). */
+    val timeMs: Long = epochDay * 86_400_000L + 43_200_000L,
+    val stationId: String? = null,
+    val ethanol: Boolean = false,
+    /** Litros reais ÷ previstos do tanque que terminou neste abastecimento (só cheio a cheio). */
+    val tankRatio: Double? = null,
 )
 
 /** Persistência simples em SharedPreferences. Trocar por Room ou Firebase só se virar necessidade. */
@@ -136,8 +143,29 @@ class Store(context: Context) {
                 full = o.getBoolean("full"),
                 odometerKm = o.getDouble("odo"),
                 realKmPerL = if (o.isNull("real")) null else o.getDouble("real"),
+                timeMs = o.optLong("time", o.getLong("day") * 86_400_000L + 43_200_000L),
+                stationId = o.optString("station").ifBlank { null },
+                ethanol = o.optBoolean("eth", false),
+                tankRatio = if (o.has("ratio") && !o.isNull("ratio")) o.getDouble("ratio") else null,
             )
         }
+    }
+
+    // Postos (registro de postos e qualidade do combustível)
+    fun stations(): List<Station> {
+        val arr = JSONArray(p.getString("stations", "[]"))
+        return (0 until arr.length()).map { i ->
+            val o = arr.getJSONObject(i)
+            Station(o.getString("id"), o.getString("name"), o.optString("address"), o.getDouble("lat"), o.getDouble("lon"))
+        }
+    }
+
+    fun saveStations(list: List<Station>) {
+        val arr = JSONArray()
+        list.forEach {
+            arr.put(JSONObject().put("id", it.id).put("name", it.name).put("address", it.address).put("lat", it.lat).put("lon", it.lon))
+        }
+        p.edit().putString("stations", arr.toString()).apply()
     }
 
     fun addRefuel(r: Refuel) {
@@ -146,7 +174,9 @@ class Store(context: Context) {
             JSONObject()
                 .put("day", r.epochDay).put("liters", r.liters).put("price", r.pricePerLiter)
                 .put("full", r.full).put("odo", r.odometerKm)
-                .put("real", r.realKmPerL ?: JSONObject.NULL),
+                .put("real", r.realKmPerL ?: JSONObject.NULL)
+                .put("time", r.timeMs).put("station", r.stationId ?: "").put("eth", r.ethanol)
+                .put("ratio", r.tankRatio ?: JSONObject.NULL),
         )
         p.edit().putString("refuels", arr.toString()).apply()
     }
