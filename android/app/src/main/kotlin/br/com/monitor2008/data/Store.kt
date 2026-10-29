@@ -3,6 +3,7 @@ package br.com.monitor2008.data
 import android.content.Context
 import br.com.monitor2008.domain.RadioStation
 import br.com.monitor2008.domain.Station
+import br.com.monitor2008.domain.Vehicles
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -131,6 +132,14 @@ class Store(context: Context) {
     var pipOnLeave: Boolean
         get() = p.getBoolean("pipOnLeave", false)
         set(v) { p.edit().putBoolean("pipOnLeave", v).apply() }
+
+    /**
+     * Perfil do carro deste aparelho ([Vehicles]); null = ainda não escolhido. Instalação antiga, que já
+     * rodou com o adaptador, era do 2008: vale como 2008 sem perguntar.
+     */
+    var vehicleId: String?
+        get() = p.getString("vehicleId", null) ?: if (odometerKm > 0) Vehicles.PEUGEOT_2008.id else null
+        set(v) { p.edit().putString("vehicleId", v).apply() }
 
     /** Aba Mídias: "MUSICA" ou "RADIO" ao lado dos números do Painel. */
     var mediaMode: String

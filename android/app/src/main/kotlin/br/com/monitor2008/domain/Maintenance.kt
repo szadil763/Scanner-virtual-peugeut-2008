@@ -15,8 +15,8 @@ data class OilPlan(
 data class OilStatus(val kmLeft: Double, val daysLeft: Long, val state: MaintState)
 
 /**
- * Item de manutenção por km e/ou tempo. Intervalos são valores comuns para o 2008 1.6 flex
- * automático: confirme no manual e no plano de revisões da Peugeot. Null = não conta por isso.
+ * Item de manutenção por km e/ou tempo. Intervalos são valores comuns para os flex da
+ * linha PSA (2008 1.6, C4 Lounge 2.0): confirme no manual e no plano de revisões da marca. Null = não conta por isso.
  */
 data class MaintItem(val id: String, val name: String, val intervalKm: Int?, val intervalMonths: Int?, val why: String)
 

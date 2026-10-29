@@ -39,6 +39,8 @@ import br.com.monitor2008.domain.ReportInput
 import br.com.monitor2008.domain.Tip
 import br.com.monitor2008.domain.TripAccumulator
 import br.com.monitor2008.domain.TripHealth
+import br.com.monitor2008.domain.Vehicle
+import br.com.monitor2008.domain.Vehicles
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -83,6 +85,8 @@ data class UiState(
     val tripsRecorded: Int = 0,
     val maint: List<MaintRow> = emptyList(),
     val pipOnLeave: Boolean = false,
+    /** Perfil do carro; null = ainda não escolhido (a tela pede na primeira abertura). */
+    val vehicle: Vehicle? = null,
     val stations: List<Station> = emptyList(),
     /** Postos com nota de qualidade, os bons e mais perto primeiro. */
     val stationRatings: List<StationRating> = emptyList(),
@@ -200,7 +204,7 @@ class MonitorEngine private constructor(private val app: Application) {
         lastTimeMs = s.timeMs
         val speed = s.speedKmh ?: 0.0
 
-        val engine = EngineConfig(volumetricEfficiency = store.volumetricEfficiency)
+        val engine = EngineConfig(displacementL = vehicle.displacementL, volumetricEfficiency = store.volumetricEfficiency)
         val raw = FuelCalc.estimate(s, FuelBlend(store.ethanolFraction), engine, calibration = 1.0)
         val lph = raw?.let { it.litersPerHour * store.calibration }
 
@@ -305,6 +309,7 @@ class MonitorEngine private constructor(private val app: Application) {
                 calibrated = refuelList.any { it.realKmPerL != null },
                 storedDtcs = dtcs ?: trips.lastOrNull()?.storedDtcs.orEmpty(),
                 pendingDtcs = pendingDtcs ?: trips.lastOrNull()?.pendingDtcs.orEmpty(),
+                vehicle = vehicle,
             ),
         )
     }
@@ -331,6 +336,7 @@ class MonitorEngine private constructor(private val app: Application) {
                 tripKmPerL = realTrip.avgKmPerL,
                 fuelName = fuel,
                 tips = preventiveTips(),
+                vehicle = vehicle,
             ),
         )
     }
@@ -349,6 +355,15 @@ class MonitorEngine private constructor(private val app: Application) {
     }
 
     fun setPipOnLeave(on: Boolean) { store.pipOnLeave = on; publish() }
+
+    /** Carro deste aparelho: muda a cilindrada do consumo (método MAP) e as dicas do modelo. */
+    private val vehicle: Vehicle get() = Vehicles.byId(store.vehicleId) ?: Vehicles.PEUGEOT_2008
+
+    fun setVehicle(id: String) {
+        if (Vehicles.byId(id) == null) return
+        store.vehicleId = id
+        publish()
+    }
 
     fun diagnosticLog(): List<String> = source?.diagnosticLog().orEmpty()
 
@@ -546,6 +561,7 @@ class MonitorEngine private constructor(private val app: Application) {
                 )
             },
             pipOnLeave = store.pipOnLeave,
+            vehicle = Vehicles.byId(store.vehicleId),
             stations = stationList,
             stationRatings = stationRatings(),
             history = history.toList(),

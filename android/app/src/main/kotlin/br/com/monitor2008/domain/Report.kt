@@ -16,6 +16,7 @@ data class ReportInput(
     val tripKmPerL: Double?,
     val fuelName: String,
     val tips: List<Tip>,
+    val vehicle: Vehicle = Vehicles.PEUGEOT_2008,
 )
 
 /**
@@ -26,7 +27,7 @@ object Report {
     private val BR = Locale("pt", "BR")
 
     fun build(r: ReportInput): String = buildString {
-        appendLine("*Relatório do carro - Peugeot 2008 1.6 flex automático*")
+        appendLine("*Relatório do carro - ${r.vehicle.fullName}, câmbio ${r.vehicle.gearbox}*")
         appendLine("Data: ${r.dateText} · Monitor 2008 ${r.appVersion}")
         appendLine("Hodômetro: " + (r.carKm?.let { "${String.format(BR, "%,d", Math.round(it))} km" } ?: "não informado"))
         appendLine("Base: ${r.tripsRecorded} viagem(ns) gravada(s) pelo adaptador OBD2")

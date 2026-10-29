@@ -1,8 +1,8 @@
 package br.com.monitor2008.domain
 
 /**
- * Dicas de manutenção preventiva para o Peugeot 2008 1.6 16V flex automático (motor EC5), a partir
- * dos dados coletados: viagens, indicadores da Saúde, falhas, itens por km/data e consumo.
+ * Dicas de manutenção preventiva para o carro do perfil ([Vehicle]: 2008 1.6, C4 Lounge 2.0...), a
+ * partir dos dados coletados: viagens, indicadores da Saúde, falhas, itens por km/data e consumo.
  *
  * Regras fixas, sem internet: a mesma situação gera sempre a mesma dica. Conhecimento do modelo vem
  * de problemas conhecidos da linha PSA; onde há dúvida, a dica manda confirmar no manual.
@@ -24,6 +24,7 @@ data class AdvisorInput(
     val calibrated: Boolean,
     val storedDtcs: List<String> = emptyList(),
     val pendingDtcs: List<String> = emptyList(),
+    val vehicle: Vehicle = Vehicles.PEUGEOT_2008,
 )
 
 object Advisor {
@@ -36,7 +37,7 @@ object Advisor {
         usage(input, out)
         consumption(input, out)
         maintenance(input, out)
-        modelChecks(out)
+        modelChecks(input.vehicle, out)
         return out.sortedBy { it.level.ordinal }
     }
 
@@ -72,19 +73,6 @@ object Advisor {
     private const val FUEL_NOTE = "Registre o próximo abastecimento com o posto (tanque cheio): se a correção cair, " +
         "a aba Postos marca o posto anterior. Se o combustível era ruim, vale trocar o filtro de combustível."
 
-    /** O que verificar primeiro no 2008 1.6 EC5 quando cada indicador sai do normal. */
-    private val MODEL_NOTE = mapOf(
-        "mix" to "No motor EC5, comece pelas mangueiras do respiro do cárter (ressecam e racham) e pela junta do coletor de admissão.",
-        "o2" to "Sonda envelhecida aumenta o consumo; no flex, use a peça com a especificação original.",
-        "cat" to "Antes de trocar o catalisador, elimine falha de ignição e mistura rica, que o danificam.",
-        "idle" to "No EC5 as bobinas individuais são um defeito conhecido; junto, verifique velas e limpeza do corpo de borboleta.",
-        "tbi" to "A limpeza do corpo de borboleta é simples; depois, a central reaprende a marcha lenta (deixe ligado parado alguns minutos).",
-        "map" to "Verifique mangueiras de vácuo, respiro do cárter e a válvula do cânister.",
-        "cool" to "Na linha PSA 1.6 é comum a carcaça plástica da válvula termostática vazar: confira o nível do reservatório com o motor frio e procure manchas rosadas.",
-        "bat" to "Se o carro fica parado vários dias, tire o adaptador da tomada OBD: ele consome a bateria.",
-        "dtc" to "Veja os códigos na aba Diagnóstico.",
-    )
-
     private fun healthItems(input: AdvisorInput, out: MutableList<Tip>) {
         input.health.forEach { h ->
             val level = when (h.status) {
@@ -93,7 +81,7 @@ object Advisor {
                 else -> return@forEach
             }
             if (h.id == "dtc" && (input.storedDtcs.isNotEmpty() || input.pendingDtcs.isNotEmpty())) return@forEach // já virou dica por código
-            val note = if (h.id == "mix" && h.advice.contains("parecida parado e andando")) FUEL_NOTE else MODEL_NOTE[h.id]
+            val note = if (h.id == "mix" && h.advice.contains("parecida parado e andando")) FUEL_NOTE else input.vehicle.notes[h.id]
             out += Tip(level, "${h.title}: ${h.value}", h.advice + (note?.let { " $it" } ?: ""))
         }
     }
@@ -128,7 +116,8 @@ object Advisor {
         val kmL = input.tripKmPerL ?: return
         if (input.tripKm < 50) return
         val etanol = input.ethanolFraction >= 0.9
-        val low = if (etanol) 5.5 else 8.0 // abaixo disso, consumo alto para o 2008 1.6 automático na cidade
+        val v = input.vehicle
+        val low = if (etanol) v.highConsumptionEthanol else v.highConsumptionGasoline // consumo alto na cidade
         if (!input.calibrated) {
             out += Tip(
                 TipLevel.BAIXA, "Calibre o consumo",
@@ -138,7 +127,8 @@ object Advisor {
         if (kmL < low) {
             out += Tip(
                 TipLevel.MEDIA, "Consumo alto: ${String.format(java.util.Locale("pt", "BR"), "%.1f", kmL)} km/l",
-                "Para o 2008 1.6 automático com ${if (etanol) "etanol" else "gasolina"}, abaixo de ${low.toInt()} km/l na média é alto. " +
+                "Para o ${v.name} ${v.engine.substringBefore(' ')} com ${if (etanol) "etanol" else "gasolina"}, abaixo de " +
+                    "${String.format(java.util.Locale("pt", "BR"), "%.1f", low)} km/l na média é alto. " +
                     "Confira a calibragem dos pneus, o filtro de ar, as velas e a sonda lambda" +
                     (if (!input.calibrated) "; antes, calibre o consumo com tanque cheio para confirmar." else "."),
             )
@@ -174,17 +164,8 @@ object Advisor {
 
     // ---------- verificações do modelo (sempre) ----------
 
-    private fun modelChecks(out: MutableList<Tip>) {
-        out += Tip(
-            TipLevel.BAIXA, "Câmbio automático",
-            "O câmbio automático do 2008 1.6 de 2016 (4 marchas, família AL4) é sensível ao estado do fluido. Mesmo se constar como vitalício, " +
-                "especialistas recomendam trocar o fluido periodicamente (algo entre 30.000 e 60.000 km), só com o fluido especificado. " +
-                "Trancos, demora para engatar ou o painel piscando em modo de segurança pedem oficina. Confirme o tipo de câmbio no manual.",
-        )
-        out += Tip(
-            TipLevel.BAIXA, "Verificações periódicas do modelo",
-            "A cada revisão: nível e cor do líquido de arrefecimento (atenção à carcaça da válvula termostática), " +
-                "coxins do motor (vibração em marcha lenta ao engatar D), mangueiras do respiro do cárter e limpeza do corpo de borboleta.",
-        )
+    private fun modelChecks(v: Vehicle, out: MutableList<Tip>) {
+        out += Tip(TipLevel.BAIXA, "Câmbio automático", v.gearboxTip)
+        out += Tip(TipLevel.BAIXA, "Verificações periódicas do modelo", v.periodicTip)
     }
 }

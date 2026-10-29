@@ -85,6 +85,7 @@ import br.com.monitor2008.domain.RefLine
 import br.com.monitor2008.domain.Station
 import br.com.monitor2008.domain.Tip
 import br.com.monitor2008.domain.TipLevel
+import br.com.monitor2008.domain.Vehicles
 import br.com.monitor2008.domain.MaintState
 import br.com.monitor2008.obd.Pid
 import kotlinx.coroutines.delay
@@ -150,6 +151,28 @@ fun MonitorApp(vm: MonitorEngine) {
             }
         }
     }
+    // Primeira abertura num aparelho novo: qual é o carro (consumo e dicas dependem do motor).
+    if (ui.vehicle == null) VehicleDialog(vm)
+}
+
+/** Escolha do carro na primeira abertura. Não fecha sem escolher. */
+@Composable
+private fun VehicleDialog(vm: MonitorEngine) {
+    AlertDialog(
+        onDismissRequest = {},
+        title = { Text("Qual é este carro?") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text("O consumo e as dicas de manutenção dependem do motor. Dá para mudar depois em Ajustes.", fontSize = 16.sp)
+                Vehicles.all.forEach { v ->
+                    Button({ vm.setVehicle(v.id) }, Modifier.fillMaxWidth().height(64.dp)) {
+                        Text("${v.name} ${v.engine.substringBefore(" (")}", fontSize = 18.sp)
+                    }
+                }
+            }
+        },
+        confirmButton = {},
+    )
 }
 
 /** Janela flutuante: só o que importa dirigindo, em letra grande. */
@@ -181,8 +204,10 @@ private fun MiniPanel(ui: UiState) {
 /**
  * Azul mais escuro com texto branco nos botões preenchidos e na opção selecionada. O azul claro
  * padrão com texto escuro ficou branco e ilegível na tela do multimídia à noite (fotos da 0.1.17).
+ * O multimídia clareia muito os azuis médios: o 0369A1 ainda saiu ciano com texto branco ilegível
+ * (fotos da 0.1.23), então o azul é bem escuro.
  */
-internal val StrongBlue = Color(0xFF0369A1)
+internal val StrongBlue = Color(0xFF1E3A8A)
 
 @Composable
 internal fun Button(
@@ -326,7 +351,7 @@ private fun PainelScreen(ui: UiState) {
             Metric("Temp. do motor", s?.coolantC?.let { Math.round(it).toString() } ?: "--", "°C", Modifier.fillMaxWidth(),
                 color = if ((s?.coolantC ?: 0.0) > 105) Bad else Color.Unspecified)
             Metric("Bateria", s?.batteryV.f(1), "V", Modifier.fillMaxWidth())
-            // O 2008 não informa o nível de combustível: no lugar, o custo do trajeto.
+            // Carro que não informa o nível de combustível (o 2008 não informa): no lugar, o custo do trajeto.
             if (s?.fuelLevelPct != null) {
                 Metric("Combustível", Math.round(s.fuelLevelPct).toString(), "%", Modifier.fillMaxWidth(),
                     color = if (s.fuelLevelPct < 12) Bad else Color.Unspecified)
@@ -750,14 +775,14 @@ private fun SaudeScreen(ui: UiState, vm: MonitorEngine, compact: Boolean) {
             OutlinedButton({
                 val version = try { ctx.packageManager.getPackageInfo(ctx.packageName, 0).versionName } catch (_: Exception) { null }
                 val send = Intent(Intent.ACTION_SEND).setType("text/plain")
-                    .putExtra(Intent.EXTRA_SUBJECT, "Relatório do Peugeot 2008")
+                    .putExtra(Intent.EXTRA_SUBJECT, "Relatório do ${ui.vehicle?.name ?: "carro"}")
                     .putExtra(Intent.EXTRA_TEXT, vm.mechanicReport(version ?: ""))
                 ctx.startActivity(Intent.createChooser(send, "Enviar relatório para o mecânico"))
             }, Modifier.height(60.dp)) { Text("Relatório para o mecânico", fontSize = 18.sp) }
             if (tips != null) OutlinedButton({ tips = null }, Modifier.height(60.dp)) { Text("Fechar dicas", fontSize = 18.sp) }
         }
         tips?.let { list ->
-            Text("Dicas para o 2008 1.6 flex automático, com base em ${ui.tripsRecorded} viagem(ns) e nos dados atuais. " +
+            Text("Dicas para o ${ui.vehicle?.fullName ?: "carro"}, com base em ${ui.tripsRecorded} viagem(ns) e nos dados atuais. " +
                 "Confirme intervalos e peças no manual.", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 15.sp)
             list.forEach { TipCard(it) }
         }
@@ -875,7 +900,7 @@ private fun ManutencaoScreen(ui: UiState, vm: MonitorEngine) {
         Text("O app não lê o nível de óleo pelo OBD2; o controle é por km rodados desde a última troca e por data.", color = MaterialTheme.colorScheme.onSurfaceVariant)
 
         Text("Outros itens", fontSize = 22.sp, fontWeight = FontWeight.Bold)
-        Text("Intervalos comuns para o 2008 1.6 flex automático: confirme no manual e no plano de revisões da Peugeot.",
+        Text("Intervalos comuns para o ${ui.vehicle?.fullName ?: "carro"}: confirme no manual e no plano de revisões da ${ui.vehicle?.brand ?: "marca"}.",
             color = MaterialTheme.colorScheme.onSurfaceVariant)
         ui.maint.forEach { row -> MaintCard(row, ui.moving, onDone = { itemToConfirm = row }, onInform = { itemToInform = row }) }
         if (ui.moving) Text("Pare o carro para registrar.", color = Warn)
@@ -1069,6 +1094,15 @@ private fun DiagnosticoScreen(ui: UiState, vm: MonitorEngine) {
 private fun AjustesScreen(ui: UiState, vm: MonitorEngine) {
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(14.dp)) {
         Text("Ajustes", fontSize = 26.sp, fontWeight = FontWeight.Bold)
+        Text("Carro", fontSize = 18.sp)
+        Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Vehicles.all.forEach { v ->
+                FilterChip(selected = ui.vehicle?.id == v.id, onClick = { vm.setVehicle(v.id) }, enabled = !ui.moving,
+                    label = { Text("${v.name} ${v.engine.substringBefore(" (")}", fontSize = 18.sp) }, modifier = Modifier.height(56.dp))
+            }
+        }
+        Text("Cada carro tem o app instalado no próprio multimídia, com os próprios dados. O carro escolhido muda a conta do consumo " +
+            "(cilindrada) e as dicas de manutenção.", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 15.sp)
         Text("Combustível no tanque", fontSize = 18.sp)
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             listOf("Gasolina E30" to 0.30, "Gasolina E32" to 0.32, "Etanol" to 0.95).forEach { (name, f) ->

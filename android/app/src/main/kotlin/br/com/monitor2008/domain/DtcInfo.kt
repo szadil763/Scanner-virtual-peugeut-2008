@@ -1,7 +1,7 @@
 package br.com.monitor2008.domain
 
 /**
- * O que os códigos de falha costumam indicar no 2008 1.6 EC5 flex automático. Usado nas dicas da
+ * O que os códigos de falha costumam indicar nos motores flex da linha PSA (Peugeot e Citroën). Usado nas dicas da
  * Saúde e na tela Diagnóstico. Não é diagnóstico: é por onde o mecânico costuma começar.
  */
 object DtcInfo {
@@ -10,7 +10,7 @@ object DtcInfo {
         "P0171" to "mistura pobre: entrada falsa de ar (mangueiras do respiro do cárter, junta do coletor), bicos ou bomba fraca",
         "P0172" to "mistura rica: bico pingando, sonda lambda ou pressão de combustível alta",
         "P0300" to "falha de ignição em vários cilindros: velas, bobinas ou combustível ruim",
-        "P0301" to "falha de ignição no cilindro 1: no EC5 a bobina de cada cilindro é comum de falhar; troque-a de lugar para confirmar",
+        "P0301" to "falha de ignição no cilindro 1: bobina ou vela (com bobinas individuais, como no 2008 1.6, troque-a de lugar para confirmar)",
         "P0302" to "falha de ignição no cilindro 2: bobina ou vela do cilindro 2",
         "P0303" to "falha de ignição no cilindro 3: bobina ou vela do cilindro 3",
         "P0304" to "falha de ignição no cilindro 4: bobina ou vela do cilindro 4",
@@ -34,7 +34,7 @@ object DtcInfo {
     /** Explicação do código, se for um dos comuns; null se não houver. */
     fun hint(code: String): String? = HINTS[code.uppercase()]
 
-    /** Sempre devolve algo: a explicação conhecida ou, pelo menos, o sistema e se é código padrão ou da Peugeot. */
+    /** Sempre devolve algo: a explicação conhecida ou, pelo menos, o sistema e se é código padrão ou do fabricante. */
     fun describe(code: String): String {
         hint(code)?.let { return it.replaceFirstChar { c -> c.uppercase() } }
         val c = code.uppercase()
@@ -45,7 +45,7 @@ object DtcInfo {
             'U' -> "comunicação entre módulos"
             else -> return "Código não reconhecido"
         }
-        val kind = if (c.getOrNull(1) == '1' || c.getOrNull(1) == '3') "código da Peugeot (específico do fabricante)" else "código padrão"
+        val kind = if (c.getOrNull(1) == '1' || c.getOrNull(1) == '3') "código do fabricante (Peugeot/Citroën)" else "código padrão"
         return "Falha de $system, $kind: consulte um mecânico com scanner da marca"
     }
 }

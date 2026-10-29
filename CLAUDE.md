@@ -56,4 +56,6 @@ Também: hodômetro real (o dono informa o km do painel uma vez; `Store.odoOffse
 
 **Postos** (`docs/POSTOS.md`): o abastecimento guarda o posto (GPS do multimídia + endereço pelo Geocoder, `data/PlaceFinder`) e o combustível; a nota de qualidade compara, por tanque cheio, litros reais ÷ previstos pelo ar, avanço de ignição e correção longa com a mediana dos tanques do mesmo combustível (`domain/FuelQuality`, com testes). Aba Postos com ranking e "Ir" (abre o mapa no posto).
 
-Pendências conhecidas: registro de falhas com foto dos dados (freeze frame, modo 02), ícone do app, previsões por tendência (etapa 3 da Saúde), suporte a outros modelos (para comercializar).
+**Vários carros** (`domain/Vehicle.kt`): perfil por carro (cilindrada para o método MAP, limites de consumo alto, o que verificar por indicador da Saúde, dicas de câmbio e revisão). Perfis: Peugeot 2008 1.6 EC5 e Citroën C4 Lounge 2.0 EW10 flex automático (segundo carro do dono, também com multimídia Android e adaptador próprio). Cada carro tem o app no próprio multimídia, com os próprios dados; o carro é escolhido na primeira abertura (instalação antiga com km rodados vale como 2008) e em Ajustes. Modelo novo = novo perfil em `Vehicles`.
+
+Pendências conhecidas: registro de falhas com foto dos dados (freeze frame, modo 02), ícone do app, previsões por tendência (etapa 3 da Saúde), outros modelos além dos perfis (irmão e cunhado do dono, depois comercializar).
