@@ -81,6 +81,14 @@ class ObdParserTest {
         assertNull(ObdParser.monitorStatus("NO DATA"))
     }
 
+    // Caso real (0.1.17): o câmbio responde vazio primeiro e escondia a falha do motor.
+    @Test fun dtcsJoinAllEcus() =
+        assertEquals(listOf("P0171"), ObdParser.dtcs("43 00 \r43 01 01 71 00 00 00 \r\r>"))
+
+    @Test fun dtcsMultiFrame() =
+        assertEquals(listOf("P0171", "P0130", "P0420"),
+            ObdParser.dtcs("00A\r0: 43 03 01 71 01 30 \r1: 04 20 00 00 00 00 00 \r\r>"))
+
     @Test fun pendingDtcs() = assertEquals(listOf("P0171"), ObdParser.dtcs("47 01 01 71 00 00 00 00", "47"))
 
     @Test fun dtcsInCanFormat() =

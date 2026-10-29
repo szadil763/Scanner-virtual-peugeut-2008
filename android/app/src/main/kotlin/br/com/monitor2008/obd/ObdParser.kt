@@ -95,19 +95,48 @@ object ObdParser {
      * em CAN (ISO 15765-4): prefixo, "NN" e NN pares de bytes. Pares 00 00 são preenchimento.
      */
     fun dtcs(raw: String, prefix: String = "43"): List<String> {
-        val b = payload(raw, prefix) ?: return emptyList()
-        if (b.isEmpty()) return emptyList()
-        val count = b[0]
-        val out = mutableListOf<String>()
-        for (i in 0 until count) {
-            val a = b.getOrNull(1 + 2 * i) ?: break
-            val c = b.getOrNull(2 + 2 * i) ?: break
-            if (a == 0 && c == 0) continue
-            val letter = "PCBU"[(a shr 6) and 3]
-            val d1 = (a shr 4) and 3
-            val d2 = (a and 0xF).toString(16).uppercase()
-            out += "$letter$d1$d2${Pid.hex2(c)}"
+        // Junta as respostas de todas as centrais: no 2008 o câmbio responde "43 00" primeiro e
+        // escondia a falha do motor (Saúde mostrava 1 falha e o Diagnóstico, nenhuma).
+        val out = linkedSetOf<String>()
+        for (b in payloads(joinMultiFrame(raw), prefix)) {
+            if (b.isEmpty()) continue
+            val count = b[0]
+            for (i in 0 until count) {
+                val a = b.getOrNull(1 + 2 * i) ?: break
+                val c = b.getOrNull(2 + 2 * i) ?: break
+                if (a == 0 && c == 0) continue
+                val letter = "PCBU"[(a shr 6) and 3]
+                val d1 = (a shr 4) and 3
+                val d2 = (a and 0xF).toString(16).uppercase()
+                out += "$letter$d1$d2${Pid.hex2(c)}"
+            }
         }
-        return out
+        return out.toList()
+    }
+
+    /**
+     * Respostas longas (mais de 2 falhas) chegam em várias linhas: "00A", "0: 43 03 ...", "1: ...".
+     * Junta as linhas numeradas de cada resposta numa linha só.
+     */
+    fun joinMultiFrame(raw: String): String {
+        val frame = Regex("""^([0-9A-Fa-f]):(.*)$""")
+        val out = mutableListOf<String>()
+        var current: StringBuilder? = null
+        for (line in raw.split('\r', '\n').map { it.trim() }.filter { it.isNotEmpty() }) {
+            val m = frame.find(line)
+            if (m == null) {
+                current?.let { out += it.toString() }
+                current = null
+                out += line
+                continue
+            }
+            if (m.groupValues[1] == "0") {
+                current?.let { out += it.toString() }
+                current = StringBuilder()
+            }
+            current?.append(' ')?.append(m.groupValues[2])
+        }
+        current?.let { out += it.toString() }
+        return out.joinToString("\r")
     }
 }

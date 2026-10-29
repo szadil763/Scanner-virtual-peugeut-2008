@@ -13,6 +13,27 @@ import java.io.File
 class HealthStore(context: Context) {
     private val file = File(context.filesDir, "viagens.json")
 
+    /**
+     * Viagem em andamento, gravada a cada minuto: o multimídia pode desligar junto com a ignição
+     * antes de o app fechar a viagem. Ao abrir de novo, ela entra no histórico ([takePending]).
+     */
+    private val pendingFile = File(context.filesDir, "viagem-em-andamento.json")
+
+    fun savePending(trip: TripHealth) {
+        try { pendingFile.writeText(toJson(trip).toString()) } catch (e: Exception) { }
+    }
+
+    fun clearPending() { pendingFile.delete() }
+
+    /** Devolve a viagem que ficou pela metade (e apaga o arquivo), ou null. */
+    fun takePending(): TripHealth? = try {
+        if (!pendingFile.exists()) null else fromJson(JSONObject(pendingFile.readText()))
+    } catch (e: Exception) {
+        null
+    } finally {
+        pendingFile.delete()
+    }
+
     fun load(): List<TripHealth> = try {
         if (!file.exists()) emptyList() else {
             val arr = JSONArray(file.readText())

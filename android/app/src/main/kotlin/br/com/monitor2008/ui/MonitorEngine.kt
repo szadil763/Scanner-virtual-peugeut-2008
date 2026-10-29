@@ -138,7 +138,12 @@ class MonitorEngine private constructor(private val app: Application) {
 
     // Saúde: viagens gravadas (só com o adaptador real) e a viagem em andamento.
     private val healthStore = HealthStore(app)
-    private var trips: List<TripHealth> = healthStore.load()
+    private var trips: List<TripHealth> = healthStore.load().let { saved ->
+        // Viagem que ficou pela metade porque o multimídia desligou: entra no histórico agora.
+        healthStore.takePending()?.let { (saved + it).takeLast(400).also(healthStore::save) } ?: saved
+    }
+    private var lastHealthMs = 0L
+    private var lastPendingMs = 0L
     private var recorder = HealthRecorder()
     private var tripDtcsRead = false
     private var engineOffSince = 0L
@@ -217,7 +222,15 @@ class MonitorEngine private constructor(private val app: Application) {
 
     /** Alimenta a viagem da tela Saúde. Simulação não grava (não pode sujar o histórico do carro). */
     private fun recordHealth(s: Sample, dt: Double) {
+        // Mais de 2 min sem leitura = o multimídia dormiu (ignição desligada) e acordou: é outra viagem.
+        // Sem isso, como o app nunca via o motor parado, todas as saídas viravam uma viagem só.
+        if (lastHealthMs != 0L && s.timeMs - lastHealthMs > SLEEP_GAP_MS) closeTrip()
+        lastHealthMs = s.timeMs
         recorder.add(s, dt)
+        if (s.timeMs - lastPendingMs > 60_000) {
+            recorder.finish()?.let(healthStore::savePending)
+            lastPendingMs = s.timeMs
+        }
         val running = (s.rpm ?: 0.0) > 400
         if (running) {
             engineOffSince = 0L
@@ -248,6 +261,7 @@ class MonitorEngine private constructor(private val app: Application) {
             trips = (trips + t).takeLast(400)
             healthStore.save(trips)
         }
+        healthStore.clearPending()
         recorder = HealthRecorder()
         tripDtcsRead = false
         engineOffSince = 0L
@@ -485,6 +499,7 @@ class MonitorEngine private constructor(private val app: Application) {
         /** Motor parado por mais que isso = fim da viagem. */
         private const val ENGINE_OFF_TRIP_END_MS = 30_000L
         private const val SPEED_POINTS = 240
+        private const val SLEEP_GAP_MS = 120_000L
 
         @Volatile private var instance: MonitorEngine? = null
 

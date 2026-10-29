@@ -132,16 +132,32 @@ near(tensao('14,1 V'), 14.1, 1e-9, 'ATRV 14,1 V');
 assert.strictEqual(tensao('?\r\r>'), null); ok++; console.log('ok  ATRV "?" -> null');
 
 // ---------- Falhas (modo 03, CAN) ----------
-function dtcs(raw, prefix = '43') {
-  const b = payload(raw, prefix);
-  if (!b || b.length < 1) return [];
-  const n = b[0];
+// Respostas longas chegam em linhas numeradas ("0: 43 03 ...", "1: ..."): junta cada resposta numa linha.
+function juntaQuadros(raw) {
   const out = [];
-  for (let i = 0; i < n; i++) {
-    const a = b[1 + 2 * i], c = b[2 + 2 * i];
-    if (a === undefined || c === undefined) break;
-    if (a === 0 && c === 0) continue;
-    out.push('PCBU'[(a >> 6) & 3] + ((a >> 4) & 3) + (a & 0xf).toString(16).toUpperCase() + hex2(c));
+  let atual = null;
+  for (const l of raw.split(/[\r\n]+/).map((x) => x.trim()).filter((x) => x)) {
+    const m = /^([0-9A-Fa-f]):(.*)$/.exec(l);
+    if (!m) { if (atual !== null) out.push(atual); atual = null; out.push(l); continue; }
+    if (m[1] === '0') { if (atual !== null) out.push(atual); atual = ''; }
+    if (atual !== null) atual += ' ' + m[2];
+  }
+  if (atual !== null) out.push(atual);
+  return out.join('\r');
+}
+
+// Junta as falhas de todas as centrais (no 2008 o câmbio responde "43 00" primeiro).
+function dtcs(raw, prefix = '43') {
+  const out = [];
+  for (const b of payloads(juntaQuadros(raw), prefix)) {
+    const n = b[0] ?? 0;
+    for (let i = 0; i < n; i++) {
+      const a = b[1 + 2 * i], c = b[2 + 2 * i];
+      if (a === undefined || c === undefined) break;
+      if (a === 0 && c === 0) continue;
+      const code = 'PCBU'[(a >> 6) & 3] + ((a >> 4) & 3) + (a & 0xf).toString(16).toUpperCase() + hex2(c);
+      if (!out.includes(code)) out.push(code);
+    }
   }
   return out;
 }
@@ -153,6 +169,10 @@ assert.deepStrictEqual(dtcs('43 01 C1 00 00 00 00 00'), ['U0100']); ok++;
 console.log('ok  DTC C1 00 -> U0100');
 assert.deepStrictEqual(dtcs('47 01 01 71 00 00 00 00', '47'), ['P0171']); ok++;
 console.log('ok  falha pendente (modo 07) 47 01 01 71 -> P0171');
+assert.deepStrictEqual(dtcs('43 00 \r43 01 01 71 00 00 00 \r\r>'), ['P0171']); ok++;
+console.log('ok  falhas de todas as centrais (câmbio vazio + motor P0171)');
+assert.deepStrictEqual(dtcs('00A\r0: 43 03 01 71 01 30 \r1: 04 20 00 00 00 00 00 \r\r>'), ['P0171', 'P0130', 'P0420']); ok++;
+console.log('ok  resposta longa em vários quadros -> P0171, P0130, P0420');
 
 // ---------- Consumo ----------
 const AFR_GASOLINA = 14.7, AFR_ETANOL = 9.0, DENS_GASOLINA = 745, DENS_ETANOL = 789;

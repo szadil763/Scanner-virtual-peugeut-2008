@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
@@ -28,10 +29,12 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
+import androidx.compose.material3.Button as M3Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChip as M3FilterChip
+import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationRail
@@ -169,6 +172,29 @@ private fun MiniPanel(ui: UiState) {
 }
 
 // ---------- componentes ----------
+
+/**
+ * Azul mais escuro com texto branco nos botões preenchidos e na opção selecionada. O azul claro
+ * padrão com texto escuro ficou branco e ilegível na tela do multimídia à noite (fotos da 0.1.17).
+ */
+private val StrongBlue = Color(0xFF0369A1)
+
+@Composable
+private fun Button(
+    onClick: () -> Unit, modifier: Modifier = Modifier, enabled: Boolean = true, content: @Composable RowScope.() -> Unit,
+) = M3Button(
+    onClick, modifier, enabled,
+    colors = ButtonDefaults.buttonColors(containerColor = StrongBlue, contentColor = Color.White),
+    content = content,
+)
+
+@Composable
+private fun FilterChip(
+    selected: Boolean, onClick: () -> Unit, label: @Composable () -> Unit, modifier: Modifier = Modifier, enabled: Boolean = true,
+) = M3FilterChip(
+    selected = selected, onClick = onClick, label = label, modifier = modifier, enabled = enabled,
+    colors = FilterChipDefaults.filterChipColors(selectedContainerColor = StrongBlue, selectedLabelColor = Color.White),
+)
 
 @Composable
 private fun Metric(
@@ -488,6 +514,10 @@ private fun ConsumoScreen(ui: UiState, vm: MonitorEngine) {
         Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
             Column(Modifier.padding(16.dp)) {
                 Text("km/l nos últimos minutos", fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                if (ui.history.size < 2) {
+                    Text("O gráfico aparece com o carro andando (parado não existe km/l).", fontSize = 15.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 8.dp))
+                }
                 Spark(ui.history, Modifier.fillMaxWidth().height(140.dp).padding(top = 8.dp))
             }
         }
