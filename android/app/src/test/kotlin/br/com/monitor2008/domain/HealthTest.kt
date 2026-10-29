@@ -99,6 +99,14 @@ class HealthTest {
         assertTrue(i.advice.contains("entrada falsa de ar"))
     }
 
+    // Caso do carro: +31% andando e +30,6% parado = mesma proporção: suspeita do combustível, não de ar.
+    @Test fun sameLeanEverywherePointsToFuel() {
+        val i = item(listOf(trip(ltft = 31.0, stft = 0.0)), "mix")
+        assertEquals(HealthStatus.ALERTA, i.status)
+        assertTrue(i.advice.contains("parecida parado e andando"))
+        assertTrue(i.advice.contains("outro posto"))
+    }
+
     @Test fun lazyO2Sensor() =
         assertEquals(HealthStatus.ALERTA, item(listOf(trip(o2Low = 0.4, o2High = 0.6)), "o2").status)
 

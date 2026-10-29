@@ -68,6 +68,10 @@ object Advisor {
 
     // ---------- indicadores da Saúde, com o contexto do modelo ----------
 
+    /** Mistura pobre na mesma proporção parado e andando: suspeita do combustível ou da entrega dele. */
+    private const val FUEL_NOTE = "Registre o próximo abastecimento com o posto (tanque cheio): se a correção cair, " +
+        "a aba Postos marca o posto anterior. Se o combustível era ruim, vale trocar o filtro de combustível."
+
     /** O que verificar primeiro no 2008 1.6 EC5 quando cada indicador sai do normal. */
     private val MODEL_NOTE = mapOf(
         "mix" to "No motor EC5, comece pelas mangueiras do respiro do cárter (ressecam e racham) e pela junta do coletor de admissão.",
@@ -89,7 +93,8 @@ object Advisor {
                 else -> return@forEach
             }
             if (h.id == "dtc" && (input.storedDtcs.isNotEmpty() || input.pendingDtcs.isNotEmpty())) return@forEach // já virou dica por código
-            out += Tip(level, "${h.title}: ${h.value}", h.advice + (MODEL_NOTE[h.id]?.let { " $it" } ?: ""))
+            val note = if (h.id == "mix" && h.advice.contains("parecida parado e andando")) FUEL_NOTE else MODEL_NOTE[h.id]
+            out += Tip(level, "${h.title}: ${h.value}", h.advice + (note?.let { " $it" } ?: ""))
         }
     }
 

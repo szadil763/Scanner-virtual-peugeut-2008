@@ -318,19 +318,29 @@ object HealthRules {
         val v = ltft ?: now ?: return noData("mix", title, "precisa do motor quente.")
         val status = level(abs(v), 10.0, 20.0)
         val sign = if (v >= 0) "pobre (a central está adicionando combustível)" else "rica (a central está tirando combustível)"
+        // O padrão separa as causas: entrada falsa de ar pesa muito parado (pouco ar) e quase some
+        // andando; combustível, entrega de combustível ou sensor de ar erram na mesma proporção sempre.
         val leak = idleTrim != null && ltft != null && idleTrim - ltft > 8
+        val proportional = idleTrim != null && ltft != null && abs(idleTrim - ltft) <= 5
         val advice = buildString {
-            append(
-                when (status) {
-                    HealthStatus.OK -> "Dentro do normal (entre −10% e +10%)."
-                    else -> "Mistura $sign. " + if (v >= 0) {
-                        "Verifique entrada falsa de ar (mangueiras, junta do coletor), bicos e pressão da bomba."
-                    } else {
-                        "Verifique bicos pingando, sonda lambda e pressão de combustível."
-                    }
-                },
-            )
-            if (leak) append(" Em marcha lenta a correção é bem maior que andando: típico de entrada falsa de ar.")
+            when {
+                status == HealthStatus.OK -> {
+                    append("Dentro do normal (entre −10% e +10%).")
+                    if (leak) append(" Em marcha lenta a correção é bem maior que andando: típico de entrada falsa de ar começando.")
+                }
+                v < 0 -> append("Mistura $sign. Verifique bicos pingando, sonda lambda e pressão de combustível.")
+                leak -> append(
+                    "Mistura $sign, bem maior parado que andando: típico de entrada falsa de ar " +
+                        "(mangueiras do respiro do cárter, junta do coletor, mangueiras de vácuo).",
+                )
+                proportional -> append(
+                    "Mistura $sign, parecida parado e andando: aponta para o combustível (fora do padrão ou com água), " +
+                        "filtro de combustível entupido, bomba fraca, bicos sujos ou sensor de pressão do coletor. " +
+                        "Teste: abasteça tanque cheio em outro posto de confiança e veja este gráfico depois de uns 50 km. " +
+                        "Se cair, era o combustível; se continuar, é o carro (peça medição da pressão de combustível).",
+                )
+                else -> append("Mistura $sign. Verifique entrada falsa de ar (mangueiras, junta do coletor), bicos e pressão da bomba.")
+            }
             append(" Carro flex: logo depois de trocar de combustível a correção muda por uns 50 km; avalie depois disso.")
         }
         val value = "${if (v > 0) "+" else ""}${fmt(v)}%" + (idleTrim?.let { " · lenta ${if (it > 0) "+" else ""}${fmt(it)}%" } ?: "")

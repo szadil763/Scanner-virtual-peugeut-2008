@@ -28,6 +28,11 @@ Definições: **marcha lenta** = parado, motor ligado e quente (≥ 80 °C). **Q
 
 Carro flex: logo depois de trocar de combustível, a correção muda por uns 50 km enquanto a central se adapta.
 
+Causa provável da mistura pobre, pelo padrão (correção total em marcha lenta vs correção longa andando):
+
+- **lenta mais de 8 pontos acima de andando:** entrada falsa de ar (pesa muito com pouco ar e quase some andando): respiro do cárter, junta do coletor, mangueiras de vácuo;
+- **as duas parecidas (até 5 pontos):** erro proporcional ao combustível: combustível fora do padrão ou com água, filtro entupido, bomba fraca, bicos sujos ou sensor MAP. O app sugere abastecer tanque cheio em outro posto e comparar depois de ~50 km (a aba Postos marca o posto anterior se a correção cair).
+
 ## Botão "Gerar dicas de manutenção"
 
 `domain/Advisor.kt` junta viagens, indicadores, falhas (com explicação dos códigos mais comuns), itens por km/data, padrão de uso (viagens curtas = uso severo; trânsito parado) e consumo do trajeto, e gera dicas priorizadas (alta, atenção, dica) com observações do 2008 1.6 EC5 flex automático: bobinas individuais, carcaça plástica da válvula termostática, respiro do cárter, coxins, fluido do câmbio automático de 4 marchas (família AL4) e correia dentada com tensor e bomba d'água. Regras fixas, sem internet; intervalos exatos sempre com "confirme no manual".

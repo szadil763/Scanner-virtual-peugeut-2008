@@ -43,6 +43,11 @@ class AdvisorTest {
         assertTrue(tip.text.contains("válvula termostática"))
     }
 
+    @Test fun fuelPatternGetsFuelNote() {
+        val item = HealthItem("mix", "Mistura", HealthStatus.ALERTA, "+31%", "Mistura pobre, parecida parado e andando: ...")
+        assertTrue(Advisor.tips(input(health = listOf(item))).first().text.contains("aba Postos"))
+    }
+
     @Test fun okHealthItemGivesNoTip() {
         val item = HealthItem("mix", "Mistura", HealthStatus.OK, "+2%", "ok")
         assertTrue(titles(input(health = listOf(item))).none { it.startsWith("Mistura") })
