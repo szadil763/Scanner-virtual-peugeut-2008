@@ -56,6 +56,8 @@ data class UiState(
     /** Dia em que o trajeto foi zerado (null = nunca ou simulação). */
     val tripSinceDay: Long? = null,
     val odometerKm: Double = 0.0,
+    /** Hodômetro do carro (km do app + diferença informada); null = ainda não informado. */
+    val carKm: Double? = null,
     val ethanolFraction: Double = 0.30,
     val calibration: Double = 1.0,
     val volumetricEfficiency: Double = 0.80,
@@ -75,6 +77,8 @@ data class UiState(
     val maint: List<MaintRow> = emptyList(),
     val pipOnLeave: Boolean = false,
     val history: List<Double> = emptyList(),
+    /** Velocidade nos últimos ~2 minutos, para o gráfico do Painel. */
+    val speedHistory: List<Double> = emptyList(),
 ) {
     /** Com o carro andando, o app não aceita digitação nem registros. */
     val moving: Boolean get() = (sample?.speedKmh ?: 0.0) > 0.5
@@ -125,6 +129,7 @@ class MonitorEngine private constructor(private val app: Application) {
     private var conn = ConnectionInfo()
     private var dtcs: List<String>? = null
     private val history = ArrayDeque<Double>()
+    private val speedHistory = ArrayDeque<Double>()
     private var paired = PairedList()
     private var pendingDtcs: List<String>? = null
 
@@ -145,7 +150,7 @@ class MonitorEngine private constructor(private val app: Application) {
     fun start() {
         closeTrip()
         sourceJob?.cancel(); infoJob?.cancel()
-        simTrip.reset(); history.clear(); lastTimeMs = 0L
+        simTrip.reset(); history.clear(); speedHistory.clear(); lastTimeMs = 0L
         lastSample = null; lastKmPerL = null; lastLph = null; lastMethod = null; dtcs = null; pendingDtcs = null
 
         val src: ObdSource = if (store.useSimulated) {
@@ -159,6 +164,8 @@ class MonitorEngine private constructor(private val app: Application) {
                 // Conexão perdida ou carro desligado: a viagem termina aqui.
                 if (it.state != ConnState.CONNECTED) closeTrip()
                 conn = it
+                // Falhas: lidas assim que conecta, mesmo com o motor desligado (só a ignição ligada).
+                if (it.state == ConnState.CONNECTED && !tripDtcsRead) readTripDtcs()
                 publish()
             }
         }
@@ -191,6 +198,10 @@ class MonitorEngine private constructor(private val app: Application) {
             history.addLast(it)
             if (history.size > 120) history.removeFirst()
         }
+        s.speedKmh?.let {
+            speedHistory.addLast(it)
+            if (speedHistory.size > SPEED_POINTS) speedHistory.removeFirst()
+        }
 
         if (!store.useSimulated) recordHealth(s, dt)
 
@@ -207,21 +218,24 @@ class MonitorEngine private constructor(private val app: Application) {
         val running = (s.rpm ?: 0.0) > 400
         if (running) {
             engineOffSince = 0L
-            // Falhas armazenadas e pendentes: uma leitura por viagem, logo que o motor liga.
-            if (!tripDtcsRead) {
-                tripDtcsRead = true
-                val src = source ?: return
-                scope.launch {
-                    val stored = src.readDtcs()
-                    val pending = src.readPendingDtcs()
-                    recorder.setDtcs(stored, pending)
-                    dtcs = stored; pendingDtcs = pending
-                    publish()
-                }
-            }
+            // Falhas armazenadas e pendentes: uma leitura por viagem (normalmente já feita ao conectar).
+            if (!tripDtcsRead) readTripDtcs()
         } else if (recorder.started) {
             if (engineOffSince == 0L) engineOffSince = s.timeMs
             if (s.timeMs - engineOffSince > ENGINE_OFF_TRIP_END_MS) closeTrip()
+        }
+    }
+
+    private fun readTripDtcs() {
+        if (store.useSimulated) return
+        val src = source ?: return
+        tripDtcsRead = true
+        scope.launch {
+            val stored = src.readDtcs()
+            val pending = src.readPendingDtcs()
+            recorder.setDtcs(stored, pending)
+            dtcs = stored; pendingDtcs = pending
+            publish()
         }
     }
 
@@ -271,6 +285,13 @@ class MonitorEngine private constructor(private val app: Application) {
         publish()
     }
 
+    /** Item feito em outro km/data. [carKm] é o km do painel (null = km atual). */
+    fun registerMaintAt(id: String, carKm: Double?, epochDay: Long) {
+        if (_ui.value.moving) return
+        store.setMaintDone(id, appKmOf(carKm), epochDay)
+        publish()
+    }
+
     fun setPipOnLeave(on: Boolean) { store.pipOnLeave = on; publish() }
 
     fun diagnosticLog(): List<String> = source?.diagnosticLog().orEmpty()
@@ -310,6 +331,26 @@ class MonitorEngine private constructor(private val app: Application) {
         store.oilLastDay = LocalDate.now().toEpochDay()
         publish()
     }
+
+    /** Converte km do hodômetro do carro para km do app (é como as trocas ficam gravadas). */
+    private fun appKmOf(carKm: Double?): Double = carKm?.let { k -> store.odoOffset?.let { k - it } } ?: odometerKm
+
+    /** Troca de óleo feita em outro km/data (ex.: na oficina, antes de instalar o app). */
+    fun registerOilAt(carKm: Double?, epochDay: Long) {
+        if (_ui.value.moving) return
+        store.oilLastKm = appKmOf(carKm)
+        store.oilLastDay = epochDay
+        publish()
+    }
+
+    /** Informa o km do painel do carro. Daí em diante a manutenção usa o hodômetro real. */
+    fun setCarOdometer(carKm: Double) {
+        if (_ui.value.moving || carKm < 0) return
+        store.odoOffset = carKm - odometerKm
+        publish()
+    }
+
+    fun setFuelPrice(v: Double) { store.fuelPrice = v.coerceIn(1.0, 20.0); publish() }
 
     fun setEthanolFraction(f: Double) { store.ethanolFraction = f; publish() }
     fun setCalibration(v: Double) { store.calibration = v.coerceIn(0.5, 1.5); publish() }
@@ -379,6 +420,7 @@ class MonitorEngine private constructor(private val app: Application) {
             tripMinutes = (trip.seconds / 60).toInt(),
             tripSinceDay = if (store.useSimulated) null else store.tripSinceDay,
             odometerKm = odometerKm,
+            carKm = store.odoOffset?.let { odometerKm + it },
             ethanolFraction = store.ethanolFraction,
             calibration = store.calibration,
             volumetricEfficiency = store.volumetricEfficiency,
@@ -405,12 +447,14 @@ class MonitorEngine private constructor(private val app: Application) {
             },
             pipOnLeave = store.pipOnLeave,
             history = history.toList(),
+            speedHistory = speedHistory.toList(),
         )
     }
 
     companion object {
         /** Motor parado por mais que isso = fim da viagem. */
         private const val ENGINE_OFF_TRIP_END_MS = 30_000L
+        private const val SPEED_POINTS = 240
 
         @Volatile private var instance: MonitorEngine? = null
 

@@ -72,6 +72,14 @@ class Store(context: Context) {
         get() = if (p.contains("tripSinceDay")) p.getLong("tripSinceDay", 0) else null
         set(v) { if (v == null) p.edit().remove("tripSinceDay").apply() else p.edit().putLong("tripSinceDay", v).apply() }
 
+    /**
+     * Diferença entre o hodômetro do carro e os km contados pelo app (null = ainda não informado).
+     * Km do carro = km do app + diferença. Os km das trocas ficam gravados em km do app.
+     */
+    var odoOffset: Double?
+        get() = p.getString("odoOffset", null)?.toDoubleOrNull()
+        set(v) { p.edit().putString("odoOffset", v?.toString()).apply() }
+
     // Troca de óleo
     val oilConfigured: Boolean get() = p.contains("oilLastDay")
     var oilLastKm: Double

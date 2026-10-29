@@ -55,33 +55,13 @@ object Advisor {
 
     // ---------- códigos de falha ----------
 
-    /** Códigos comuns e o que costumam indicar neste motor. */
-    private val CODE_HINTS = mapOf(
-        "P0171" to "mistura pobre: entrada falsa de ar (mangueiras do respiro do cárter, junta do coletor), bicos ou bomba fraca",
-        "P0172" to "mistura rica: bico pingando, sonda lambda ou pressão de combustível alta",
-        "P0300" to "falha de ignição em vários cilindros: velas, bobinas ou combustível ruim",
-        "P0301" to "falha de ignição no cilindro 1: no EC5 a bobina de cada cilindro é comum de falhar; troque-a de lugar para confirmar",
-        "P0302" to "falha de ignição no cilindro 2: bobina ou vela do cilindro 2",
-        "P0303" to "falha de ignição no cilindro 3: bobina ou vela do cilindro 3",
-        "P0304" to "falha de ignição no cilindro 4: bobina ou vela do cilindro 4",
-        "P0128" to "motor esquentando devagar: válvula termostática travada aberta",
-        "P0130" to "sonda lambda antes do catalisador", "P0133" to "sonda lambda lenta (envelhecida)",
-        "P0134" to "sonda lambda sem sinal", "P0136" to "sonda lambda depois do catalisador",
-        "P0420" to "eficiência do catalisador baixa",
-        "P0115" to "sensor de temperatura do motor", "P0117" to "sensor de temperatura do motor",
-        "P0118" to "sensor de temperatura do motor",
-        "P0505" to "controle de marcha lenta: limpeza do corpo de borboleta",
-        "P0500" to "sensor de velocidade",
-        "P0700" to "o câmbio automático registrou falha: leve a uma oficina especializada em câmbio automático",
-    )
-
     private fun codes(input: AdvisorInput, out: MutableList<Tip>) {
         input.storedDtcs.forEach { c ->
-            out += Tip(TipLevel.ALTA, "Falha armazenada $c", (CODE_HINTS[c]?.let { "Costuma indicar $it. " } ?: "") +
+            out += Tip(TipLevel.ALTA, "Falha armazenada $c", (DtcInfo.hint(c)?.let { "Costuma indicar $it. " } ?: "") +
                 "Anote o código e leve a um mecânico; não apague a falha antes do diagnóstico.")
         }
         input.pendingDtcs.forEach { c ->
-            out += Tip(TipLevel.MEDIA, "Falha pendente $c", (CODE_HINTS[c]?.let { "Costuma indicar $it. " } ?: "") +
+            out += Tip(TipLevel.MEDIA, "Falha pendente $c", (DtcInfo.hint(c)?.let { "Costuma indicar $it. " } ?: "") +
                 "A central viu o problema mas ainda não acendeu a luz: vale verificar antes que vire falha.")
         }
     }
@@ -175,7 +155,7 @@ object Advisor {
             out += Tip(
                 TipLevel.BAIXA, "Informe as últimas trocas",
                 "Sem a data da última troca, o app não avisa: ${unknown.joinToString(", ")}. " +
-                    "Na aba Manutenção, toque em \"Fiz agora\" nos que foram feitos recentemente.",
+                    "Na aba Manutenção, informe a última troca de cada um (\"Fiz hoje\" ou \"Informar\" com data e km).",
             )
         }
         if (unknown.any { it.startsWith("Correia dentada") }) {

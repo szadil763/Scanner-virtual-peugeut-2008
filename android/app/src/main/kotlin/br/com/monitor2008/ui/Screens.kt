@@ -72,6 +72,7 @@ import br.com.monitor2008.data.AppLauncher
 import br.com.monitor2008.data.BtPermissions
 import br.com.monitor2008.data.MediaWatcher
 import br.com.monitor2008.data.ConnState
+import br.com.monitor2008.domain.DtcInfo
 import br.com.monitor2008.domain.FlowMethod
 import br.com.monitor2008.domain.HealthItem
 import br.com.monitor2008.domain.HealthStatus
@@ -123,7 +124,8 @@ fun MonitorApp(vm: MonitorEngine) {
                     )
                 }
             }
-            Column(Modifier.fillMaxSize().padding(if (compact) 10.dp else 16.dp)) {
+            // Margem maior à direita: a moldura do multimídia cobre a borda direita da tela (fotos da 0.1.15).
+            Column(Modifier.fillMaxSize().padding(start = if (compact) 10.dp else 16.dp, top = 10.dp, bottom = 10.dp, end = 32.dp)) {
                 Box(Modifier.fillMaxWidth().weight(1f)) {
                     when (tab) {
                         Tab.PAINEL -> if (compact) PainelCompact(ui) else PainelScreen(ui)
@@ -151,8 +153,9 @@ private fun MiniPanel(ui: UiState) {
             Text(s?.speedKmh?.let { Math.round(it).toString() } ?: "--", fontSize = 40.sp, fontWeight = FontWeight.Bold)
             Text(" km/h", fontSize = 14.sp, modifier = Modifier.padding(bottom = 6.dp))
             Spacer(Modifier.weight(1f))
-            Text(ui.kmPerL.f(), fontSize = 40.sp, fontWeight = FontWeight.Bold, color = if ((ui.kmPerL ?: 99.0) < 7) Warn else OkGreen)
-            Text(" km/l", fontSize = 14.sp, modifier = Modifier.padding(bottom = 6.dp))
+            val cv = consumoView(ui)
+            Text(cv.value, fontSize = 40.sp, fontWeight = FontWeight.Bold, color = cv.color)
+            Text(" ${cv.unit}", fontSize = 14.sp, modifier = Modifier.padding(bottom = 6.dp))
         }
         Row {
             Text("${s?.rpm?.let { Math.round(it).toString() } ?: "--"} rpm", fontSize = 16.sp)
@@ -193,23 +196,53 @@ private fun Stepper(value: String, onMinus: () -> Unit, onPlus: () -> Unit, enab
     }
 }
 
+/** Linha dos últimos valores; [capacity] pontos ocupam a largura toda, [gridStep] marca as linhas de fundo. */
 @Composable
-private fun Spark(values: List<Double>, modifier: Modifier = Modifier) {
+private fun Spark(
+    values: List<Double>, modifier: Modifier = Modifier, max: Double = 30.0, capacity: Int = 120,
+    gridStep: Double = 10.0, color: Color = OkGreen,
+) {
     Canvas(modifier) {
-        val max = 30.0
+        var g = 0.0
+        while (g <= max) {
+            val y = size.height - (g / max * size.height).toFloat()
+            drawLine(Color(0x33FFFFFF), Offset(0f, y), Offset(size.width, y), 1f)
+            g += gridStep
+        }
         if (values.size < 2) return@Canvas
         val path = Path()
         values.forEachIndexed { i, v ->
-            val x = size.width * i / 119f
+            val x = size.width * i / (capacity - 1).toFloat()
             val y = size.height - (v.coerceIn(0.0, max) / max * size.height).toFloat()
             if (i == 0) path.moveTo(x, y) else path.lineTo(x, y)
         }
-        listOf(0f, 10f, 20f, 30f).forEach { g ->
-            val y = size.height - g / 30f * size.height
-            drawLine(Color(0x33FFFFFF), Offset(0f, y), Offset(size.width, y), 1f)
-        }
-        drawPath(path, OkGreen, style = Stroke(width = 6f, cap = StrokeCap.Round))
+        drawPath(path, color, style = Stroke(width = 6f, cap = StrokeCap.Round))
     }
+}
+
+/** Consumo para mostrar: andando = km/l; parado com o motor ligado = L/h; motor desligado = aviso. */
+private data class ConsumoView(val value: String, val unit: String, val note: String, val color: Color)
+
+private fun consumoView(ui: UiState): ConsumoView {
+    val s = ui.sample
+    val running = (s?.rpm ?: 0.0) > 400
+    val moving = (s?.speedKmh ?: 0.0) >= 1
+    return when {
+        s == null -> ConsumoView("—", "", "sem dados", Color.Unspecified)
+        !running && !moving -> ConsumoView("—", "", "Motor desligado", Color.Unspecified)
+        !moving -> ConsumoView(ui.litersPerHour.f(1).replace("--", "—"), "L/h", "Parado · ${methodLabel(ui.method)}", OkGreen)
+        else -> ConsumoView(ui.kmPerL.f().replace("--", "—"), "km/l", "${ui.litersPerHour.f(2)} L/h · ${methodLabel(ui.method)}",
+            if ((ui.kmPerL ?: 99.0) < 7) Warn else OkGreen)
+    }
+}
+
+/** Resumo da Saúde numa linha, para o Painel. Null = tudo ok. */
+private fun saudeResumo(ui: UiState): Pair<String, Color>? {
+    val alerts = ui.health.filter { it.status == HealthStatus.ALERTA }
+    val warns = ui.health.filter { it.status == HealthStatus.ATENCAO }
+    if (alerts.isEmpty() && warns.isEmpty()) return null
+    val names = (alerts + warns).take(2).joinToString(" · ") { it.title.substringBefore(" (") }
+    return "Saúde: $names" to (if (alerts.isNotEmpty()) Bad else Warn)
 }
 
 // ---------- telas ----------
@@ -225,20 +258,32 @@ private fun PainelScreen(ui: UiState) {
     }
     Row(Modifier.fillMaxWidth().weight(1f), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-            Metric("Velocidade", s?.speedKmh?.let { Math.round(it).toString() } ?: "--", "km/h", Modifier.fillMaxWidth().weight(1f), big = true)
-            Metric("Rotação", s?.rpm?.let { Math.round(it).toString() } ?: "--", "rpm", Modifier.fillMaxWidth())
+            Card(Modifier.fillMaxWidth().weight(1f), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
+                Column(Modifier.padding(16.dp).fillMaxSize()) {
+                    Text("VELOCIDADE", fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, fontWeight = FontWeight.SemiBold)
+                    Row(verticalAlignment = Alignment.Bottom) {
+                        Text(s?.speedKmh?.let { Math.round(it).toString() } ?: "—", fontSize = 120.sp, fontWeight = FontWeight.Bold)
+                        Text(" km/h", fontSize = 24.sp, modifier = Modifier.padding(bottom = 20.dp))
+                    }
+                    saudeResumo(ui)?.let { (t, c) -> Text(t, color = c, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis) }
+                    Spacer(Modifier.height(8.dp))
+                    Spark(ui.speedHistory, Modifier.fillMaxWidth().weight(1f), max = 140.0, capacity = 240, gridStep = 40.0, color = Color(0xFF38BDF8))
+                }
+            }
+            Metric("Rotação", s?.rpm?.let { Math.round(it).toString() } ?: "—", "rpm", Modifier.fillMaxWidth())
         }
         Column(Modifier.weight(1.2f), verticalArrangement = Arrangement.spacedBy(16.dp)) {
             Card(Modifier.fillMaxWidth().weight(1f), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
                 Column(Modifier.padding(16.dp).fillMaxSize()) {
                     Text("CONSUMO AGORA", fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, fontWeight = FontWeight.SemiBold)
+                    val cv = consumoView(ui)
                     Row(verticalAlignment = Alignment.Bottom) {
-                        Text(ui.kmPerL.f(), fontSize = 96.sp, fontWeight = FontWeight.Bold, color = if ((ui.kmPerL ?: 99.0) < 7) Warn else OkGreen)
-                        Text(" km/l", fontSize = 22.sp, modifier = Modifier.padding(bottom = 14.dp))
+                        Text(cv.value, fontSize = 96.sp, fontWeight = FontWeight.Bold, color = cv.color)
+                        Text(" ${cv.unit}", fontSize = 22.sp, modifier = Modifier.padding(bottom = 14.dp))
                     }
-                    Text("${ui.litersPerHour.f(2)} L/h · ${methodLabel(ui.method)}", fontSize = 15.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    Spacer(Modifier.weight(1f))
-                    Spark(ui.history, Modifier.fillMaxWidth().height(110.dp))
+                    Text(cv.note, fontSize = 16.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Spacer(Modifier.height(8.dp))
+                    Spark(ui.history, Modifier.fillMaxWidth().weight(1f))
                 }
             }
             Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
@@ -250,8 +295,13 @@ private fun PainelScreen(ui: UiState) {
             Metric("Temp. do motor", s?.coolantC?.let { Math.round(it).toString() } ?: "--", "°C", Modifier.fillMaxWidth(),
                 color = if ((s?.coolantC ?: 0.0) > 105) Bad else Color.Unspecified)
             Metric("Bateria", s?.batteryV.f(1), "V", Modifier.fillMaxWidth())
-            Metric("Combustível", s?.fuelLevelPct?.let { Math.round(it).toString() } ?: "--", "%", Modifier.fillMaxWidth(),
-                color = if ((s?.fuelLevelPct ?: 100.0) < 12) Bad else Color.Unspecified)
+            // O 2008 não informa o nível de combustível: no lugar, o custo do trajeto.
+            if (s?.fuelLevelPct != null) {
+                Metric("Combustível", Math.round(s.fuelLevelPct).toString(), "%", Modifier.fillMaxWidth(),
+                    color = if (s.fuelLevelPct < 12) Bad else Color.Unspecified)
+            } else {
+                Metric("Custo do trajeto", "R$ " + (ui.tripLiters * ui.fuelPrice).f(2), "", Modifier.fillMaxWidth(), valueSize = 34.sp)
+            }
             Metric("Ar de admissão", s?.intakeC?.let { Math.round(it).toString() } ?: "--", "°C", Modifier.fillMaxWidth())
         }
     }
@@ -271,7 +321,8 @@ private fun PainelCompact(ui: UiState) {
         val gap = Arrangement.spacedBy(10.dp)
         Row(horizontalArrangement = gap) {
             Metric("Velocidade", s?.speedKmh?.let { Math.round(it).toString() } ?: "--", "km/h", Modifier.weight(1f), valueSize = 56.sp)
-            Metric("Consumo", ui.kmPerL.f(), "km/l", Modifier.weight(1f), valueSize = 56.sp, color = if ((ui.kmPerL ?: 99.0) < 7) Warn else OkGreen)
+            val cv = consumoView(ui)
+            Metric("Consumo", cv.value, cv.unit, Modifier.weight(1f), valueSize = 56.sp, color = cv.color)
         }
         Row(horizontalArrangement = gap) {
             Metric("Rotação", s?.rpm?.let { Math.round(it).toString() } ?: "--", "rpm", Modifier.weight(1f), valueSize = 32.sp)
@@ -282,11 +333,7 @@ private fun PainelCompact(ui: UiState) {
             Metric("Média trajeto", ui.tripAvgKmPerL.f(), "km/l", Modifier.weight(1f), valueSize = 32.sp)
             Metric("Bateria", s?.batteryV.f(1), "V", Modifier.weight(1f), valueSize = 32.sp)
         }
-        val alerts = ui.health.count { it.status == HealthStatus.ALERTA }
-        val warns = ui.health.count { it.status == HealthStatus.ATENCAO }
-        if (alerts + warns > 0) {
-            Text("Saúde: $alerts alerta(s), $warns atenção", color = if (alerts > 0) Bad else Warn, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
-        }
+        saudeResumo(ui)?.let { (t, c) -> Text(t, color = c, fontSize = 16.sp, fontWeight = FontWeight.SemiBold) }
     }
 }
 
@@ -311,25 +358,31 @@ private fun MediaBar(compact: Boolean) {
         Button({ open(launcher.openMap(activity)) }, Modifier.height(56.dp)) { Text("Mapa", fontSize = 17.sp) }
         OutlinedButton({ open(launcher.openMusic(activity)) }, Modifier.height(56.dp)) { Text("Música", fontSize = 17.sp) }
     }
+    // Botões antes do nome da música: no fim da linha eles ficavam cortados pela moldura do multimídia.
     val player: @Composable (Modifier) -> Unit = { mod ->
         Row(mod, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             val n = now
+            if (allowed && n != null) {
+                MediaKey("⏮") { media.previous() }
+                MediaKey(if (n.playing) "⏸" else "▶") { media.playPause() }
+                MediaKey("⏭") { media.next() }
+                Spacer(Modifier.width(4.dp))
+            }
             Column(Modifier.weight(1f)) {
                 when {
                     !allowed -> Text("Para ver a música tocando, libere em Ajustes.", fontSize = 15.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant)
                     n == null -> Text("Nada tocando", fontSize = 16.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     else -> {
-                        Text(n.title ?: n.app, fontSize = 18.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                        Text(listOfNotNull(n.artist, n.app).joinToString(" · "), fontSize = 14.sp, maxLines = 1,
+                        // O app Bluetooth do multimídia (música do celular) costuma não mandar o nome da faixa.
+                        val bt = n.app.contains("bluetooth", ignoreCase = true)
+                        val title = n.title?.takeIf { it.isNotBlank() && it != n.app } ?: if (bt) "Música do celular (Bluetooth)" else n.app
+                        val sub = listOfNotNull(n.artist, n.app.takeIf { !bt || n.title != null }).distinct().filter { it != title }
+                        Text(title, fontSize = 18.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        if (sub.isNotEmpty()) Text(sub.joinToString(" · "), fontSize = 14.sp, maxLines = 1,
                             overflow = TextOverflow.Ellipsis, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
-            }
-            if (allowed && n != null) {
-                MediaKey("⏮") { media.previous() }
-                MediaKey(if (n.playing) "⏸" else "▶") { media.playPause() }
-                MediaKey("⏭") { media.next() }
             }
         }
     }
@@ -375,8 +428,7 @@ private fun MapMusicSettings() {
     var musicPkg by remember { mutableStateOf(launcher.musicPackage ?: musics.firstOrNull()?.pkg) }
 
     Text("Mapa e música", fontSize = 22.sp, fontWeight = FontWeight.Bold)
-    Text("Com a tela dividida (pelo botão de apps recentes), os botões Mapa e Música abrem o app na outra metade; " +
-        "abrir um troca pelo outro. Com o Monitor em tela cheia, o app abre em tela cheia e o Monitor vira janela flutuante.",
+    Text("Com a tela dividida, Mapa e Música abrem na outra metade. Em tela cheia, o Monitor vira janela flutuante.",
         color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 15.sp)
     Text("App de mapa", fontSize = 18.sp)
     AppChips(maps, mapPkg, "Nenhum app de mapa instalado.") { mapPkg = it; launcher.mapPackage = it }
@@ -613,9 +665,29 @@ private fun TrendChart(values: List<Double?>, lines: List<RefLine>, color: Color
 private fun ManutencaoScreen(ui: UiState, vm: MonitorEngine) {
     var confirm by remember { mutableStateOf(false) }
     var itemToConfirm by remember { mutableStateOf<MaintRow?>(null) }
+    var itemToInform by remember { mutableStateOf<MaintRow?>(null) }
+    var informOil by remember { mutableStateOf(false) }
+    var odoDialog by remember { mutableStateOf(false) }
     val oil = ui.oil
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(16.dp)) {
         Text("Manutenção", fontSize = 26.sp, fontWeight = FontWeight.Bold)
+        Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
+            Row(Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text("HODÔMETRO DO CARRO", fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, fontWeight = FontWeight.SemiBold)
+                    if (ui.carKm != null) {
+                        Text("${String.format(BR, "%,d", Math.round(ui.carKm))} km", fontSize = 34.sp, fontWeight = FontWeight.Bold)
+                    } else {
+                        Text("Não informado", fontSize = 24.sp, fontWeight = FontWeight.Bold, color = Warn)
+                        Text("Informe o km do painel uma vez: os prazos passam a usar o hodômetro real.", fontSize = 15.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                }
+                OutlinedButton({ odoDialog = true }, enabled = !ui.moving, modifier = Modifier.height(56.dp)) {
+                    Text(if (ui.carKm == null) "Informar km" else "Corrigir km", fontSize = 16.sp)
+                }
+            }
+        }
         if (oil != null) {
             val color = when (oil.state) { MaintState.OK -> OkGreen; MaintState.SOON -> Warn; MaintState.DUE -> Bad }
             Metric("Troca de óleo", Math.round(oil.kmLeft).toString(), "km restantes", big = true, color = color)
@@ -623,13 +695,31 @@ private fun ManutencaoScreen(ui: UiState, vm: MonitorEngine) {
             Text("Por data: ${oil.daysLeft} dias restantes · intervalo ${ui.oilIntervalKm} km ou 12 meses (confirme no manual).")
             if (!ui.oilConfigured) Text("Informe quando foi a última troca: toque em \"Registrei a troca\" se foi hoje.", color = Warn)
         }
-        Button(onClick = { confirm = true }, enabled = !ui.moving, modifier = Modifier.height(60.dp)) { Text("Registrei a troca", fontSize = 18.sp) }
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            Button(onClick = { confirm = true }, enabled = !ui.moving, modifier = Modifier.height(60.dp)) { Text("Troquei hoje", fontSize = 18.sp) }
+            OutlinedButton(onClick = { informOil = true }, enabled = !ui.moving, modifier = Modifier.height(60.dp)) { Text("Informar troca anterior", fontSize = 18.sp) }
+        }
         Text("O app não lê o nível de óleo pelo OBD2; o controle é por km rodados desde a última troca e por data.", color = MaterialTheme.colorScheme.onSurfaceVariant)
 
         Text("Outros itens", fontSize = 22.sp, fontWeight = FontWeight.Bold)
         Text("Intervalos comuns para o 2008 1.6 flex automático: confirme no manual e no plano de revisões da Peugeot.",
             color = MaterialTheme.colorScheme.onSurfaceVariant)
-        ui.maint.forEach { row -> MaintCard(row, ui.moving) { itemToConfirm = row } }
+        ui.maint.forEach { row -> MaintCard(row, ui.moving, onDone = { itemToConfirm = row }, onInform = { itemToInform = row }) }
+        if (ui.moving) Text("Pare o carro para registrar.", color = Warn)
+    }
+    if (odoDialog) NumberDialog(
+        title = "Hodômetro do carro",
+        label = "Km que aparece no painel",
+        initial = ui.carKm?.let { Math.round(it).toString() } ?: "",
+        onDismiss = { odoDialog = false },
+    ) { vm.setCarOdometer(it); odoDialog = false }
+    itemToInform?.let { row ->
+        PastServiceDialog(row.item.name, ui.carKm, onDismiss = { itemToInform = null }) { km, day ->
+            vm.registerMaintAt(row.item.id, km, day); itemToInform = null
+        }
+    }
+    if (informOil) PastServiceDialog("Troca de óleo", ui.carKm, onDismiss = { informOil = false }) { km, day ->
+        vm.registerOilAt(km, day); informOil = false
     }
     itemToConfirm?.let { row ->
         AlertDialog(
@@ -649,8 +739,61 @@ private fun ManutencaoScreen(ui: UiState, vm: MonitorEngine) {
     )
 }
 
+/** Pede um número (sem vírgula de milhar). Só abre parado (regra: sem digitação andando). */
 @Composable
-private fun MaintCard(row: MaintRow, moving: Boolean, onDone: () -> Unit) {
+private fun NumberDialog(title: String, label: String, initial: String, onDismiss: () -> Unit, onSave: (Double) -> Unit) {
+    var text by remember { mutableStateOf(initial) }
+    val v = text.replace(".", "").replace(" ", "").toDoubleOrNull()
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(title) },
+        text = {
+            OutlinedTextField(text, { text = it }, label = { Text(label) }, singleLine = true,
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number))
+        },
+        confirmButton = { TextButton(onClick = { onSave(v!!) }, enabled = v != null && v >= 0) { Text("Salvar") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancelar") } },
+    )
+}
+
+/** Troca feita antes (oficina, antes de instalar o app): data e, se o hodômetro foi informado, km. */
+@Composable
+private fun PastServiceDialog(name: String, carKm: Double?, onDismiss: () -> Unit, onSave: (Double?, Long) -> Unit) {
+    val today = LocalDate.now()
+    var date by remember { mutableStateOf("%02d/%02d/%d".format(today.dayOfMonth, today.monthValue, today.year)) }
+    var km by remember { mutableStateOf(carKm?.let { Math.round(it).toString() } ?: "") }
+    val day = try {
+        val (d, m, y) = date.trim().split('/').map { it.toInt() }
+        LocalDate.of(y, m, d).takeIf { !it.isAfter(today) }?.toEpochDay()
+    } catch (e: Exception) {
+        null
+    }
+    val kmValue = km.replace(".", "").replace(" ", "").toDoubleOrNull()
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(name) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                OutlinedTextField(date, { date = it }, label = { Text("Data (dd/mm/aaaa)") }, singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number))
+                if (carKm != null) {
+                    OutlinedTextField(km, { km = it }, label = { Text("Km do painel na troca") }, singleLine = true,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number))
+                } else {
+                    Text("Informe o hodômetro do carro (no topo da tela) para registrar também o km da troca.", fontSize = 14.sp)
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = { onSave(if (carKm != null) kmValue else null, day!!) },
+                enabled = day != null && (carKm == null || (kmValue != null && kmValue <= carKm))) { Text("Salvar") }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancelar") } },
+    )
+}
+
+@Composable
+private fun MaintCard(row: MaintRow, moving: Boolean, onDone: () -> Unit, onInform: () -> Unit) {
     val st = row.status
     val color = when (st?.state) { MaintState.OK -> OkGreen; MaintState.SOON -> Warn; MaintState.DUE -> Bad; null -> Color(0xFF94A3B8) }
     Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
@@ -662,7 +805,7 @@ private fun MaintCard(row: MaintRow, moving: Boolean, onDone: () -> Unit) {
                     row.item.intervalMonths?.let { "$it meses" },
                 ).joinToString(" ou ")
                 val left = if (st == null) {
-                    "Informe a última troca (toque em \"Fiz agora\" se foi hoje) · a cada $interval"
+                    "Informe a última troca (\"Fiz hoje\" ou \"Informar\") · a cada $interval"
                 } else {
                     listOfNotNull(
                         st.kmLeft?.let { if (it <= 0) "vencido por km" else "${String.format(BR, "%,d", Math.round(it))} km" },
@@ -673,7 +816,20 @@ private fun MaintCard(row: MaintRow, moving: Boolean, onDone: () -> Unit) {
                 Text(row.item.why, color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 14.sp)
             }
             Spacer(Modifier.width(12.dp))
-            OutlinedButton(onClick = onDone, enabled = !moving, modifier = Modifier.height(56.dp)) { Text("Fiz agora", fontSize = 16.sp) }
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedButton(onClick = onDone, enabled = !moving, modifier = Modifier.height(56.dp)) { Text("Fiz hoje", fontSize = 16.sp) }
+                OutlinedButton(onClick = onInform, enabled = !moving, modifier = Modifier.height(56.dp)) { Text("Informar", fontSize = 16.sp) }
+            }
+        }
+    }
+}
+
+@Composable
+private fun DtcRow(code: String, color: Color) {
+    Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
+        Column(Modifier.padding(12.dp)) {
+            Text(code, fontSize = 22.sp, fontWeight = FontWeight.Bold, color = color)
+            Text(DtcInfo.describe(code), fontSize = 16.sp)
         }
     }
 }
@@ -693,12 +849,14 @@ private fun DiagnosticoScreen(ui: UiState, vm: MonitorEngine) {
         OutlinedButton(onClick = vm::start, modifier = Modifier.height(60.dp)) { Text("Reconectar", fontSize = 18.sp) }
         Text("Falhas armazenadas", fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
         when (val d = ui.dtcs) {
-            null -> Text("Toque em \"Ler falhas\" para consultar a central.")
-            else -> Text(if (d.isEmpty()) "Nenhuma falha armazenada." else d.joinToString(", "))
+            null -> Text("Ainda não lidas: o app lê sozinho ao conectar, ou toque em \"Ler falhas\".")
+            else -> if (d.isEmpty()) Text("Nenhuma falha armazenada.", color = OkGreen) else d.forEach { DtcRow(it, Bad) }
         }
         ui.pendingDtcs?.let { p ->
-            Text(if (p.isEmpty()) "Nenhuma falha pendente." else "Pendentes (ainda sem luz): " + p.joinToString(", "),
-                color = if (p.isEmpty()) Color.Unspecified else Warn)
+            if (p.isEmpty()) Text("Nenhuma falha pendente.") else {
+                Text("Pendentes (a central viu, mas ainda não acendeu a luz):", color = Warn)
+                p.forEach { DtcRow(it, Warn) }
+            }
         }
         Button(onClick = vm::readDtcs, modifier = Modifier.height(60.dp)) { Text("Ler falhas", fontSize = 18.sp) }
         Text("Somente leitura. O app não apaga falhas.", color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -747,6 +905,8 @@ private fun AjustesScreen(ui: UiState, vm: MonitorEngine) {
         }
         Text("Fator de calibração (ajustado pelos abastecimentos)", fontSize = 18.sp)
         Stepper(ui.calibration.f(2), { vm.setCalibration(ui.calibration - 0.01) }, { vm.setCalibration(ui.calibration + 0.01) })
+        Text("Preço do combustível (R$/litro)", fontSize = 18.sp)
+        Stepper(ui.fuelPrice.f(2), { vm.setFuelPrice(ui.fuelPrice - 0.05) }, { vm.setFuelPrice(ui.fuelPrice + 0.05) })
         Text("Eficiência volumétrica (usada só no método MAP)", fontSize = 18.sp)
         Stepper(ui.volumetricEfficiency.f(2), { vm.setVolumetricEfficiency(ui.volumetricEfficiency - 0.01) }, { vm.setVolumetricEfficiency(ui.volumetricEfficiency + 0.01) })
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -757,11 +917,10 @@ private fun AjustesScreen(ui: UiState, vm: MonitorEngine) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Switch(ui.pipOnLeave, { vm.setPipOnLeave(it) })
             Spacer(Modifier.width(12.dp))
-            Column {
+            Column(Modifier.weight(1f)) {
                 Text("Janela flutuante ao sair do app", fontSize = 18.sp)
-                Text("Ao tocar em Início, o monitor continua numa janelinha sobre o mapa ou a música. " +
-                    "Para tela dividida, use o botão de apps recentes do multimídia.",
-                    color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 14.sp)
+                Text("Ao tocar em Início, o Monitor fica numa janelinha sobre o mapa.",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 15.sp)
             }
         }
         if (!ui.simulated && ui.conn.message.isNotBlank()) {
@@ -784,8 +943,7 @@ private fun AdapterPicker(ui: UiState, vm: MonitorEngine) {
     }
 
     Text("Adaptador OBD2", fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
-    Text("Adaptador BLE (como o OBDBLE) não precisa parear nem de PIN: deixe em Detectar sozinho. " +
-        "Adaptador clássico precisa estar pareado antes no Bluetooth do aparelho; aí ele aparece aqui para tocar.",
+    Text("BLE (como o OBDBLE): deixe em Detectar sozinho, sem parear. Clássico: pareie antes no Bluetooth do aparelho.",
         color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 16.sp)
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         OutlinedButton({ vm.refreshPaired() }, Modifier.height(56.dp)) { Text("Atualizar lista", fontSize = 18.sp) }
