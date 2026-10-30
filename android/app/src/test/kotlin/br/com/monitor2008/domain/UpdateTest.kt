@@ -32,6 +32,11 @@ class UpdateTest {
         assertFalse(UpdateRules.isNewer(null, 1))
     }
 
+    @Test fun eachDeviceGetsItsApk() {
+        assertEquals("monitor-2008.apk", UpdateRules.apkName(phone = false))
+        assertEquals("monitor-2008-celular.apk", UpdateRules.apkName(phone = true))
+    }
+
     @Test fun channelPointsToItsRelease() {
         assertEquals("https://api.github.com/repos/o/r/releases/tags/estavel", UpdateRules.releaseUrl("o", "r", UpdateChannel.ESTAVEL))
         assertEquals("https://api.github.com/repos/o/r/releases/tags/latest", UpdateRules.releaseUrl("o", "r", UpdateChannel.TESTE))

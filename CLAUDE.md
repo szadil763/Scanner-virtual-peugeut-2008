@@ -62,4 +62,6 @@ Também: hodômetro real (o dono informa o km do painel uma vez; `Store.odoOffse
 
 **Celular**: o app escolhe o layout pela tela: multimídia (menu lateral), tela dividida (compacto), celular (largura < 600 dp ou altura < 560 dp: abas embaixo com "Mais", telas em uma coluna, sem a barra de mapa/música) e janela flutuante.
 
-Pendências conhecidas: registro de falhas com foto dos dados (freeze frame, modo 02), ícone do app, previsões por tendência (etapa 3 da Saúde), outros modelos além dos perfis (irmão e cunhado do dono, depois comercializar).
+**Dois APKs** (`productFlavors` `multimidia` e `celular`, `data/Features`): o do celular não tem o acesso a notificações, porque o Play Protect bloqueia no celular apps de fora da loja que pedem esse acesso. Ícone próprio (mostrador, `res/drawable/ic_launcher_foreground.xml`).
+
+Pendências conhecidas: registro de falhas com foto dos dados (freeze frame, modo 02), previsões por tendência (etapa 3 da Saúde), outros modelos além dos perfis (irmão e cunhado do dono, depois comercializar).

@@ -99,7 +99,7 @@ class Updater private constructor(private val app: Application) {
             val o = JSONObject(c.inputStream.bufferedReader().use { it.readText() })
             val assets = o.optJSONArray("assets")
             val apk = (0 until (assets?.length() ?: 0)).map { assets!!.getJSONObject(it) }
-                .firstOrNull { it.optString("name") == UpdateRules.APK_NAME }?.optString("browser_download_url")
+                .firstOrNull { it.optString("name") == Features.apkName }?.optString("browser_download_url")
             UpdateRules.parse(o.optString("body") + "\n" + o.optString("name"), apk)
         } finally {
             c.disconnect()

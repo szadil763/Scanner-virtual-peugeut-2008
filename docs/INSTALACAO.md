@@ -27,3 +27,16 @@ Atualizar: baixe o APK novo e instale por cima. Os dados do app (abastecimentos,
 - O registro do adaptador (botão Copiar registro).
 - Se conectou: quais dados aparecem preenchidos no Painel (rotação, velocidade, MAF, MAP, nível de combustível).
 - Se não conectou: a mensagem exata em Diagnóstico e a lista de dispositivos pareados que o app mostra.
+
+## Dois APKs: multimídia e celular
+
+Desde a 0.1.32 cada versão sai em dois arquivos na página de Releases:
+
+| Arquivo | Para | Diferença |
+|---|---|---|
+| `monitor-2008.apk` | Multimídia do carro | Completo: inclui o acesso a notificações (ver e controlar a música dos outros apps) |
+| `monitor-2008-celular.apk` | Celular | Sem o acesso a notificações; a aba Mídias fica com o rádio e os botões que abrem os apps de música |
+
+Motivo: no celular, o Google Play Protect bloqueia a instalação de fora da loja de apps que pedem acesso a notificações ("App blocked to protect your device", foto do dono na 0.1.31). Os dois APKs são o mesmo app (`productFlavors` `multimidia` e `celular` em `android/app/build.gradle.kts`; o serviço do mini player fica só em `src/multimidia/AndroidManifest.xml`). O botão de atualização baixa sempre o APK do mesmo tipo (`data/Features.apkName`).
+
+Se o celular mesmo assim bloquear: Play Store > foto do perfil > Play Protect > engrenagem > desligar "Verificar apps com o Play Protect", instalar e ligar de novo.

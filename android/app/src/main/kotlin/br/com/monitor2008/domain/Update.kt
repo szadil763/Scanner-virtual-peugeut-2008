@@ -14,7 +14,8 @@ data class RemoteVersion(val versionCode: Int, val versionName: String, val apkU
  * ("Versão 0.1.31 ... versionCode: 31") e decidir se ela é mais nova que a instalada.
  */
 object UpdateRules {
-    const val APK_NAME = "monitor-2008.apk"
+    /** APK do multimídia (completo) ou do celular (sem acesso a notificações). */
+    fun apkName(phone: Boolean) = if (phone) "monitor-2008-celular.apk" else "monitor-2008.apk"
 
     /** versionCode da release: "versionCode: N" ou, em releases antigas, o N de "0.1.N". */
     fun versionCode(notes: String): Int? =

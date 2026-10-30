@@ -80,6 +80,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import br.com.monitor2008.data.AppChoice
 import br.com.monitor2008.data.AppLauncher
 import br.com.monitor2008.data.BtPermissions
+import br.com.monitor2008.data.Features
 import br.com.monitor2008.data.MediaWatcher
 import br.com.monitor2008.data.PlaceFinder
 import br.com.monitor2008.data.Updater
@@ -489,7 +490,7 @@ private fun MediaBar(compact: Boolean, showPlayer: Boolean) {
             }
             Column(Modifier.weight(1f)) {
                 when {
-                    !allowed -> Text("Para ver a música tocando, libere em Ajustes.", fontSize = 15.sp,
+                    !allowed && Features.mediaControl -> Text("Para ver a música tocando, libere em Ajustes.", fontSize = 15.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant)
                     n == null -> Text("Nada tocando", fontSize = 16.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     else -> {
@@ -555,7 +556,9 @@ private fun MapMusicSettings() {
     AppChips(maps, mapPkg, "Nenhum app de mapa instalado.") { mapPkg = it; launcher.mapPackage = it }
     Text("App de música", fontSize = 18.sp)
     AppChips(musics, musicPkg, "Nenhum app de música instalado.") { musicPkg = it; launcher.musicPackage = it }
-    if (allowed) {
+    if (!Features.mediaControl) {
+        // APK do celular: sem acesso a notificações (bloqueado pelo Play Protect fora da loja).
+    } else if (allowed) {
         Text("Mini player ativado: o Painel mostra a música tocando.", color = OkGreen, fontSize = 15.sp)
     } else {
         Button({ ctx.startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)) }, Modifier.height(56.dp)) {

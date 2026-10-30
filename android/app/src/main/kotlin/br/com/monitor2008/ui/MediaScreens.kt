@@ -61,6 +61,7 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import br.com.monitor2008.data.AppLauncher
 import br.com.monitor2008.data.ConnState
+import br.com.monitor2008.data.Features
 import br.com.monitor2008.data.MediaWatcher
 import br.com.monitor2008.data.NowPlaying
 import br.com.monitor2008.data.PlaceFinder
@@ -190,7 +191,7 @@ private fun MusicPlayer(modifier: Modifier, large: Boolean) {
                     BigKey("⏭", keySize) { if (isRadio) radio.step(forward = true) else media.next() }
                 }
             }
-            if (!allowed) {
+            if (!allowed && Features.mediaControl) {
                 Text("Para ver e controlar a música dos outros apps, libere o \"acesso a notificações\" do Monitor 2008 " +
                     "(o app não lê nem guarda suas notificações).", fontSize = 15.sp, color = Warn)
                 Button({ ctx.startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)) }, Modifier.height(56.dp)) {

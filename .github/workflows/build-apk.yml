@@ -31,7 +31,7 @@ jobs:
 
       - name: Testes unitários
         working-directory: android
-        run: gradle test --no-daemon --stacktrace
+        run: gradle testMultimidiaDebugUnitTest --no-daemon --stacktrace
         continue-on-error: true # um teste falhando não deve impedir de gerar o APK para o teste no carro
 
       - name: Relatório dos testes
@@ -44,14 +44,15 @@ jobs:
 
       - name: Gerar APK
         working-directory: android
-        run: gradle assembleDebug --no-daemon --stacktrace
+        run: gradle assembleMultimidiaDebug assembleCelularDebug --no-daemon --stacktrace
 
       - name: Publicar APK na página de Releases
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          cp android/app/build/outputs/apk/debug/app-debug.apk monitor-2008.apk
+          cp android/app/build/outputs/apk/multimidia/debug/app-multimidia-debug.apk monitor-2008.apk
+          cp android/app/build/outputs/apk/celular/debug/app-celular-debug.apk monitor-2008-celular.apk
           gh release delete latest --yes --cleanup-tag || true
-          gh release create latest monitor-2008.apk \
+          gh release create latest monitor-2008.apk monitor-2008-celular.apk \
             --title "Monitor 2008 (versão mais recente)" \
-            --notes "Versão 0.1.${GITHUB_RUN_NUMBER}. APK de teste gerado em $(date -u +'%d/%m/%Y %H:%M') UTC a partir do commit ${GITHUB_SHA::7}. Baixe monitor-2008.apk e instale. versionCode: ${GITHUB_RUN_NUMBER}"
+            --notes "Versão 0.1.${GITHUB_RUN_NUMBER}. APK de teste gerado em $(date -u +'%d/%m/%Y %H:%M') UTC a partir do commit ${GITHUB_SHA::7}. Multimídia: monitor-2008.apk. Celular: monitor-2008-celular.apk. versionCode: ${GITHUB_RUN_NUMBER}"

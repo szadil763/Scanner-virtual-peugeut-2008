@@ -29,6 +29,15 @@ android {
         }
     }
 
+    // Dois APKs com o mesmo app: "multimidia" (completo) e "celular", sem o acesso a notificações
+    // (mini player da música dos outros apps). Instalado fora da Play Store, o Google Play Protect
+    // bloqueia no celular apps que pedem esse acesso (foto do dono, 0.1.31). Ver docs/INSTALACAO.md.
+    flavorDimensions += "aparelho"
+    productFlavors {
+        create("multimidia") { dimension = "aparelho" }
+        create("celular") { dimension = "aparelho" }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = false
@@ -44,6 +53,7 @@ android {
     }
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 }
 
