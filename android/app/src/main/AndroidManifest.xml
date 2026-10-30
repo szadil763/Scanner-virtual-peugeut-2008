@@ -21,6 +21,8 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <!-- O player do rádio mantém o processador e o Wi-Fi acordados enquanto toca (sem isso o app fechava ao tocar, 0.1.21). -->
     <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <!-- Botão "Atualizar": abre a instalação do APK novo baixado do GitHub (o usuário confirma). -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
     <uses-feature android:name="android.hardware.bluetooth" android:required="false" />
@@ -89,6 +91,16 @@
                 <action android:name="android.service.notification.NotificationListenerService" />
             </intent-filter>
         </service>
+
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.updates"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/update_paths" />
+        </provider>
 
         <!-- Rádio pela internet em segundo plano; aparece no mini player e nos botões do volante. -->
         <service

@@ -54,4 +54,4 @@ jobs:
           gh release delete latest --yes --cleanup-tag || true
           gh release create latest monitor-2008.apk \
             --title "Monitor 2008 (versão mais recente)" \
-            --notes "Versão 0.1.${GITHUB_RUN_NUMBER}. APK de teste gerado em $(date -u +'%d/%m/%Y %H:%M') UTC a partir do commit ${GITHUB_SHA::7}. Baixe monitor-2008.apk e instale."
+            --notes "Versão 0.1.${GITHUB_RUN_NUMBER}. APK de teste gerado em $(date -u +'%d/%m/%Y %H:%M') UTC a partir do commit ${GITHUB_SHA::7}. Baixe monitor-2008.apk e instale. versionCode: ${GITHUB_RUN_NUMBER}"

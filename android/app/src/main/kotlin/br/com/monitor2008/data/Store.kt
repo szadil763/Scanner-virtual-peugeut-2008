@@ -141,6 +141,17 @@ class Store(context: Context) {
         get() = p.getString("vehicleId", null) ?: if (odometerKm > 0) Vehicles.PEUGEOT_2008.id else null
         set(v) { p.edit().putString("vehicleId", v).apply() }
 
+    /**
+     * Canal de atualização (UpdateChannel): "ESTAVEL" só recebe versões aprovadas pelo dono; "TESTE"
+     * recebe todo APK novo. O aparelho do dono (já rodou com o adaptador) começa no Teste.
+     */
+    var updateChannel: String
+        get() = p.getString("updateChannel", null) ?: if (odometerKm > 0) "TESTE" else "ESTAVEL"
+        set(v) { p.edit().putString("updateChannel", v).apply() }
+    var updateCheckedMs: Long
+        get() = p.getLong("updateCheckedMs", 0L)
+        set(v) { p.edit().putLong("updateCheckedMs", v).apply() }
+
     /** Aba Mídias: "MUSICA" ou "RADIO" ao lado dos números do Painel. */
     var mediaMode: String
         get() = p.getString("mediaMode", "MUSICA") ?: "MUSICA"

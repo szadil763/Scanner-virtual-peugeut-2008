@@ -58,4 +58,8 @@ Também: hodômetro real (o dono informa o km do painel uma vez; `Store.odoOffse
 
 **Vários carros** (`domain/Vehicle.kt`): perfil por carro (cilindrada para o método MAP, limites de consumo alto, o que verificar por indicador da Saúde, dicas de câmbio e revisão). Perfis: Peugeot 2008 1.6 EC5 e Citroën C4 Lounge 2.0 EW10 flex automático (segundo carro do dono, também com multimídia Android e adaptador próprio). Cada carro tem o app no próprio multimídia, com os próprios dados; o carro é escolhido na primeira abertura (instalação antiga com km rodados vale como 2008) e em Ajustes. Modelo novo = novo perfil em `Vehicles`.
 
+**Atualização pelo app** (`docs/ATUALIZACAO.md`, `data/Updater`, `ui/UpdateScreens.kt`): botão em Ajustes e aviso no alto das abas; canais Teste (release `latest`) e Estável (release `estavel`, publicada pelo workflow manual `publish-stable.yml` depois de testar no carro). O Android sempre pede o toque em Instalar.
+
+**Celular**: o app escolhe o layout pela tela: multimídia (menu lateral), tela dividida (compacto), celular (largura < 600 dp ou altura < 560 dp: abas embaixo com "Mais", telas em uma coluna, sem a barra de mapa/música) e janela flutuante.
+
 Pendências conhecidas: registro de falhas com foto dos dados (freeze frame, modo 02), ícone do app, previsões por tendência (etapa 3 da Saúde), outros modelos além dos perfis (irmão e cunhado do dono, depois comercializar).

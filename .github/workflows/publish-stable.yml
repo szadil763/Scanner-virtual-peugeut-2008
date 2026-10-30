@@ -1,0 +1,32 @@
+name: Publicar versão estável
+
+# Rodar à mão (Actions > "Publicar versão estável" > Run workflow) depois de testar a versão de teste
+# no carro: copia o APK da release "latest" (teste) para a release "estavel", que é a que os carros
+# no canal Estável recebem pelo botão de atualização do app.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Copiar a versão de teste para a estável
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          gh release download latest -p monitor-2008.apk
+          BODY=$(gh release view latest --json body -q .body)
+          CODE=$(echo "$BODY" | grep -oE 'versionCode: [0-9]+' | grep -oE '[0-9]+')
+          NAME=$(echo "$BODY" | grep -oE '0\.1\.[0-9]+' | head -1)
+          SHA=$(gh release view latest --json targetCommitish -q .targetCommitish)
+          test -n "$CODE"
+          gh release delete estavel --yes --cleanup-tag || true
+          gh release create estavel monitor-2008.apk \
+            --target "$SHA" \
+            --latest=false \
+            --title "Monitor 2008 (versão estável)" \
+            --notes "Versão ${NAME}, aprovada no carro em $(date -u +'%d/%m/%Y'). versionCode: ${CODE}"

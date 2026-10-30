@@ -1,3 +1,5 @@
+@file:OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+
 package br.com.monitor2008.ui
 
 import android.app.Application
@@ -14,6 +16,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
@@ -37,6 +40,10 @@ import androidx.compose.material3.FilterChip as M3FilterChip
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.NavigationBar
+import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.NavigationRail
 import androidx.compose.material3.NavigationRailItem
 import androidx.compose.material3.OutlinedButton
@@ -75,6 +82,7 @@ import br.com.monitor2008.data.AppLauncher
 import br.com.monitor2008.data.BtPermissions
 import br.com.monitor2008.data.MediaWatcher
 import br.com.monitor2008.data.PlaceFinder
+import br.com.monitor2008.data.Updater
 import br.com.monitor2008.data.ConnState
 import br.com.monitor2008.domain.DtcInfo
 import br.com.monitor2008.domain.FlowMethod
@@ -106,19 +114,29 @@ enum class Tab(val label: String) {
 }
 
 /**
- * Três tamanhos: tela inteira; tela dividida com mapas ou música (layout compacto, abaixo de
- * [COMPACT_WIDTH]); e janela flutuante (só os números principais).
+ * Quatro tamanhos, escolhidos pela tela: multimídia (menu lateral); tela dividida com mapas ou
+ * música (layout compacto, abaixo de [COMPACT_WIDTH]); celular (abas embaixo, uma coluna); e
+ * janela flutuante (só os números principais).
  */
 private val COMPACT_WIDTH = 800.dp
+
+/** Abas que cabem na barra do celular; as outras ficam em "Mais". */
+private val PHONE_TABS = listOf(Tab.PAINEL, Tab.MIDIAS, Tab.SAUDE, Tab.CONSUMO)
 
 @Composable
 fun MonitorApp(vm: MonitorEngine) {
     val ui by vm.ui.collectAsStateWithLifecycle()
     var tab by remember { mutableStateOf(Tab.PAINEL) }
+    val ctx = LocalContext.current
+    // Confere se há versão nova ao abrir (no máximo a cada 6 h; sem internet, não mostra nada).
+    LaunchedEffect(Unit) { Updater.get(ctx.applicationContext as Application).checkQuietly() }
 
     BoxWithConstraints(Modifier.fillMaxSize()) {
         val compact = maxWidth < COMPACT_WIDTH
-        if (maxWidth < 420.dp || maxHeight < 320.dp) MiniPanel(ui) else Row(Modifier.fillMaxSize()) {
+        // Janela flutuante: baixa, ou estreita e baixa. Celular em pé é estreito, mas alto.
+        val mini = maxHeight < 320.dp || (maxWidth < 420.dp && maxHeight < 420.dp)
+        val phone = maxWidth < 600.dp || maxHeight < 560.dp
+        if (mini) MiniPanel(ui) else if (phone) PhoneLayout(ui, vm, tab) { tab = it } else Row(Modifier.fillMaxSize()) {
             NavigationRail {
                 Tab.values().forEach { t ->
                     NavigationRailItem(
@@ -133,18 +151,8 @@ fun MonitorApp(vm: MonitorEngine) {
             }
             // Margem maior à direita: a moldura do multimídia cobre a borda direita da tela (fotos da 0.1.15).
             Column(Modifier.fillMaxSize().padding(start = if (compact) 10.dp else 16.dp, top = 10.dp, bottom = 10.dp, end = 32.dp)) {
-                Box(Modifier.fillMaxWidth().weight(1f)) {
-                    when (tab) {
-                        Tab.PAINEL -> if (compact) PainelCompact(ui) else PainelScreen(ui)
-                        Tab.MIDIAS -> MidiasScreen(ui, compact)
-                        Tab.CONSUMO -> ConsumoScreen(ui, vm)
-                        Tab.POSTOS -> PostosScreen(ui, vm)
-                        Tab.SAUDE -> SaudeScreen(ui, vm, compact)
-                        Tab.MANUTENCAO -> ManutencaoScreen(ui, vm)
-                        Tab.DIAGNOSTICO -> DiagnosticoScreen(ui, vm)
-                        Tab.AJUSTES -> AjustesScreen(ui, vm)
-                    }
-                }
+                UpdateBanner(ui.moving)
+                Box(Modifier.fillMaxWidth().weight(1f)) { TabContent(tab, ui, vm, compact, phone = false) }
                 // Mapa, música e mini player em todas as abas (sem o mini player onde o player grande já aparece).
                 Spacer(Modifier.height(8.dp))
                 MediaBar(compact, showPlayer = tab != Tab.MIDIAS)
@@ -153,6 +161,61 @@ fun MonitorApp(vm: MonitorEngine) {
     }
     // Primeira abertura num aparelho novo: qual é o carro (consumo e dicas dependem do motor).
     if (ui.vehicle == null) VehicleDialog(vm)
+}
+
+@Composable
+private fun TabContent(tab: Tab, ui: UiState, vm: MonitorEngine, compact: Boolean, phone: Boolean) {
+    when (tab) {
+        Tab.PAINEL -> if (compact) PainelCompact(ui) else PainelScreen(ui)
+        Tab.MIDIAS -> MidiasScreen(ui, compact)
+        Tab.CONSUMO -> ConsumoScreen(ui, vm, phone)
+        Tab.POSTOS -> PostosScreen(ui, vm)
+        Tab.SAUDE -> SaudeScreen(ui, vm, compact)
+        Tab.MANUTENCAO -> ManutencaoScreen(ui, vm)
+        Tab.DIAGNOSTICO -> DiagnosticoScreen(ui, vm)
+        Tab.AJUSTES -> AjustesScreen(ui, vm)
+    }
+}
+
+/**
+ * Celular (ou tela pequena): telas em uma coluna e abas embaixo, ao alcance do polegar. Quatro abas
+ * fixas e "Mais" com as outras. Sem a barra de mapa e música: a aba Mídias faz esse papel.
+ */
+@Composable
+private fun PhoneLayout(ui: UiState, vm: MonitorEngine, tab: Tab, onTab: (Tab) -> Unit) {
+    var more by remember { mutableStateOf(false) }
+    Column(Modifier.fillMaxSize()) {
+        Column(Modifier.fillMaxWidth().weight(1f).padding(horizontal = 12.dp, vertical = 10.dp)) {
+            UpdateBanner(ui.moving)
+            Box(Modifier.fillMaxWidth().weight(1f)) { TabContent(tab, ui, vm, compact = true, phone = true) }
+        }
+        NavigationBar {
+            PHONE_TABS.forEach { t ->
+                NavigationBarItem(
+                    selected = tab == t, onClick = { onTab(t) }, icon = {},
+                    label = { Text(t.label, fontSize = 14.sp, maxLines = 1) }, alwaysShowLabel = true,
+                )
+            }
+            val inMore = tab !in PHONE_TABS
+            NavigationBarItem(
+                selected = inMore, onClick = { more = true },
+                icon = {
+                    Box {
+                        DropdownMenu(expanded = more, onDismissRequest = { more = false }) {
+                            Tab.values().filter { it !in PHONE_TABS }.forEach { t ->
+                                DropdownMenuItem(
+                                    text = { Text(t.label, fontSize = 18.sp) },
+                                    onClick = { onTab(t); more = false },
+                                    modifier = Modifier.height(56.dp),
+                                )
+                            }
+                        }
+                    }
+                },
+                label = { Text(if (inMore) tab.label else "Mais", fontSize = 14.sp, maxLines = 1) }, alwaysShowLabel = true,
+            )
+        }
+    }
 }
 
 /** Escolha do carro na primeira abertura. Não fecha sem escolher. */
@@ -525,7 +588,7 @@ private fun methodLabel(m: FlowMethod?) = when (m) {
 }
 
 @Composable
-private fun ConsumoScreen(ui: UiState, vm: MonitorEngine) {
+private fun ConsumoScreen(ui: UiState, vm: MonitorEngine, phone: Boolean = false) {
     var dialog by remember { mutableStateOf(false) }
     var confirmReset by remember { mutableStateOf(false) }
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(16.dp)) {
@@ -537,10 +600,18 @@ private fun ConsumoScreen(ui: UiState, vm: MonitorEngine) {
                 " · ${Math.round(ui.tripKm)} km em ${ui.tripMinutes / 60} h ${ui.tripMinutes % 60} min",
             color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 15.sp,
         )
-        Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-            Metric("Média do trajeto", ui.tripAvgKmPerL.f(), "km/l", Modifier.weight(1f))
-            Metric("Combustível usado", ui.tripLiters.f(2), "L", Modifier.weight(1f))
-            Metric("Velocidade média", ui.tripAvgSpeed.f(0), "km/h", Modifier.weight(1f))
+        if (phone) {
+            Metric("Média do trajeto", ui.tripAvgKmPerL.f(), "km/l", Modifier.fillMaxWidth())
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                Metric("Combustível", ui.tripLiters.f(1), "L", Modifier.weight(1f), valueSize = 30.sp)
+                Metric("Vel. média", ui.tripAvgSpeed.f(0), "km/h", Modifier.weight(1f), valueSize = 30.sp)
+            }
+        } else {
+            Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                Metric("Média do trajeto", ui.tripAvgKmPerL.f(), "km/l", Modifier.weight(1f))
+                Metric("Combustível usado", ui.tripLiters.f(2), "L", Modifier.weight(1f))
+                Metric("Velocidade média", ui.tripAvgSpeed.f(0), "km/h", Modifier.weight(1f))
+            }
         }
         Text("Custo do trajeto: R$ ${(ui.tripLiters * ui.fuelPrice).f(2)} · ${ui.tripAvgL100.f(1)} L/100 km")
         Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
@@ -553,7 +624,7 @@ private fun ConsumoScreen(ui: UiState, vm: MonitorEngine) {
                 Spark(ui.history, Modifier.fillMaxWidth().height(140.dp).padding(top = 8.dp))
             }
         }
-        Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Button(onClick = { dialog = true }, enabled = !ui.moving, modifier = Modifier.height(60.dp)) { Text("Registrar abastecimento", fontSize = 18.sp) }
             OutlinedButton(onClick = { confirmReset = true }, modifier = Modifier.height(60.dp)) { Text("Zerar trajeto", fontSize = 18.sp) }
             if (ui.moving) Text("Pare o carro para registrar.")
@@ -770,7 +841,7 @@ private fun SaudeScreen(ui: UiState, vm: MonitorEngine, compact: Boolean) {
             Text("Dados simulados: as viagens só são gravadas com o adaptador conectado.", color = Warn, fontSize = 15.sp)
         }
         val ctx = LocalContext.current
-        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Button({ tips = vm.preventiveTips() }, Modifier.height(60.dp)) { Text("Gerar dicas de manutenção", fontSize = 18.sp) }
             OutlinedButton({
                 val version = try { ctx.packageManager.getPackageInfo(ctx.packageName, 0).versionName } catch (_: Exception) { null }
@@ -893,7 +964,7 @@ private fun ManutencaoScreen(ui: UiState, vm: MonitorEngine) {
             Text("Por data: ${oil.daysLeft} dias restantes · intervalo ${ui.oilIntervalKm} km ou 12 meses (confirme no manual).")
             if (!ui.oilConfigured) Text("Informe quando foi a última troca: toque em \"Registrei a troca\" se foi hoje.", color = Warn)
         }
-        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Button(onClick = { confirm = true }, enabled = !ui.moving, modifier = Modifier.height(60.dp)) { Text("Troquei hoje", fontSize = 18.sp) }
             OutlinedButton(onClick = { informOil = true }, enabled = !ui.moving, modifier = Modifier.height(60.dp)) { Text("Informar troca anterior", fontSize = 18.sp) }
         }
@@ -1103,8 +1174,9 @@ private fun AjustesScreen(ui: UiState, vm: MonitorEngine) {
         }
         Text("Cada carro tem o app instalado no próprio multimídia, com os próprios dados. O carro escolhido muda a conta do consumo " +
             "(cilindrada) e as dicas de manutenção.", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 15.sp)
+        UpdateSection(ui.moving)
         Text("Combustível no tanque", fontSize = 18.sp)
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             listOf("Gasolina E30" to 0.30, "Gasolina E32" to 0.32, "Etanol" to 0.95).forEach { (name, f) ->
                 FilterChip(selected = Math.abs(ui.ethanolFraction - f) < 0.001, onClick = { vm.setEthanolFraction(f) },
                     label = { Text(name, fontSize = 18.sp) }, modifier = Modifier.height(56.dp))
@@ -1152,7 +1224,7 @@ private fun AdapterPicker(ui: UiState, vm: MonitorEngine) {
     Text("Adaptador OBD2", fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
     Text("BLE (como o OBDBLE): deixe em Detectar sozinho, sem parear. Clássico: pareie antes no Bluetooth do aparelho.",
         color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 16.sp)
-    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         OutlinedButton({ vm.refreshPaired() }, Modifier.height(56.dp)) { Text("Atualizar lista", fontSize = 18.sp) }
         OutlinedButton({ context.startActivity(Intent(Settings.ACTION_BLUETOOTH_SETTINGS)) }, Modifier.height(56.dp), enabled = !ui.moving) {
             Text("Abrir Bluetooth do aparelho", fontSize = 18.sp)
