@@ -23,6 +23,9 @@ data class MaintItem(val id: String, val name: String, val intervalKm: Int?, val
 data class ItemStatus(val kmLeft: Double?, val daysLeft: Long?, val state: MaintState)
 
 object MaintCatalog {
+    /** Itens que valem para o carro: sem correia dentada quando o motor usa corrente de comando. */
+    fun itemsFor(v: Vehicle): List<MaintItem> = items.filter { it.id != "correia" || v.timingBelt }
+
     val items = listOf(
         MaintItem("filtro_ar", "Filtro de ar do motor", 20_000, 24, "Filtro sujo aumenta o consumo e tira potência."),
         MaintItem("filtro_comb", "Filtro de combustível", 20_000, 24, "No flex, o etanol solta sujeira do tanque e entope o filtro."),

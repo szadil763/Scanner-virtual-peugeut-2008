@@ -28,6 +28,8 @@ data class Vehicle(
     val gearboxTip: String,
     /** Dica fixa das verificações a cada revisão. */
     val periodicTip: String,
+    /** Correia dentada (troca por km); false = corrente de comando, que não tem troca programada. */
+    val timingBelt: Boolean = true,
 ) {
     /** "Peugeot 2008 1.6 16V flex (EC5)". */
     val fullName: String get() = "$name $engine"
@@ -85,7 +87,30 @@ object Vehicles {
             "coxins do motor, bobina de ignição, mangueiras do respiro do cárter e limpeza do corpo de borboleta.",
     )
 
-    val all = listOf(PEUGEOT_2008, C4_LOUNGE_20)
+    /** Carro do irmão do dono (importado do México, ano 2010/2011). */
+    val NISSAN_TIIDA_18 = Vehicle(
+        id = "nissan-tiida-18",
+        name = "Nissan Tiida",
+        engine = "1.8 16V flex (MR18DE)",
+        gearbox = "manual de 6 marchas ou automático de 4 marchas",
+        brand = "Nissan",
+        displacementL = 1.798,
+        highConsumptionGasoline = 7.5,
+        highConsumptionEthanol = 5.2,
+        timingBelt = false,
+        notes = common + mapOf(
+            "mix" to "No MR18DE, comece pelas mangueiras de vácuo, pela válvula do respiro do cárter (PCV) e pela junta do coletor de admissão.",
+            "idle" to "No MR18DE cada cilindro tem a sua bobina, e elas costumam falhar com a idade; verifique também velas e a limpeza do corpo de borboleta.",
+            "tbi" to "Depois de limpar o corpo de borboleta da Nissan, a oficina precisa fazer o reaprendizado da marcha lenta (\"idle air volume learning\"); sem isso a lenta fica instável.",
+            "cool" to "Confira o nível do reservatório com o motor frio e se a ventoinha do radiador liga com o motor quente; mangueiras ressecadas são comuns nessa idade.",
+        ),
+        gearboxTip = "No Tiida 1.8, se o câmbio for automático (4 marchas), troque o fluido periodicamente (algo entre 40.000 e 60.000 km) só com o fluido Nissan especificado; " +
+            "trancos ou demora para engatar pedem oficina. Se for manual, confira o óleo do câmbio e a embreagem (pedal alto ou patinando). Confirme no manual.",
+        periodicTip = "A cada revisão: bobinas e velas, corpo de borboleta (com o reaprendizado da marcha lenta), nível do arrefecimento e ventoinha, " +
+            "coxins do motor e mangueiras de vácuo. O motor usa corrente de comando: ruído metálico ao ligar frio é sinal para verificar.",
+    )
+
+    val all = listOf(PEUGEOT_2008, C4_LOUNGE_20, NISSAN_TIIDA_18)
 
     fun byId(id: String?): Vehicle? = all.firstOrNull { it.id == id }
 }

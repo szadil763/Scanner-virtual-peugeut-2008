@@ -25,7 +25,7 @@ class AdvisorTest {
 
     @Test fun alwaysHasModelChecks() {
         val t = titles(input())
-        assertTrue(t.contains("Câmbio automático"))
+        assertTrue(t.contains("Câmbio"))
         assertTrue(t.contains("Verificações periódicas do modelo"))
     }
 

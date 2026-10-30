@@ -165,7 +165,7 @@ object Advisor {
     // ---------- verificações do modelo (sempre) ----------
 
     private fun modelChecks(v: Vehicle, out: MutableList<Tip>) {
-        out += Tip(TipLevel.BAIXA, "Câmbio automático", v.gearboxTip)
+        out += Tip(TipLevel.BAIXA, "Câmbio", v.gearboxTip)
         out += Tip(TipLevel.BAIXA, "Verificações periódicas do modelo", v.periodicTip)
     }
 }

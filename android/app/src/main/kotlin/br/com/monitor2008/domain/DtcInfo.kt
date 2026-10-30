@@ -1,7 +1,7 @@
 package br.com.monitor2008.domain
 
 /**
- * O que os códigos de falha costumam indicar nos motores flex da linha PSA (Peugeot e Citroën). Usado nas dicas da
+ * O que os códigos de falha costumam indicar nos motores flex (escrito a partir da linha PSA: Peugeot e Citroën; vale para a maioria dos carros). Usado nas dicas da
  * Saúde e na tela Diagnóstico. Não é diagnóstico: é por onde o mecânico costuma começar.
  */
 object DtcInfo {
@@ -45,7 +45,7 @@ object DtcInfo {
             'U' -> "comunicação entre módulos"
             else -> return "Código não reconhecido"
         }
-        val kind = if (c.getOrNull(1) == '1' || c.getOrNull(1) == '3') "código do fabricante (Peugeot/Citroën)" else "código padrão"
+        val kind = if (c.getOrNull(1) == '1' || c.getOrNull(1) == '3') "código do fabricante (específico da marca)" else "código padrão"
         return "Falha de $system, $kind: consulte um mecânico com scanner da marca"
     }
 }

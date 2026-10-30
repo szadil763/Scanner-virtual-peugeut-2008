@@ -18,6 +18,9 @@ O que o carro responde pela tomada OBD **não** fica no perfil: em qualquer mode
 |---|---|---|---|---|
 | Peugeot 2008 | 1.6 16V flex (EC5) | automático 4 marchas (AL4) | 1,598 L | 8,0 / 5,5 km/l |
 | Citroën C4 Lounge | 2.0 16V flex (EW10) | automático (4 ou 6 marchas, conforme o ano) | 1,997 L | 7,0 / 5,0 km/l |
+| Nissan Tiida (2010/2011, importado) | 1.8 16V flex (MR18DE) | manual 6 ou automático 4 (a confirmar) | 1,798 L | 7,5 / 5,2 km/l |
+
+O MR18DE usa corrente de comando: a manutenção não mostra "Correia dentada" para ele (`Vehicle.timingBelt`, `MaintCatalog.itemsFor`).
 
 ## Instalar em outro carro
 

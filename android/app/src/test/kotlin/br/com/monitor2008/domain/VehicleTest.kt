@@ -32,13 +32,19 @@ class VehicleTest {
         val tips = Advisor.tips(input(Vehicles.C4_LOUNGE_20, health = listOf(item)))
         assertTrue(tips.first { it.title.startsWith("Marcha lenta") }.text.contains("EW10"))
         assertFalse(tips.any { it.text.contains("EC5") })
-        assertTrue(tips.first { it.title == "Câmbio automático" }.text.contains("C4 Lounge"))
+        assertTrue(tips.first { it.title == "Câmbio" }.text.contains("C4 Lounge"))
     }
 
     @Test fun consumptionLimitDependsOnTheCar() {
         // 7,5 km/l na gasolina: alto para o 2008 1.6 (limite 8), normal para o C4 2.0 (limite 7).
         assertTrue(Advisor.tips(input(Vehicles.PEUGEOT_2008, kmL = 7.5)).any { it.title.startsWith("Consumo alto") })
         assertFalse(Advisor.tips(input(Vehicles.C4_LOUNGE_20, kmL = 7.5)).any { it.title.startsWith("Consumo alto") })
+    }
+
+    @Test fun chainEngineHasNoTimingBeltItem() {
+        assertFalse(MaintCatalog.itemsFor(Vehicles.NISSAN_TIIDA_18).any { it.id == "correia" })
+        assertTrue(MaintCatalog.itemsFor(Vehicles.PEUGEOT_2008).any { it.id == "correia" })
+        assertTrue(Vehicles.NISSAN_TIIDA_18.periodicTip.contains("corrente"))
     }
 
     @Test fun reportNamesTheCar() {

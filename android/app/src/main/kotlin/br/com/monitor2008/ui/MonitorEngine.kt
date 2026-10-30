@@ -584,7 +584,7 @@ class MonitorEngine private constructor(private val app: Application) {
             pendingDtcs = pendingDtcs,
             health = HealthRules.evaluate(trips, lastSample),
             tripsRecorded = trips.size,
-            maint = MaintCatalog.items.map { item ->
+            maint = MaintCatalog.itemsFor(vehicle).map { item ->
                 MaintRow(
                     item,
                     if (store.maintConfigured(item.id)) {
