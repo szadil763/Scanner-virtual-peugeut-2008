@@ -12,6 +12,7 @@ import android.provider.Settings
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.IntentSenderRequest
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -33,7 +34,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button as M3Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -282,29 +282,42 @@ private fun MiniPanel(ui: UiState) {
 // ---------- componentes ----------
 
 /**
- * Azul mais escuro com texto branco nos botões preenchidos e na opção selecionada. O azul claro
- * padrão com texto escuro ficou branco e ilegível na tela do multimídia à noite (fotos da 0.1.17).
- * O multimídia clareia muito os azuis médios: o 0369A1 ainda saiu ciano com texto branco ilegível
- * (fotos da 0.1.23), então o azul é bem escuro.
+ * Botões de destaque e opção selecionada: contorno grosso e texto na cor de destaque, sem fundo.
+ * Nos multimídias do dono, botão com fundo azul (claro ou escuro) sai quase branco na tela e o texto
+ * some (fotos da 0.1.17, 0.1.23 e 0.1.40: "Mapa", "Ler falhas", opção selecionada); os botões de
+ * contorno sempre saíram legíveis.
  */
 internal val StrongBlue = Color(0xFF1E3A8A)
 
 @Composable
 internal fun Button(
     onClick: () -> Unit, modifier: Modifier = Modifier, enabled: Boolean = true, content: @Composable RowScope.() -> Unit,
-) = M3Button(
+) = OutlinedButton(
     onClick, modifier, enabled,
-    colors = ButtonDefaults.buttonColors(containerColor = StrongBlue, contentColor = Color.White),
+    border = BorderStroke(3.dp, if (enabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline),
+    colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.primary),
     content = content,
 )
 
 @Composable
 internal fun FilterChip(
     selected: Boolean, onClick: () -> Unit, label: @Composable () -> Unit, modifier: Modifier = Modifier, enabled: Boolean = true,
-) = M3FilterChip(
+) {
+    val check: (@Composable () -> Unit)? = if (selected) { { Text("✓", fontWeight = FontWeight.Bold) } } else null
+    M3FilterChip(
     selected = selected, onClick = onClick, label = label, modifier = modifier, enabled = enabled,
-    colors = FilterChipDefaults.filterChipColors(selectedContainerColor = StrongBlue, selectedLabelColor = Color.White),
-)
+    leadingIcon = check,
+    colors = FilterChipDefaults.filterChipColors(
+        selectedContainerColor = Color.Transparent,
+        selectedLabelColor = MaterialTheme.colorScheme.primary,
+        selectedLeadingIconColor = MaterialTheme.colorScheme.primary,
+    ),
+    border = FilterChipDefaults.filterChipBorder(
+        enabled = enabled, selected = selected,
+        selectedBorderColor = MaterialTheme.colorScheme.primary, selectedBorderWidth = 3.dp,
+    ),
+    )
+}
 
 @Composable
 internal fun Metric(
