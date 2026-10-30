@@ -62,7 +62,8 @@ class Store(context: Context) {
         set(v) { p.edit().putFloat("pendingRealLiters", v.toFloat()).apply() }
 
     var useSimulated: Boolean
-        get() = p.getBoolean("useSimulated", true)
+        // Instalação nova já usa o adaptador (o cliente instala para usar no carro, não para ver a demonstração).
+        get() = p.getBoolean("useSimulated", false)
         set(v) { p.edit().putBoolean("useSimulated", v).apply() }
     var adapterName: String
         get() = p.getString("adapterName", "") ?: ""

@@ -97,8 +97,12 @@ data class UiState(
     /** Velocidade nos últimos ~2 minutos, para o gráfico do Painel. */
     val speedHistory: List<Double> = emptyList(),
 ) {
-    /** Com o carro andando, o app não aceita digitação nem registros. */
-    val moving: Boolean get() = (sample?.speedKmh ?: 0.0) > 0.5
+    /**
+     * Com o carro andando, o app não aceita digitação nem registros. Só vale com o adaptador: na
+     * simulação o carro de mentira "anda" e travava os Ajustes, inclusive a chave para sair dela
+     * (foto do dono no C4, 0.1.33).
+     */
+    val moving: Boolean get() = !simulated && (sample?.speedKmh ?: 0.0) > 0.5
 }
 
 /** Posto informado no abastecimento: local do GPS, nome (editável) e endereço. */
