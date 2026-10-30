@@ -203,27 +203,46 @@ class BluetoothObdSource(
         return null
     }
 
+    /**
+     * Ordem: BLE primeiro, depois o clássico pareado. O adaptador do dono é duplo (OBDII clássico +
+     * OBDBLE): no C4 o multimídia conseguiu parear o OBDII, e o app ficava preso tentando o clássico
+     * (cada tentativa espera até o Android desistir) antes de chegar ao BLE, que é o caminho que
+     * funciona no 2008. Agora o BLE vem antes, e o clássico tem limite de tempo.
+     */
     private fun connect(): Elm327Client? {
         val adapter = context.getSystemService(BluetoothManager::class.java)?.adapter
             ?: return fail("Este aparelho não tem Bluetooth")
         if (!adapter.isEnabled) return fail("Bluetooth desligado")
 
-        // 1) Bluetooth clássico, se o adaptador estiver pareado.
-        val bonded = adapter.bondedDevices.toList()
-        val device = bonded.firstOrNull { matches(it.name) }
-        if (device != null) {
-            log("Dispositivo: ${device.name} (${device.address})")
+        val bonded = adapter.bondedDevices.toList().firstOrNull { matches(it.name) }
+
+        // 1) BLE (por exemplo "OBDBLE"): não precisa parear nem de PIN. Busca mais curta se ainda há o clássico para tentar.
+        val ble = try {
+            connectBle(adapter, scanMs = if (bonded != null) 8_000 else 15_000)
+        } catch (e: SecurityException) {
+            return fail("Sem permissão para procurar o adaptador. Toque em Permitir Bluetooth em Ajustes.")
+        }
+        if (ble != null) {
+            log("Dispositivo BLE: ${ble.deviceName}")
+            bleLink = ble
+            return Elm327Client(ble.input, ble.output, ::exchanged).also { client = it }
+        }
+
+        // 2) Bluetooth clássico, se o adaptador estiver pareado.
+        if (bonded != null) {
+            _info.value = ConnectionInfo(ConnState.CONNECTING, "Tentando o ${bonded.name} pelo Bluetooth clássico...")
+            log("Dispositivo: ${bonded.name} (${bonded.address})")
             adapter.cancelDiscovery()
             val s = try {
-                device.createRfcommSocketToServiceRecord(SPP_UUID).also { it.connect() }
+                bonded.createRfcommSocketToServiceRecord(SPP_UUID).also { connectWithTimeout(it) }
             } catch (e: IOException) {
                 log("Conexão padrão falhou (${e.message}); tentando o canal 1")
                 // Alguns clones só aceitam o canal 1 direto (truque conhecido).
                 try {
-                    val m = device.javaClass.getMethod("createRfcommSocket", Int::class.javaPrimitiveType)
-                    (m.invoke(device, 1) as BluetoothSocket).also { it.connect() }
+                    val m = bonded.javaClass.getMethod("createRfcommSocket", Int::class.javaPrimitiveType)
+                    (m.invoke(bonded, 1) as BluetoothSocket).also { connectWithTimeout(it) }
                 } catch (e2: Exception) {
-                    log("Clássico falhou: ${e2.message ?: e.message}; tentando BLE")
+                    log("Clássico falhou: ${e2.message ?: e.message}")
                     null
                 }
             }
@@ -231,23 +250,32 @@ class BluetoothObdSource(
                 socket = s
                 return Elm327Client(s.inputStream, s.outputStream, ::exchanged).also { client = it }
             }
-        }
-
-        // 2) BLE (por exemplo "OBDBLE"): não precisa parear nem de PIN.
-        val ble = try {
-            connectBle(adapter)
-        } catch (e: SecurityException) {
-            return fail("Sem permissão para procurar o adaptador. Toque em Permitir Bluetooth em Ajustes.")
-        }
-        if (ble == null) {
             return fail(
-                "Adaptador não encontrado. Ligue a ignição. Se o Monitor estiver aberto em outro aparelho (celular), " +
-                    "feche lá: o adaptador aceita uma conexão por vez. Tentando de novo...",
+                "Adaptador não conectou. Com a ignição ligada, se continuar assim: nas configurações de Bluetooth do " +
+                    "aparelho, esqueça (desparear) o ${bonded.name}. O app usa o OBDBLE sem parear, como no 2008. Tentando de novo...",
             )
         }
-        log("Dispositivo BLE: ${ble.deviceName}")
-        bleLink = ble
-        return Elm327Client(ble.input, ble.output, ::exchanged).also { client = it }
+        return fail(
+            "Adaptador não encontrado. Ligue a ignição. Se o Monitor estiver aberto em outro aparelho (celular), " +
+                "feche lá: o adaptador aceita uma conexão por vez. Tentando de novo...",
+        )
+    }
+
+    /** O connect() do Bluetooth clássico pode travar meio minuto; fecha o socket se passar de 12 s. */
+    private fun connectWithTimeout(s: BluetoothSocket) {
+        val watchdog = Thread {
+            try {
+                Thread.sleep(12_000)
+                s.close()
+            } catch (_: InterruptedException) {
+            } catch (_: IOException) {
+            }
+        }.apply { isDaemon = true; start() }
+        try {
+            s.connect()
+        } finally {
+            watchdog.interrupt()
+        }
     }
 
     /**
@@ -256,7 +284,7 @@ class BluetoothObdSource(
      * procura pelo nome. Cada conexão tenta 3 vezes, porque o chip do multimídia costuma falhar a
      * primeira (status 133) quando já tem áudio Bluetooth ativo.
      */
-    private fun connectBle(adapter: BluetoothAdapter): BleLink? {
+    private fun connectBle(adapter: BluetoothAdapter, scanMs: Long): BleLink? {
         val addr = store.bleAddress
         if (addr != null && BluetoothAdapter.checkBluetoothAddress(addr) && matches(store.bleName)) {
             _info.value = ConnectionInfo(ConnState.CONNECTING, "Conectando no adaptador ${store.bleName}...")
@@ -266,7 +294,7 @@ class BluetoothObdSource(
 
         _info.value = ConnectionInfo(ConnState.CONNECTING, "Procurando o adaptador BLE...")
         val seen = mutableSetOf<String>()
-        val device = BleLink.find(adapter, ::matches, seen = seen)
+        val device = BleLink.find(adapter, ::matches, scanMs = scanMs, seen = seen)
         if (device == null) {
             log("BLE: a busca não achou o adaptador. Aparelhos BLE vistos: ${synchronized(seen) { seen.joinToString(", ") }.ifBlank { "nenhum" }}")
             return null
