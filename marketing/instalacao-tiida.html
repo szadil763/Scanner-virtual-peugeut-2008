@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Instalação do Monitor no Tiida</title>
+<style>
+  :root { --ink:#13202D; --dim:#55677A; --line:#D6DFE8; --accent:#0369A1; --soft:#EEF6FC; --warn:#B45309; --warnbg:#FFF7E6; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:#fff; color:var(--ink); font-family:Roboto, "Segoe UI", Arial, sans-serif; font-size:16px; line-height:1.5; }
+  main { max-width:760px; margin:0 auto; padding:28px 20px 40px; }
+  h1 { font-size:28px; line-height:1.15; margin:0 0 6px; }
+  .sub { color:var(--dim); margin:0 0 22px; }
+  h2 { font-size:20px; margin:28px 0 10px; display:flex; align-items:center; gap:10px; break-after:avoid; }
+  h2 .n { flex:none; width:32px; height:32px; border-radius:50%; background:var(--accent); color:#fff; font-size:17px; display:inline-flex; align-items:center; justify-content:center; }
+  ol, ul { margin:0; padding-left:22px; }
+  li { margin-bottom:8px; }
+  .box { border:1px solid var(--line); border-radius:12px; padding:14px 16px; margin:10px 0; break-inside:avoid; }
+  .link { background:var(--soft); border-color:#BAE0F7; }
+  .link b { display:block; margin-bottom:4px; }
+  .link a { text-decoration:none; }
+  .link code { font-size:13.5px; word-break:break-all; color:var(--accent); }
+  .warn { background:var(--warnbg); border-color:#F5D9A8; }
+  .warn b { color:var(--warn); }
+  .two { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+  @media (max-width:600px) { .two { grid-template-columns:1fr; } }
+  .foot { margin-top:30px; padding-top:14px; border-top:1px solid var(--line); color:var(--dim); font-size:14px; }
+  @media print { main { padding:0; } h2 { margin-top:20px; } }
+</style>
+</head>
+<body>
+<main>
+  <h1>Monitor do Carro no Nissan Tiida 1.8</h1>
+  <p class="sub">Passo a passo para instalar o app e ligar o adaptador OBD2. Leva uns 10 minutos, com o carro parado.</p>
+
+  <h2><span class="n">1</span> O que você precisa</h2>
+  <ul>
+    <li><b>Adaptador OBD2 Bluetooth</b> (o mesmo modelo do Adilson, que aparece como "OBDBLE").</li>
+    <li><b>Celular Android</b> (Android 8 ou mais novo) <b>ou multimídia Android</b> no carro.</li>
+    <li>Internet no aparelho, só para baixar o app.</li>
+  </ul>
+
+  <h2><span class="n">2</span> Ligar o adaptador no carro</h2>
+  <ol>
+    <li>Encontre a <b>tomada de diagnóstico (OBD2)</b>: no Tiida fica <b>embaixo do painel, do lado do motorista</b>, perto da coluna do volante. É um conector de 16 pinos, em forma de trapézio.</li>
+    <li>Encaixe o adaptador até o fim. A luz dele acende.</li>
+    <li><b>Não precisa parear</b> o adaptador no Bluetooth do celular: o app encontra sozinho.</li>
+  </ol>
+
+  <h2><span class="n">3</span> Baixar e instalar o app</h2>
+  <p>Abra o link no <b>navegador</b> (Chrome) do aparelho onde o app vai ficar:</p>
+  <div class="two">
+    <div class="box link"><b>No celular</b><a href="https://github.com/szadil763/Scanner-virtual-peugeut-2008/releases/download/latest/monitor-2008-celular.apk"><code>https://github.com/szadil763/Scanner-virtual-peugeut-2008/releases/download/latest/monitor-2008-celular.apk</code></a></div>
+    <div class="box link"><b>No multimídia do carro</b><a href="https://github.com/szadil763/Scanner-virtual-peugeut-2008/releases/download/latest/monitor-2008.apk"><code>https://github.com/szadil763/Scanner-virtual-peugeut-2008/releases/download/latest/monitor-2008.apk</code></a></div>
+  </div>
+  <ol>
+    <li>Toque no arquivo baixado (<b>monitor-2008...apk</b>) e em <b>Instalar</b>.</li>
+    <li>Se o Android pedir, toque em <b>Configurações</b> e ligue <b>"Permitir desta fonte"</b>; depois volte e toque em Instalar.</li>
+    <li>Se aparecer um aviso do <b>Play Protect</b>, toque em <b>"Instalar mesmo assim"</b>.</li>
+  </ol>
+  <div class="box warn"><b>Atenção:</b> no celular, use o link "No celular". O arquivo do multimídia é bloqueado pelo Play Protect no celular.</div>
+
+  <h2><span class="n">4</span> Primeira abertura</h2>
+  <ol>
+    <li>Abra o <b>Monitor 2008</b> (ícone azul com um mostrador).</li>
+    <li>Aceite as permissões que aparecerem: <b>Dispositivos por perto / Bluetooth</b> (obrigatória) e <b>Notificações</b>. A <b>Localização</b> é pedida no primeiro abastecimento, para registrar o posto.</li>
+    <li>Em <b>"Qual é este carro?"</b>, toque em <b>Nissan Tiida 1.8 16V flex</b>.</li>
+    <li>Vá em <b>Ajustes</b> e desligue os <b>dados simulados</b> (a chave deve mostrar "Usando o adaptador Bluetooth"). Deixe o adaptador em <b>"Detectar sozinho"</b>.</li>
+  </ol>
+
+  <h2><span class="n">5</span> Primeiro teste</h2>
+  <ol>
+    <li>Com o <b>Bluetooth do aparelho ligado</b>, ligue o motor.</li>
+    <li>Em alguns segundos, o <b>Painel</b> mostra rotação, velocidade e temperatura.</li>
+    <li>Abra a aba <b>Diagnóstico</b> e tire um <b>print</b> da parte "Dados que o carro declarou suportar". Mande para o Adilson: com ele dá para ajustar o app ao Tiida.</li>
+  </ol>
+
+  <h2><span class="n">6</span> Só no celular: conectar sozinho</h2>
+  <ol>
+    <li>Com a ignição ligada, vá em <b>Ajustes &gt; Conectar sozinho ao ligar o carro</b> e toque em <b>Ativar conexão automática</b>.</li>
+    <li>Escolha o adaptador <b>OBDBLE</b> na lista e confirme.</li>
+    <li>Pronto: ao ligar o carro, o app grava a viagem sozinho, mesmo fechado (precisa do Bluetooth ligado). Funciona no Android 12 ou mais novo.</li>
+  </ol>
+
+  <h2><span class="n">7</span> Primeiros ajustes (com o carro parado)</h2>
+  <ul>
+    <li><b>Manutenção &gt; Informar km:</b> digite o km do painel do carro. Os prazos de óleo e revisão passam a usar o hodômetro real.</li>
+    <li><b>Manutenção:</b> informe a data da última troca de óleo e dos outros itens.</li>
+    <li><b>Ajustes:</b> escolha o combustível do tanque e o preço do litro.</li>
+    <li><b>Consumo &gt; Registrar abastecimento:</b> registre sempre que abastecer, de preferência com <b>tanque cheio</b>. Dois tanques cheios seguidos calibram o consumo.</li>
+  </ul>
+
+  <h2><span class="n">8</span> Atualizações</h2>
+  <p>O app avisa sozinho quando sai versão nova. Também dá para conferir em <b>Ajustes &gt; Atualização do app &gt; Procurar atualização</b>: toque em <b>Baixar</b> e depois em <b>Instalar</b>. Os dados continuam. Se o download falhar, use o botão <b>"Baixar pelo navegador"</b>.</p>
+
+  <h2><span class="n">9</span> Se não funcionar</h2>
+  <ul>
+    <li><b>Não conecta:</b> confira o Bluetooth ligado, a ignição ligada e a permissão de "Dispositivos por perto". Em Diagnóstico, toque em <b>Reconectar</b>.</li>
+    <li><b>Continua sem dados:</b> em Diagnóstico, toque em <b>Copiar registro</b> e mande para o Adilson, junto com um print da tela.</li>
+  </ul>
+
+  <div class="box warn"><b>Cuidados:</b> o app não pede digitação com o carro andando. Se o carro for ficar <b>parado mais de 7 dias</b>, tire o adaptador da tomada: ele consome um pouco da bateria. O app só lê informações; não altera nada na central do carro.</div>
+
+  <p class="foot">Monitor do Carro · dúvidas: fale com o Adilson.</p>
+</main>
+</body>
+</html>
