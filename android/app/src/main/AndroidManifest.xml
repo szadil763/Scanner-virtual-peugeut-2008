@@ -23,6 +23,11 @@
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     <!-- Botão "Atualizar": abre a instalação do APK novo baixado do GitHub (o usuário confirma). -->
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+    <!-- Conexão automática no celular: o Android avisa quando o adaptador aparece (data/AutoConnect). -->
+    <uses-permission android:name="android.permission.REQUEST_OBSERVE_COMPANION_DEVICE_PRESENCE" />
+    <uses-permission android:name="android.permission.REQUEST_COMPANION_RUN_IN_BACKGROUND" />
+    <uses-permission android:name="android.permission.REQUEST_COMPANION_START_FOREGROUND_SERVICES_FROM_BACKGROUND" />
+    <uses-feature android:name="android.software.companion_device_setup" android:required="false" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
     <uses-feature android:name="android.hardware.bluetooth" android:required="false" />
@@ -83,6 +88,15 @@
             android:exported="false"
             android:foregroundServiceType="connectedDevice" />
 
+
+        <service
+            android:name=".data.AdapterPresenceService"
+            android:exported="true"
+            android:permission="android.permission.BIND_COMPANION_DEVICE_SERVICE">
+            <intent-filter>
+                <action android:name="android.companion.CompanionDeviceService" />
+            </intent-filter>
+        </service>
 
         <provider
             android:name="androidx.core.content.FileProvider"

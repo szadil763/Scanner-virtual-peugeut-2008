@@ -27,6 +27,7 @@ const PID = {
   0x10: (d) => (256 * d[0] + d[1]) / 100,
   0x11: (d) => (d[0] * 100) / 255,
   0x2f: (d) => (d[0] * 100) / 255,
+  0x31: (d) => 256 * d[0] + d[1],
   0x42: (d) => (256 * d[0] + d[1]) / 1000,
   0x5e: (d) => (256 * d[0] + d[1]) / 20,
 };
@@ -59,7 +60,7 @@ function payloads(raw, prefix, size) {
   return out;
 }
 const payload = (raw, prefix) => payloads(raw, prefix)[0] ?? null;
-const BYTES = { 0x06: 1, 0x07: 1, 0x0e: 1, 0x14: 2, 0x15: 2, 0x04: 1, 0x05: 1, 0x0b: 1, 0x0c: 2, 0x0d: 1, 0x0f: 1, 0x10: 2, 0x11: 1, 0x2f: 1, 0x42: 2, 0x5e: 2 };
+const BYTES = { 0x06: 1, 0x07: 1, 0x0e: 1, 0x14: 2, 0x15: 2, 0x04: 1, 0x05: 1, 0x0b: 1, 0x0c: 2, 0x0d: 1, 0x0f: 1, 0x10: 2, 0x11: 1, 0x2f: 1, 0x31: 2, 0x42: 2, 0x5e: 2 };
 const hex2 = (n) => n.toString(16).toUpperCase().padStart(2, '0');
 const parse = (pid, raw) => {
   const b = payloads(raw, '41' + hex2(pid), BYTES[pid])[0];
@@ -72,6 +73,7 @@ near(parse(0x05, 'SEARCHING...\r41 05 7B\r\r>'), 83, 1e-9, 'Temp. motor com SEAR
 near(parse(0x10, '41 10 01 F4'), 5.0, 1e-9, 'MAF 41 10 01 F4');
 near(parse(0x42, '41 42 38 A4'), 14.5, 1e-9, 'Bateria 41 42 38 A4');
 near(parse(0x2f, '41 2F 80'), 50.196078, 1e-5, 'Nível combustível 41 2F 80');
+near(parse(0x31, '41 31 01 2C'), 300, 1e-9, 'Distância desde que as falhas foram apagadas 41 31 01 2C');
 near(parse(0x5e, '41 5E 00 C8'), 10.0, 1e-9, 'Taxa combustível 41 5E 00 C8');
 near(parse(0x0c, '410C1AF8'), 1726, 1e-9, 'RPM sem espaços');
 assert.strictEqual(parse(0x0c, 'NO DATA\r\r>'), null); ok++; console.log('ok  NO DATA -> null');

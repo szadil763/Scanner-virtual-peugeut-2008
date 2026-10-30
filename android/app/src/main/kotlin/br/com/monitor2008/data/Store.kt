@@ -113,6 +113,11 @@ class Store(context: Context) {
     }
 
     /** Último adaptador BLE que conectou: o app conecta direto nele, sem precisar procurar. */
+    /** Adaptador associado para a conexão automática (data/AutoConnect); null = desligada. */
+    var autoConnectAddress: String?
+        get() = p.getString("autoConnectAddress", null)
+        set(v) { p.edit().putString("autoConnectAddress", v).apply() }
+
     var bleAddress: String?
         get() = p.getString("bleAddress", null)
         set(v) { p.edit().putString("bleAddress", v).apply() }
@@ -151,6 +156,25 @@ class Store(context: Context) {
     var updateCheckedMs: Long
         get() = p.getLong("updateCheckedMs", 0L)
         set(v) { p.edit().putLong("updateCheckedMs", v).apply() }
+
+    // Km rodados sem o app (domain/MissedDistance): última leitura do contador da central (PID 31)
+    // e o hodômetro do app naquele momento.
+    val distCounterKm: Double? get() = p.getString("distCounterKm", null)?.toDoubleOrNull()
+    val distCounterAppKm: Double? get() = p.getString("distCounterAppKm", null)?.toDoubleOrNull()
+
+    fun saveDistCounter(counterKm: Double, appKm: Double) {
+        p.edit().putString("distCounterKm", counterKm.toString()).putString("distCounterAppKm", appKm.toString()).apply()
+    }
+
+    /** O tanque atual teve km rodados sem o app: o consumo dele não entra na calibração nem na nota do posto. */
+    var tankIncomplete: Boolean
+        get() = p.getBoolean("tankIncomplete", false)
+        set(v) { p.edit().putBoolean("tankIncomplete", v).apply() }
+
+    /** Aviso de km rodados sem o app, até o usuário tocar em OK. */
+    var missedNotice: String?
+        get() = p.getString("missedNotice", null)
+        set(v) { p.edit().putString("missedNotice", v).apply() }
 
     /** Aba Mídias: "MUSICA" ou "RADIO" ao lado dos números do Painel. */
     var mediaMode: String

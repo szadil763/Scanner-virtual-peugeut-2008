@@ -38,6 +38,7 @@ import br.com.monitor2008.domain.Report
 import br.com.monitor2008.domain.ReportInput
 import br.com.monitor2008.domain.Tip
 import br.com.monitor2008.domain.TripAccumulator
+import br.com.monitor2008.domain.MissedDistance
 import br.com.monitor2008.domain.TripHealth
 import br.com.monitor2008.domain.Vehicle
 import br.com.monitor2008.domain.Vehicles
@@ -85,6 +86,8 @@ data class UiState(
     val tripsRecorded: Int = 0,
     val maint: List<MaintRow> = emptyList(),
     val pipOnLeave: Boolean = false,
+    /** Aviso de km rodados sem o app conectado (até tocar em OK). */
+    val missedNotice: String? = null,
     /** Perfil do carro; null = ainda não escolhido (a tela pede na primeira abertura). */
     val vehicle: Vehicle? = null,
     val stations: List<Station> = emptyList(),
@@ -157,6 +160,7 @@ class MonitorEngine private constructor(private val app: Application) {
         healthStore.takePending()?.let { (saved + it).takeLast(400).also(healthStore::save) } ?: saved
     }
     private var lastHealthMs = 0L
+    private var lastDistCounter: Double? = null
     private var lastPendingMs = 0L
     private var recorder = HealthRecorder()
     private var tripDtcsRead = false
@@ -175,7 +179,7 @@ class MonitorEngine private constructor(private val app: Application) {
     fun start() {
         closeTrip()
         sourceJob?.cancel(); infoJob?.cancel()
-        simTrip.reset(); history.clear(); speedHistory.clear(); lastTimeMs = 0L
+        simTrip.reset(); history.clear(); speedHistory.clear(); lastTimeMs = 0L; lastDistCounter = null
         lastSample = null; lastKmPerL = null; lastLph = null; lastMethod = null; dtcs = null; pendingDtcs = null
 
         val src: ObdSource = if (store.useSimulated) {
@@ -228,7 +232,11 @@ class MonitorEngine private constructor(private val app: Application) {
             if (speedHistory.size > SPEED_POINTS) speedHistory.removeFirst()
         }
 
-        if (!store.useSimulated) recordHealth(s, dt)
+        if (!store.useSimulated) {
+            recordHealth(s, dt)
+            // O contador anda de 1 em 1 km: confere só quando muda (e na primeira leitura de cada conexão).
+            s.distSinceClearKm?.let { if (it != lastDistCounter) { lastDistCounter = it; checkMissedDistance(it) } }
+        }
 
         if (s.timeMs - lastSaveMs > 20_000) {
             saveNow()
@@ -236,6 +244,26 @@ class MonitorEngine private constructor(private val app: Application) {
         }
         publish()
     }
+
+    /**
+     * Compara o contador de km da central com o que o app viu desde a última leitura: a diferença
+     * são km rodados sem o app conectado. Acerta o hodômetro (manutenção e prazos) e tira o tanque
+     * atual da calibração e da nota do posto, porque faltam os litros dessa parte.
+     */
+    private fun checkMissedDistance(counterKm: Double) {
+        val missed = MissedDistance.missedKm(store.distCounterKm, store.distCounterAppKm, counterKm, odometerKm)
+        if (missed != null) {
+            odometerKm += missed
+            store.tankIncomplete = true
+            val total = Math.round(missed + (store.missedNotice?.let { Regex("""^(\d+)""").find(it)?.value?.toDoubleOrNull() } ?: 0.0))
+            store.missedNotice = "$total km rodados sem o app conectado. O hodômetro e os prazos de manutenção foram " +
+                "ajustados; o consumo deste tanque não entra na calibração nem na nota do posto."
+            saveNow()
+        }
+        store.saveDistCounter(counterKm, odometerKm)
+    }
+
+    fun dismissMissedNotice() { store.missedNotice = null; publish() }
 
     /** Alimenta a viagem da tela Saúde. Simulação não grava (não pode sujar o histórico do carro). */
     private fun recordHealth(s: Sample, dt: Double) {
@@ -377,14 +405,17 @@ class MonitorEngine private constructor(private val app: Application) {
     fun registerRefuel(liters: Double, price: Double, full: Boolean, ethanol: Boolean = store.ethanolFraction >= 0.9, place: StationDraft? = null) {
         if (_ui.value.moving) return
         // Litros reais ÷ previstos do tanque que termina agora: só de cheio a cheio, sem parcial no meio.
-        val tankRatio = if (full && store.baselineValid && store.pendingRealLiters == 0.0 && uncalLiters > 1.0 && kmSinceFull > 20.0) {
+        // Tanque com km rodados sem o app: faltam litros na conta, então não mede nem calibra.
+        val incomplete = store.tankIncomplete
+        val tankRatio = if (full && !incomplete && store.baselineValid && store.pendingRealLiters == 0.0 && uncalLiters > 1.0 && kmSinceFull > 20.0) {
             liters / uncalLiters
         } else null
         val stationId = place?.let { saveStation(it) }
         // O combustível escolhido no abastecimento passa a valer no cálculo do consumo.
         if (ethanol) store.ethanolFraction = 0.95 else if (store.ethanolFraction >= 0.9) store.ethanolFraction = 0.32
         val before = RefuelState(
-            baselineValid = store.baselineValid,
+            // Tanque incompleto e cheio agora: recomeça a medição deste ponto, sem mexer na calibração.
+            baselineValid = store.baselineValid && !(incomplete && full),
             uncalLiters = uncalLiters,
             pendingRealLiters = store.pendingRealLiters,
             kmSinceFull = kmSinceFull,
@@ -397,6 +428,7 @@ class MonitorEngine private constructor(private val app: Application) {
         uncalLiters = result.state.uncalLiters
         kmSinceFull = result.state.kmSinceFull
         store.fuelPrice = price
+        if (full) store.tankIncomplete = false
         store.addRefuel(
             Refuel(
                 LocalDate.now().toEpochDay(), liters, price, full, odometerKm, result.realKmPerL,
@@ -561,6 +593,7 @@ class MonitorEngine private constructor(private val app: Application) {
                 )
             },
             pipOnLeave = store.pipOnLeave,
+            missedNotice = store.missedNotice,
             vehicle = Vehicles.byId(store.vehicleId),
             stations = stationList,
             stationRatings = stationRatings(),

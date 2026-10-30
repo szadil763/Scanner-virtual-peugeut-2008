@@ -167,7 +167,7 @@ class BluetoothObdSource(
         val fast = listOf(Pid.RPM, Pid.SPEED, Pid.FUEL_RATE, Pid.MAF, Pid.MAP, Pid.LOAD, Pid.O2_S1, Pid.STFT)
         val slow = listOf(
             Pid.COOLANT_TEMP, Pid.INTAKE_TEMP, Pid.MODULE_VOLTAGE, Pid.FUEL_LEVEL, Pid.THROTTLE,
-            Pid.LTFT, Pid.TIMING, Pid.O2_S2, Pid.MONITOR_STATUS,
+            Pid.LTFT, Pid.TIMING, Pid.O2_S2, Pid.MONITOR_STATUS, Pid.DIST_SINCE_CLEAR,
         )
         val wanted = if (cycle % 10 == 0) fast + slow else fast
         // Se o filtro esvaziar a lista (máscara mal lida), consulta tudo: o que não existir volta NO DATA.
@@ -194,6 +194,7 @@ class BluetoothObdSource(
         o2s2V = v[Pid.O2_S2],
         milOn = v[Pid.MONITOR_STATUS]?.let { (it.toInt() and 0x80) != 0 },
         dtcCount = v[Pid.MONITOR_STATUS]?.let { it.toInt() and 0x7F },
+        distSinceClearKm = v[Pid.DIST_SINCE_CLEAR],
     )
 
     private fun fail(msg: String): Elm327Client? {

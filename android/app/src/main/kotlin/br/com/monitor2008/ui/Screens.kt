@@ -10,6 +10,7 @@ import android.content.Intent
 import android.widget.Toast
 import android.provider.Settings
 import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.IntentSenderRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Arrangement
@@ -79,6 +80,7 @@ import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import br.com.monitor2008.data.AppChoice
 import br.com.monitor2008.data.AppLauncher
+import br.com.monitor2008.data.AutoConnect
 import br.com.monitor2008.data.BtPermissions
 import br.com.monitor2008.data.Features
 import br.com.monitor2008.data.MediaWatcher
@@ -153,6 +155,7 @@ fun MonitorApp(vm: MonitorEngine) {
             // Margem maior à direita: a moldura do multimídia cobre a borda direita da tela (fotos da 0.1.15).
             Column(Modifier.fillMaxSize().padding(start = if (compact) 10.dp else 16.dp, top = 10.dp, bottom = 10.dp, end = 32.dp)) {
                 UpdateBanner(ui.moving)
+                ui.missedNotice?.let { MissedBanner(it) { vm.dismissMissedNotice() } }
                 Box(Modifier.fillMaxWidth().weight(1f)) { TabContent(tab, ui, vm, compact, phone = false) }
                 // Mapa, música e mini player em todas as abas (sem o mini player onde o player grande já aparece).
                 Spacer(Modifier.height(8.dp))
@@ -188,6 +191,7 @@ private fun PhoneLayout(ui: UiState, vm: MonitorEngine, tab: Tab, onTab: (Tab) -
     Column(Modifier.fillMaxSize()) {
         Column(Modifier.fillMaxWidth().weight(1f).padding(horizontal = 12.dp, vertical = 10.dp)) {
             UpdateBanner(ui.moving)
+            ui.missedNotice?.let { MissedBanner(it) { vm.dismissMissedNotice() } }
             Box(Modifier.fillMaxWidth().weight(1f)) { TabContent(tab, ui, vm, compact = true, phone = true) }
         }
         NavigationBar {
@@ -215,6 +219,18 @@ private fun PhoneLayout(ui: UiState, vm: MonitorEngine, tab: Tab, onTab: (Tab) -
                 },
                 label = { Text(if (inMore) tab.label else "Mais", fontSize = 14.sp, maxLines = 1) }, alwaysShowLabel = true,
             )
+        }
+    }
+}
+
+/** Aviso de km rodados sem o app conectado (domain/MissedDistance). */
+@Composable
+private fun MissedBanner(text: String, onOk: () -> Unit) {
+    Card(Modifier.fillMaxWidth().padding(bottom = 8.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
+        Row(Modifier.padding(horizontal = 14.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            Text(text, fontSize = 15.sp, color = Warn, modifier = Modifier.weight(1f))
+            OutlinedButton(onOk, Modifier.height(56.dp)) { Text("OK", fontSize = 17.sp) }
         }
     }
 }
@@ -1209,8 +1225,45 @@ private fun AjustesScreen(ui: UiState, vm: MonitorEngine) {
             Text(ui.conn.message, color = if (ui.conn.state == ConnState.ERROR) Warn else MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 16.sp)
         }
         AdapterPicker(ui, vm)
+        AutoConnectSection(ui.moving)
         MapMusicSettings()
     }
+}
+
+/**
+ * Conexão automática (celular): o adaptador vira dispositivo companheiro e o Android liga a leitura
+ * quando ele aparece, com o app fechado. Só aparece onde o Android oferece o recurso (12 ou mais novo).
+ */
+@Composable
+private fun AutoConnectSection(moving: Boolean) {
+    val ctx = LocalContext.current
+    if (!AutoConnect.supported(ctx)) return
+    var address by remember { mutableStateOf(AutoConnect.activeAddress(ctx)) }
+    var message by remember { mutableStateOf<String?>(null) }
+    val chooser = rememberLauncherForActivityResult(ActivityResultContracts.StartIntentSenderForResult()) { r ->
+        if (r.resultCode == Activity.RESULT_OK) {
+            address = AutoConnect.onChosen(ctx, r.data)
+            message = if (address == null) "Não foi possível ativar. Tente de novo." else null
+        }
+    }
+    Text("Conectar sozinho ao ligar o carro", fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
+    Text("Para o celular: o Android avisa o app quando o adaptador fica ao alcance, mesmo com o app fechado, e a viagem " +
+        "é gravada sem abrir nada. Precisa do Bluetooth do celular ligado. No multimídia não é necessário.",
+        color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 15.sp)
+    if (address != null) {
+        Text("Ativa para o adaptador $address.", color = OkGreen, fontSize = 16.sp)
+        OutlinedButton({ AutoConnect.disable(ctx); address = null }, Modifier.height(56.dp), enabled = !moving) {
+            Text("Desativar", fontSize = 18.sp)
+        }
+    } else {
+        Button({
+            message = "Procurando o adaptador (ignição ligada)..."
+            AutoConnect.associate(ctx,
+                onChooser = { chooser.launch(IntentSenderRequest.Builder(it).build()); message = null },
+                onError = { message = it })
+        }, Modifier.height(56.dp), enabled = !moving) { Text("Ativar conexão automática", fontSize = 18.sp) }
+    }
+    message?.let { Text(it, color = Warn, fontSize = 15.sp) }
 }
 
 /** Lista os aparelhos pareados para tocar no adaptador, em vez de digitar o nome. */

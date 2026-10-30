@@ -23,6 +23,8 @@ data class Sample(
     val milOn: Boolean? = null,
     /** Quantidade de falhas armazenadas que a central informa (PID 01). */
     val dtcCount: Int? = null,
+    /** Contador da central: km desde que as falhas foram apagadas (PID 31). Lido de tempos em tempos. */
+    val distSinceClearKm: Double? = null,
 )
 
 enum class ConnState { IDLE, CONNECTING, CONNECTED, ERROR }

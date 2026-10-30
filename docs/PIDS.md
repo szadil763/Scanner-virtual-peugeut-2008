@@ -19,6 +19,7 @@ Resultado do primeiro teste no carro (28/10/2026, adaptador ELM327 v2.1 por BLE,
 | 14 | Sonda lambda antes do catalisador | A / 200 | V | Sim |
 | 15 | Sonda lambda depois do catalisador | A / 200 | V | Sim |
 | 2F | Nível de combustível | A × 100 / 255 | % | **Não** |
+| 31 | Distância desde que as falhas foram apagadas | 256 A + B | km | A confirmar (usado para achar km rodados sem o app, `domain/MissedDistance`) |
 | 42 | Tensão do módulo (bateria) | (256 A + B) / 1000 | V | **Não** (app usa ATRV) |
 | 46 | Temperatura ambiente | A − 40 | °C | **Não** |
 | 5C | Temperatura do óleo | A − 40 | °C | Não |

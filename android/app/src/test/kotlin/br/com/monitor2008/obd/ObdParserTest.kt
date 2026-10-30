@@ -19,6 +19,7 @@ class ObdParserTest {
     @Test fun battery() = assertEquals(14.5, ObdParser.parse(Pid.MODULE_VOLTAGE, "41 42 38 A4")!!, 1e-9)
 
     @Test fun fuelLevel() = assertEquals(50.196078, ObdParser.parse(Pid.FUEL_LEVEL, "41 2F 80")!!, 1e-5)
+    @Test fun distanceSinceClear() = assertEquals(300.0, ObdParser.parse(Pid.DIST_SINCE_CLEAR, "41 31 01 2C")!!, 1e-9)
 
     @Test fun fuelRate() = assertEquals(10.0, ObdParser.parse(Pid.FUEL_RATE, "41 5E 00 C8")!!, 1e-9)
 

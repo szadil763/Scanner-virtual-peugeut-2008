@@ -64,4 +64,6 @@ Também: hodômetro real (o dono informa o km do painel uma vez; `Store.odoOffse
 
 **Dois APKs** (`productFlavors` `multimidia` e `celular`, `data/Features`): o do celular não tem o acesso a notificações, porque o Play Protect bloqueia no celular apps de fora da loja que pedem esse acesso. Ícone próprio (mostrador, `res/drawable/ic_launcher_foreground.xml`).
 
+**Viagem sem o app** (`domain/MissedDistance`, com testes): o adaptador e a central não guardam a viagem. O app lê o PID 31 (km desde que as falhas foram apagadas, se o carro declarar) e, se o contador andou mais que o app viu, acerta o hodômetro, tira o tanque da calibração e da nota do posto (`Store.tankIncomplete`) e mostra um aviso. **Conexão automática no celular** (`data/AutoConnect`, `AdapterPresenceService`, Android 12+): o adaptador vira dispositivo companheiro e o Android liga a leitura quando ele aparece, com o app fechado (Ajustes).
+
 Pendências conhecidas: registro de falhas com foto dos dados (freeze frame, modo 02), previsões por tendência (etapa 3 da Saúde), outros modelos além dos perfis (irmão e cunhado do dono, depois comercializar).

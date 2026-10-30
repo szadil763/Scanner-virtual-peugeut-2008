@@ -512,7 +512,7 @@ document.querySelectorAll('[data-ve]').forEach((b) => b.addEventListener('click'
 // ---------- diagnóstico ----------
 const PIDS = [
   ['Rotação', 1], ['Velocidade', 1], ['Temp. do motor', 1], ['Pressão do coletor (MAP)', 1], ['Fluxo de ar (MAF)', 0],
-  ['Nível de combustível', 1], ['Tensão da bateria', 1], ['Taxa de combustível (L/h)', 0], ['Temp. do óleo', 0],
+  ['Nível de combustível', 1], ['Distância desde que as falhas foram apagadas (km)', 1], ['Tensão da bateria', 1], ['Taxa de combustível (L/h)', 0], ['Temp. do óleo', 0],
 ];
 $('pidTable').innerHTML = PIDS.map(([n, s]) =>
   `<tr><td>${n}</td><td class="r"><span class="pill ${s ? 'ok' : 'off'}">${s ? 'Responde' : 'Sem dado'}</span></td></tr>`).join('');

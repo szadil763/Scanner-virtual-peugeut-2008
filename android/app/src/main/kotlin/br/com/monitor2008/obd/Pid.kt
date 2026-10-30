@@ -27,6 +27,8 @@ enum class Pid(
     THROTTLE(0x11, "Acelerador", "%", 1, { it[0] * 100.0 / 255.0 }),
     O2_S1(0x14, "Sonda lambda antes do catalisador", "V", 2, { it[0] / 200.0 }),
     O2_S2(0x15, "Sonda lambda depois do catalisador", "V", 2, { it[0] / 200.0 }),
+    /** Contador da central: km desde que as falhas foram apagadas. Mostra os km rodados sem o app conectado. */
+    DIST_SINCE_CLEAR(0x31, "Distância desde que as falhas foram apagadas", "km", 2, { 256.0 * it[0] + it[1] }),
     FUEL_LEVEL(0x2F, "Nível de combustível", "%", 1, { it[0] * 100.0 / 255.0 }),
     MODULE_VOLTAGE(0x42, "Bateria", "V", 2, { (256.0 * it[0] + it[1]) / 1000.0 }),
     AMBIENT_TEMP(0x46, "Temp. ambiente", "°C", 1, { it[0] - 40.0 }),
