@@ -1,6 +1,8 @@
 package br.com.monitor2008.ui
 
 import android.app.Application
+import android.content.Intent
+import android.net.Uri
 import android.widget.Toast
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -80,6 +82,24 @@ private fun UpdateAction(state: UpdateState, moving: Boolean, compact: Boolean =
 internal fun UpdateBanner(moving: Boolean) {
     val updater = rememberUpdater()
     val state by updater.state.collectAsStateWithLifecycle()
+    val failed = state as? UpdateState.Failed
+    if (failed?.browserUrl != null) {
+        val ctx = LocalContext.current
+        Card(Modifier.fillMaxWidth().padding(bottom = 8.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
+            Row(Modifier.padding(horizontal = 14.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text(failed.message, fontSize = 15.sp, color = Warn, modifier = Modifier.weight(1f))
+                OutlinedButton({
+                    try {
+                        ctx.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(failed.browserUrl)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                    } catch (e: Exception) {
+                        Toast.makeText(ctx, "Nenhum navegador encontrado.", Toast.LENGTH_LONG).show()
+                    }
+                }, Modifier.height(56.dp), enabled = !moving) { Text("Baixar pelo navegador", fontSize = 16.sp) }
+            }
+        }
+        return
+    }
     val v = when (val s = state) {
         is UpdateState.Available -> s.version
         is UpdateState.Ready -> s.version
@@ -143,7 +163,18 @@ internal fun UpdateSection(moving: Boolean) {
             "Versão ${s.version.versionName} baixada. Toque em Instalar e confirme na tela do Android; os dados do app continuam.",
             fontSize = 16.sp,
         )
-        is UpdateState.Failed -> Text(s.message, color = Warn, fontSize = 16.sp)
+        is UpdateState.Failed -> {
+            Text(s.message, color = Warn, fontSize = 16.sp)
+            s.browserUrl?.let { url ->
+                OutlinedButton({
+                    try {
+                        ctx.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                    } catch (e: Exception) {
+                        Toast.makeText(ctx, "Nenhum navegador encontrado.", Toast.LENGTH_LONG).show()
+                    }
+                }, Modifier.height(60.dp), enabled = !moving) { Text("Baixar pelo navegador", fontSize = 18.sp) }
+            }
+        }
     }
     UpdateAction(state, moving)
     if (moving && (state is UpdateState.Available || state is UpdateState.Ready)) Text("Pare o carro para atualizar.", color = Warn)

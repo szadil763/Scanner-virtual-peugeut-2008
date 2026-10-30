@@ -31,7 +31,8 @@ sealed class UpdateState {
     data class Downloading(val version: RemoteVersion, val progress: Float) : UpdateState()
     /** Baixado: falta o dono tocar em "Instalar" na tela do Android. */
     data class Ready(val version: RemoteVersion, val file: File) : UpdateState()
-    data class Failed(val message: String) : UpdateState()
+    /** [browserUrl]: quando o download pelo app falhou, o mesmo APK para baixar pelo navegador. */
+    data class Failed(val message: String, val browserUrl: String? = null) : UpdateState()
 }
 
 /**
@@ -115,14 +116,8 @@ class Updater private constructor(private val app: Application) {
                     val dir = File(app.cacheDir, "updates").apply { mkdirs() }
                     dir.listFiles()?.forEach { it.delete() }
                     val out = File(dir, "monitor-${v.versionCode}.apk")
-                    // O link do GitHub redireciona para outro servidor (https para https: o Java segue sozinho).
-                    val c = URL(v.apkUrl).openConnection() as HttpURLConnection
-                    c.connectTimeout = 15_000
-                    c.readTimeout = 30_000
-                    c.instanceFollowRedirects = true
-                    c.setRequestProperty("User-Agent", "Monitor2008")
+                    val c = openFollowingRedirects(v.apkUrl)
                     try {
-                        if (c.responseCode != 200) throw IllegalStateException("HTTP ${c.responseCode}")
                         val total = c.contentLengthLong
                         var done = 0L
                         var lastShown = 0f
@@ -150,9 +145,41 @@ class Updater private constructor(private val app: Application) {
                 }
                 _state.value = UpdateState.Ready(v, file)
             } catch (e: Exception) {
-                _state.value = UpdateState.Failed("O download não terminou. Confira a internet e tente de novo.")
+                _state.value = UpdateState.Failed(
+                    "O download não terminou (${e.message ?: e.javaClass.simpleName}). Tente de novo ou baixe pelo navegador.",
+                    browserUrl = v.apkUrl,
+                )
             }
         }
+    }
+
+    /**
+     * O link do GitHub redireciona para o servidor de arquivos (outro endereço, com link assinado).
+     * Segue os redirecionamentos um a um, em vez de confiar no HttpURLConnection do aparelho.
+     */
+    private fun openFollowingRedirects(start: String): HttpURLConnection {
+        var url = start
+        repeat(6) {
+            val c = URL(url).openConnection() as HttpURLConnection
+            c.connectTimeout = 15_000
+            c.readTimeout = 30_000
+            c.instanceFollowRedirects = false
+            c.setRequestProperty("User-Agent", "Monitor2008")
+            c.setRequestProperty("Accept", "application/octet-stream")
+            when (val code = c.responseCode) {
+                200 -> return c
+                301, 302, 303, 307, 308 -> {
+                    val next = c.getHeaderField("Location") ?: throw IllegalStateException("redirecionamento sem endereço")
+                    c.disconnect()
+                    url = URL(URL(url), next).toString()
+                }
+                else -> {
+                    c.disconnect()
+                    throw IllegalStateException("HTTP $code")
+                }
+            }
+        }
+        throw IllegalStateException("redirecionamentos demais")
     }
 
     /** O Android só deixa abrir a instalação se o usuário liberou "instalar apps desconhecidos" para o Monitor. */
