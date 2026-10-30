@@ -119,6 +119,11 @@ class Store(context: Context) {
         get() = p.getString("autoConnectAddress", null)
         set(v) { p.edit().putString("autoConnectAddress", v).apply() }
 
+    /** O adaptador já conectou pelo Bluetooth clássico neste aparelho: tenta o clássico antes do BLE. */
+    var classicWorks: Boolean
+        get() = p.getBoolean("classicWorks", false)
+        set(v) { p.edit().putBoolean("classicWorks", v).apply() }
+
     var bleAddress: String?
         get() = p.getString("bleAddress", null)
         set(v) { p.edit().putString("bleAddress", v).apply() }

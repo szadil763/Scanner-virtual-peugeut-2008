@@ -216,6 +216,16 @@ class BluetoothObdSource(
 
         val bonded = adapter.bondedDevices.toList().firstOrNull { matches(it.name) }
 
+        // Adaptador só clássico (ex.: ELM327 mini azul do C4) que já conectou antes: direto nele, sem a busca BLE.
+        if (bonded != null && store.classicWorks) {
+            log("Dispositivo: ${bonded.name} (${bonded.address})")
+            adapter.cancelDiscovery()
+            openClassic(bonded)?.let { s ->
+                socket = s
+                return Elm327Client(s.inputStream, s.outputStream, ::exchanged).also { client = it }
+            }
+        }
+
         // 1) BLE (por exemplo "OBDBLE"): não precisa parear nem de PIN. Busca mais curta se ainda há o clássico para tentar.
         val ble = try {
             connectBle(adapter, scanMs = if (bonded != null) 8_000 else 15_000)
@@ -233,32 +243,53 @@ class BluetoothObdSource(
             _info.value = ConnectionInfo(ConnState.CONNECTING, "Tentando o ${bonded.name} pelo Bluetooth clássico...")
             log("Dispositivo: ${bonded.name} (${bonded.address})")
             adapter.cancelDiscovery()
-            val s = try {
-                bonded.createRfcommSocketToServiceRecord(SPP_UUID).also { connectWithTimeout(it) }
-            } catch (e: IOException) {
-                log("Conexão padrão falhou (${e.message}); tentando o canal 1")
-                // Alguns clones só aceitam o canal 1 direto (truque conhecido).
-                try {
-                    val m = bonded.javaClass.getMethod("createRfcommSocket", Int::class.javaPrimitiveType)
-                    (m.invoke(bonded, 1) as BluetoothSocket).also { connectWithTimeout(it) }
-                } catch (e2: Exception) {
-                    log("Clássico falhou: ${e2.message ?: e.message}")
-                    null
-                }
-            }
+            val s = openClassic(bonded)
             if (s != null) {
                 socket = s
                 return Elm327Client(s.inputStream, s.outputStream, ::exchanged).also { client = it }
             }
             return fail(
-                "Adaptador não conectou. Com a ignição ligada, se continuar assim: nas configurações de Bluetooth do " +
-                    "aparelho, esqueça (desparear) o ${bonded.name}. O app usa o OBDBLE sem parear, como no 2008. Tentando de novo...",
+                "O ${bonded.name} não respondeu. Confira a ignição ligada e se nenhum outro app (OBD do próprio multimídia, " +
+                    "celular) está conectado nele. Se for um adaptador duplo (OBDII e OBDBLE), esqueça o ${bonded.name} no " +
+                    "Bluetooth do aparelho para o app usar o OBDBLE. Tentando de novo...",
             )
         }
         return fail(
             "Adaptador não encontrado. Ligue a ignição. Se o Monitor estiver aberto em outro aparelho (celular), " +
                 "feche lá: o adaptador aceita uma conexão por vez. Tentando de novo...",
         )
+    }
+
+    /**
+     * Adaptadores clássicos baratos ("ELM327 mini", nome OBDII, endereço 01:23:45:67:89:BA como o do C4)
+     * nem sempre aceitam o jeito padrão. Tenta, nesta ordem: padrão (seguro), sem criptografia
+     * (insecure, o que mais funciona nesses clones) e direto no canal 1, nas duas formas.
+     */
+    private fun openClassic(device: BluetoothDevice): BluetoothSocket? {
+        val attempts: List<Pair<String, () -> BluetoothSocket>> = listOf(
+            "padrão" to { device.createRfcommSocketToServiceRecord(SPP_UUID) },
+            "sem criptografia" to { device.createInsecureRfcommSocketToServiceRecord(SPP_UUID) },
+            "canal 1" to {
+                device.javaClass.getMethod("createRfcommSocket", Int::class.javaPrimitiveType).invoke(device, 1) as BluetoothSocket
+            },
+            "canal 1 sem criptografia" to {
+                device.javaClass.getMethod("createInsecureRfcommSocket", Int::class.javaPrimitiveType).invoke(device, 1) as BluetoothSocket
+            },
+        )
+        for ((label, create) in attempts) {
+            _info.value = ConnectionInfo(ConnState.CONNECTING, "Conectando no ${device.name} pelo Bluetooth clássico ($label)...")
+            log("Clássico: tentando $label")
+            try {
+                val s = create()
+                connectWithTimeout(s)
+                log("Clássico: conectou ($label)")
+                store.classicWorks = true
+                return s
+            } catch (e: Exception) {
+                log("Clássico ($label) falhou: ${e.cause?.message ?: e.message ?: e.javaClass.simpleName}")
+            }
+        }
+        return null
     }
 
     /** O connect() do Bluetooth clássico pode travar meio minuto; fecha o socket se passar de 12 s. */
