@@ -1,0 +1,176 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Multimídias para o Monitor</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Roboto+Condensed:wght@700;800&family=Roboto:wght@400;500;700&display=swap">
+<style>
+*{box-sizing:border-box}
+body{margin:0}
+
+/* Guia de compra: faixas de preço em colunas (empilham no celular), tabela de requisitos e checklist de teste. */
+:root {
+  --bg:#F4F7FA; --panel:#FFFFFF; --line:#D6DFE8; --ink:#13202D; --dim:#55677A;
+  --accent:#0369A1; --good:#15803D; --warn:#B45309; --bad:#B91C1C; --pick:#E0F2FE;
+  --display:"Roboto Condensed", "Arial Narrow", Arial, sans-serif; --body:"Roboto", "Segoe UI", Arial, sans-serif;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg:#0B1118; --panel:#121B25; --line:#243244; --ink:#E8EEF5; --dim:#93A4B8;
+  --accent:#38BDF8; --good:#4ADE80; --warn:#FBBF24; --bad:#F87171; --pick:#0E2A3D; color-scheme:dark; } }
+:root[data-theme="dark"] {
+  --bg:#0B1118; --panel:#121B25; --line:#243244; --ink:#E8EEF5; --dim:#93A4B8;
+  --accent:#38BDF8; --good:#4ADE80; --warn:#FBBF24; --bad:#F87171; --pick:#0E2A3D; color-scheme:dark; }
+body { background:var(--bg); color:var(--ink); font-family:var(--body); font-size:16px; line-height:1.5;
+  padding-left:max(16px, env(safe-area-inset-left, 0px)); padding-right:max(16px, env(safe-area-inset-right, 0px)); padding-block:28px 40px; }
+main { max-width:1040px; margin:0 auto; display:flex; flex-direction:column; gap:34px; }
+h1, h2 { font-family:var(--display); letter-spacing:-.2px; text-wrap:balance; margin:0; }
+h1 { font-size:40px; line-height:1.05; }
+h2 { font-size:28px; margin-bottom:12px; }
+p { margin:0; max-width:68ch; }
+.lead { color:var(--dim); font-size:18px; margin-top:10px; }
+.kick { font-size:13px; font-weight:700; letter-spacing:1.8px; text-transform:uppercase; color:var(--accent); margin-bottom:8px; }
+
+.tiers { display:grid; grid-template-columns:repeat(3, minmax(0, 1fr)); gap:16px; }
+.tier { background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:20px; display:flex; flex-direction:column; gap:10px; min-width:0; }
+.tier.pick { background:var(--pick); border:2px solid var(--accent); }
+.price { font-family:var(--display); font-size:34px; font-weight:800; font-variant-numeric:tabular-nums; line-height:1; }
+.badge { align-self:flex-start; font-size:12px; font-weight:700; letter-spacing:1px; text-transform:uppercase; padding:4px 8px; border-radius:6px; background:var(--accent); color:var(--panel); }
+.tier h3 { margin:0; font-size:18px; }
+.tier ul { margin:0; padding-left:18px; }
+.tier li { margin-bottom:4px; }
+.app { border-top:1px solid var(--line); padding-top:10px; font-size:15px; }
+.app b { color:var(--good); }
+.tier .ex { font-size:14px; color:var(--dim); }
+.tier a { color:var(--accent); }
+
+.tbl { overflow-x:auto; background:var(--panel); border:1px solid var(--line); border-radius:14px; }
+table { width:100%; border-collapse:collapse; font-size:15px; min-width:560px; }
+th, td { text-align:left; padding:11px 14px; border-bottom:1px solid var(--line); vertical-align:top; }
+th { font-size:13px; text-transform:uppercase; letter-spacing:.8px; color:var(--dim); }
+tr:last-child td { border-bottom:0; }
+td:first-child { font-weight:700; white-space:nowrap; }
+
+.grid2 { display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)); gap:16px; }
+.box { background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:20px; min-width:0; }
+.box h3 { margin:0 0 10px; font-size:19px; }
+.box.no h3 { color:var(--bad); }
+.box ol, .box ul { margin:0; padding-left:20px; }
+.box li { margin-bottom:8px; }
+.note { font-size:14px; color:var(--dim); }
+.sources { font-size:14px; columns:2; column-gap:28px; padding-left:18px; margin:0; }
+.sources li { margin-bottom:6px; break-inside:avoid; }
+.sources a { color:var(--accent); overflow-wrap:anywhere; }
+a:focus-visible { outline:3px solid var(--accent); outline-offset:2px; }
+@media (max-width:820px) { .tiers, .grid2 { grid-template-columns:1fr; } .sources { columns:1; } h1 { font-size:32px; } }
+</style>
+</head>
+<body>
+
+
+<main>
+  <header>
+    <div class="kick">Monitor do Carro · guia de compra</div>
+    <h1>Multimídia para rodar o app, a partir de R$ 380</h1>
+    <p class="lead">O que comprar para ter o Monitor no painel do carro: três faixas de preço, o que o app precisa e como testar antes de pagar. Preços de anúncios vistos em outubro de 2026; confira o valor na hora da compra.</p>
+  </header>
+
+  <section aria-labelledby="faixas">
+    <h2 id="faixas">Faixas de preço</h2>
+    <div class="tiers">
+      <article class="tier">
+        <div class="price">R$ 380 a 500</div>
+        <h3>Entrada · 7", 2 GB de RAM, 32 GB</h3>
+        <ul>
+          <li>Quad-core, tela de 1024x600</li>
+          <li>Android de verdade (confira na entrega)</li>
+          <li>Universal: moldura do carro à parte</li>
+        </ul>
+        <p class="ex">Exemplos: universal 7" 2/32 GB por cerca de R$ 385 a 399; H-Tech 7" 2/32 GB por cerca de R$ 505; universal 7" Android com CarPlay por cerca de R$ 499.</p>
+        <div class="app"><b>Com o app:</b> Painel, Consumo, Saúde, Manutenção e rádio funcionam. Com o mapa aberto junto fica lento, e algumas telas ficam apertadas.</div>
+      </article>
+      <article class="tier pick">
+        <span class="badge">Melhor custo-benefício</span>
+        <div class="price">R$ 740 a 1.260</div>
+        <h3>9", 4 GB de RAM, 64 GB</h3>
+        <ul>
+          <li>4 ou 8 núcleos, Android 12 ou mais novo</li>
+          <li>Tela de 1280x720 ou mais</li>
+          <li>Universal: somar a moldura do carro</li>
+        </ul>
+        <p class="ex">Exemplos: quad-core 4/64 GB por cerca de R$ 739; universal 9" Android 14 com 4/64 GB de R$ 889 a R$ 1.259.</p>
+        <div class="app"><b>Com o app:</b> igual ao Peugeot 2008 do Adilson. App, mapa e música juntos sem travar.</div>
+      </article>
+      <article class="tier">
+        <div class="price">R$ 2.000 a 3.400</div>
+        <h3>Kit de marca com moldura do modelo</h3>
+        <ul>
+          <li>4 GB, 8 núcleos, 4G com chip</li>
+          <li>Encaixe original, sem cortar fios</li>
+          <li>Marca com garantia no Brasil (ex.: Aikon)</li>
+        </ul>
+        <p class="ex">Exemplos: Aikon Proton para Peugeot 2008 com 4 GB e 4G por cerca de R$ 3.299; Aikon 10" 4/64 GB com 4G para C4 Lounge por cerca de R$ 2.549.</p>
+        <div class="app"><b>Com o app:</b> igual ao 2008, com acabamento de fábrica e internet própria para rádio e mapa.</div>
+      </article>
+    </div>
+  </section>
+
+  <section aria-labelledby="requisitos">
+    <h2 id="requisitos">O que o app precisa</h2>
+    <div class="tbl">
+      <table>
+        <thead><tr><th>Item</th><th>Mínimo</th><th>Ideal</th><th>Por quê</th></tr></thead>
+        <tbody>
+          <tr><td>Sistema</td><td>Android 8</td><td>Android 12 ou 13</td><td>Bluetooth e tela dividida funcionam melhor nas versões novas</td></tr>
+          <tr><td>Memória RAM</td><td>2 GB</td><td>4 GB</td><td>App, mapa e música abertos ao mesmo tempo</td></tr>
+          <tr><td>Tela</td><td>1024x600</td><td>1280x720 ou mais</td><td>O app foi desenhado para 1280x800</td></tr>
+          <tr><td>Bluetooth</td><td>Liberado para apps</td><td>Bluetooth 5 com BLE</td><td>É por onde o adaptador OBD2 conecta</td></tr>
+          <tr><td>GPS</td><td>Interno</td><td>Com antena externa</td><td>Postos, rota e rádios da região</td></tr>
+          <tr><td>Internet</td><td>Wi-Fi do celular</td><td>4G com chip</td><td>Rádio, endereço dos postos e mapa</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section aria-labelledby="cuidados" class="grid2">
+    <div class="box">
+      <h3 id="cuidados">Teste antes de pagar</h3>
+      <ol>
+        <li><b>Confira se é Android de verdade.</b> Configurações &gt; Sobre: versão do Android e memória. Há anúncios que dizem "Android 14" ou "4 GB" e não são.</li>
+        <li><b>Teste o Bluetooth com o adaptador.</b> Instale o Car Scanner (grátis), ligue o adaptador OBD2 e veja se conecta. Se o Car Scanner conectar, o Monitor também conecta.</li>
+        <li><b>Prefira vendedor que aceita troca:</b> o teste de verdade é no carro.</li>
+      </ol>
+    </div>
+    <div class="box no">
+      <h3>Evite</h3>
+      <ul>
+        <li><b>1 GB de RAM</b> (ex.: Roadstar RS-909BR, 1 GB e 16 GB): o sistema todo fica lento.</li>
+        <li><b>Kits "MP5" ou só CarPlay/Android Auto que não são Android:</b> não instalam o app, só espelham o celular. O anúncio precisa dizer "Android".</li>
+        <li><b>Android muito antigo</b> (8.1 em alguns modelos): prefira 10 ou mais novo.</li>
+        <li><b>Bluetooth só para o celular:</b> em algumas centrais baratas os apps não acessam o Bluetooth, e o adaptador não conecta.</li>
+      </ul>
+    </div>
+  </section>
+
+  <section aria-labelledby="fontes">
+    <h2 id="fontes">Anúncios e fontes consultados</h2>
+    <ul class="sources">
+      <li><a href="https://produto.mercadolivre.com.br/MLB-3527030567-central-multimidia-android-12-7-polegadas-2-din-2gb-ram-32gb-_JM">Mercado Livre: Android 12, 7", 2 GB, 32 GB</a></li>
+      <li><a href="https://lista.mercadolivre.com.br/central-multimidia-universal-android-2gb-ram">Mercado Livre: universal Android 2 GB</a></li>
+      <li><a href="https://www.reidasmultimidias.com.br/MLB-5095400456-central-multimidia-universal-7p-android-carplay-2gb-32gb-_JM">Rei das Multimídias: universal 7" Android 2/32 GB</a></li>
+      <li><a href="https://lista.mercadolivre.com.br/central-multimidia-9-polegadas-4gb">Mercado Livre: central 9" 4 GB</a></li>
+      <li><a href="https://www.mercadolivre.com.br/central-multimidia-2din-9pol-android-4gb-ram-64gb-octa-core/p/MLB28228930">Mercado Livre: 2din 9" 4 GB, 64 GB, octa-core</a></li>
+      <li><a href="https://www.reidasmultimidias.com.br/MLB-3631908375-multimidia-peugeot-2008-9p-aikon-proton-4gb-carplay-4g-_JM">Aikon Proton para Peugeot 2008</a></li>
+      <li><a href="https://lista.mercadolivre.com.br/central-multimidia-c4-lounge-aikon">Aikon para C4 Lounge</a></li>
+      <li><a href="https://www.ecarshop.com.br/kit-multimidia-9-polegadas-peugeot-208-2008-2015-a-2021-mp5-carplayandroid-auto">Ecarshop: kit MP5 para 208 e 2008 (não é Android)</a></li>
+      <li><a href="https://www.s2magazine.com.br/central-multimidia-2-din-9-android-rs909br-plus-roadstar">S2 Magazine: Roadstar RS-909BR Plus</a></li>
+      <li><a href="https://monitorcasa.com/melhor-scanner-automotivo-obd2/">Monitor Casa: apps de scanner OBD2</a></li>
+    </ul>
+    <p class="note" style="margin-top:12px">Preços e estoques mudam. Este guia não tem vínculo com as lojas citadas.</p>
+  </section>
+</main>
+
+</body>
+</html>
