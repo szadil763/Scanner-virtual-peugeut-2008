@@ -28,27 +28,48 @@ object PlaceFinder {
     fun allowed(context: Context) =
         ContextCompat.checkSelfPermission(context, permission) == PackageManager.PERMISSION_GRANTED
 
-    /** Localização atual (até [timeoutMs]); se o GPS não responder, a última conhecida. Null sem permissão. */
+    /** Localização do aparelho ligada (chave "Localização" do Android). Desligada, nenhum app recebe o GPS. */
+    fun locationOn(context: Context): Boolean {
+        val lm = context.getSystemService(LocationManager::class.java) ?: return false
+        return try { LocationManagerCompat.isLocationEnabled(lm) } catch (e: Exception) { true }
+    }
+
+    /**
+     * Localização atual. Primeiro a última posição recente do aparelho (o mapa costuma estar aberto no
+     * caminho até o posto, e o GPS demora a achar satélites debaixo da cobertura do posto); depois pede
+     * uma posição nova a cada fonte (GPS, combinada, rede), até [timeoutMs] cada; por fim aceita a última
+     * conhecida de até 30 min. Null sem permissão, com a localização desligada ou sem nenhuma posição.
+     */
     @SuppressLint("MissingPermission") // conferida em allowed()
     suspend fun current(context: Context, timeoutMs: Long = 15_000): Location? {
         if (!allowed(context)) return null
         val lm = context.getSystemService(LocationManager::class.java) ?: return null
-        val providers = listOf(LocationManager.GPS_PROVIDER, LocationManager.NETWORK_PROVIDER).filter {
-            try { lm.isProviderEnabled(it) } catch (e: Exception) { false }
+        val enabled = try { lm.getProviders(true) } catch (e: Exception) { emptyList() }
+        fun lastKnown(maxAgeMs: Long): Location? {
+            val now = System.currentTimeMillis()
+            return enabled.mapNotNull { try { lm.getLastKnownLocation(it) } catch (e: Exception) { null } }
+                .filter { now - it.time in -60_000L..maxAgeMs }
+                .maxByOrNull { it.time }
         }
-        for (provider in providers) {
+        lastKnown(2 * 60_000L)?.let { return it }
+        val order = listOf(LocationManager.GPS_PROVIDER, "fused", LocationManager.NETWORK_PROVIDER).filter { it in enabled }
+        for (provider in order) {
             val fix = withTimeoutOrNull(timeoutMs) {
                 suspendCancellableCoroutine<Location?> { cont ->
                     val cancel = CancellationSignal()
                     cont.invokeOnCancellation { cancel.cancel() }
-                    LocationManagerCompat.getCurrentLocation(lm, provider, cancel, ContextCompat.getMainExecutor(context)) {
-                        if (cont.isActive) cont.resume(it)
+                    try {
+                        LocationManagerCompat.getCurrentLocation(lm, provider, cancel, ContextCompat.getMainExecutor(context)) {
+                            if (cont.isActive) cont.resume(it)
+                        }
+                    } catch (e: Exception) {
+                        if (cont.isActive) cont.resume(null)
                     }
                 }
             }
             if (fix != null) return fix
         }
-        return providers.mapNotNull { try { lm.getLastKnownLocation(it) } catch (e: Exception) { null } }.maxByOrNull { it.time }
+        return lastKnown(30 * 60_000L)
     }
 
     /** Endereço curto ("Av. Paulista, 1000 - Bela Vista"), ou null sem internet. */

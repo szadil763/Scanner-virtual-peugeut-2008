@@ -2,6 +2,10 @@
 
 Ao registrar um abastecimento (aba Consumo), o app guarda o **posto**: local pelo GPS do multimídia, endereço pela internet do celular (Geocoder do Android) e o nome, que o dono confere (ex.: "Shell Av. Brasil"). Postos a menos de 150 m são o mesmo. A localização fica só no aparelho.
 
+Localização no abastecimento (`data/PlaceFinder`): primeiro a última posição do aparelho de até 2 min (o mapa costuma estar aberto no caminho; debaixo da cobertura do posto o GPS demora), depois uma posição nova do GPS, da fonte combinada e da rede (10 s cada), por fim a última de até 30 min. Se falhar, o diálogo diz o motivo e mostra a solução: "Permitir localização" (abre os ajustes do app se a permissão foi negada de vez), "Ligar a localização" ou "Tentar de novo", e a lista dos postos já registrados para escolher.
+
+Litros: o carro não informa o nível do tanque (o 2008 não tem o PID 2F), então os litros vêm da bomba, digitados pelo dono. Preencher com a estimativa do app estragaria a calibração e a nota do posto, que comparam justamente os litros reais com os previstos.
+
 ## Nota do posto (`domain/FuelQuality.kt`)
 
 Cada **abastecimento de tanque cheio** num posto abre um "tanque", que vai até o próximo abastecimento. Com as viagens gravadas nesse período (Saúde), o app mede:

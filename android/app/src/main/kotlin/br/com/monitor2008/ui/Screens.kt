@@ -690,6 +690,8 @@ private fun ConsumoScreen(ui: UiState, vm: MonitorEngine, phone: Boolean = false
  * Abastecimento: litros, preço, tanque cheio, combustível e o posto. O local vem do GPS do
  * multimídia e o endereço pela internet; se já houver posto registrado a menos de 150 m, é ele.
  */
+private enum class LocProblem { NO_PERMISSION, LOCATION_OFF, NO_FIX }
+
 @Composable
 private fun RefuelDialog(
     price: Double, ethanolNow: Boolean, vm: MonitorEngine, onDismiss: () -> Unit,
@@ -707,12 +709,43 @@ private fun RefuelDialog(
     var address by remember { mutableStateOf("") }
     var known by remember { mutableStateOf<Station?>(null) }
     var useLocation by remember { mutableStateOf(true) }
-    val askLocation = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { allowed = it }
+    // Por que não achou o posto: decide o botão de solução que aparece (permitir, ligar a localização, tentar de novo).
+    var problem by remember { mutableStateOf<LocProblem?>(null) }
+    var attempt by remember { mutableStateOf(0) }
+    var searching by remember { mutableStateOf(true) }
+    var askedByButton by remember { mutableStateOf(false) }
+    val askLocation = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { ok ->
+        allowed = ok
+        // Recusada antes com "não perguntar de novo": o Android nem mostra o pedido; abre os ajustes do app.
+        if (!ok && askedByButton) {
+            try {
+                ctx.startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:${ctx.packageName}")))
+            } catch (_: Exception) { }
+        }
+        askedByButton = false
+    }
     LaunchedEffect(Unit) { if (!allowed) askLocation.launch(PlaceFinder.permission) }
-    LaunchedEffect(allowed) {
-        if (!allowed) { locState = "Sem permissão de localização: o abastecimento fica sem posto."; return@LaunchedEffect }
-        val fix = PlaceFinder.current(ctx)
-        if (fix == null) { locState = "GPS sem sinal agora: o abastecimento fica sem posto."; return@LaunchedEffect }
+    // Volta dos ajustes do Android (permissão ou localização ligada): tenta de novo sozinho.
+    LifecycleResumeEffect(Unit) {
+        val now = PlaceFinder.allowed(ctx)
+        if (now != allowed) allowed = now
+        else if (loc == null && !searching && problem != LocProblem.NO_FIX) attempt++
+        onPauseOrDispose { }
+    }
+    LaunchedEffect(allowed, attempt) {
+        if (loc != null) return@LaunchedEffect
+        problem = null
+        if (!allowed) { problem = LocProblem.NO_PERMISSION; searching = false; locState = "O app não tem permissão de localização."; return@LaunchedEffect }
+        if (!PlaceFinder.locationOn(ctx)) { problem = LocProblem.LOCATION_OFF; searching = false; locState = "A localização do aparelho está desligada."; return@LaunchedEffect }
+        searching = true
+        locState = "Localizando o posto..."
+        val fix = PlaceFinder.current(ctx, timeoutMs = 10_000)
+        searching = false
+        if (fix == null) {
+            problem = LocProblem.NO_FIX
+            locState = "O GPS não achou a posição agora (cobertura do posto atrapalha). Tente de novo ou escolha um posto já registrado."
+            return@LaunchedEffect
+        }
         loc = fix.latitude to fix.longitude
         val k = vm.stationNear(fix.latitude, fix.longitude)
         known = k
@@ -740,7 +773,28 @@ private fun RefuelDialog(
                     FilterChip(selected = ethanol, onClick = { ethanol = true }, label = { Text("Etanol", fontSize = 17.sp) }, modifier = Modifier.height(56.dp))
                 }
                 Text("Posto", fontWeight = FontWeight.SemiBold)
-                Text(locState, fontSize = 14.sp, color = if (loc == null) Warn else MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(locState, fontSize = 14.sp, color = if (loc == null && !searching) Warn else MaterialTheme.colorScheme.onSurfaceVariant)
+                if (loc == null) when (problem) {
+                    LocProblem.NO_PERMISSION -> Button({ askedByButton = true; askLocation.launch(PlaceFinder.permission) }, Modifier.height(56.dp)) {
+                        Text("Permitir localização", fontSize = 17.sp)
+                    }
+                    LocProblem.LOCATION_OFF -> Button({
+                        try { ctx.startActivity(Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS)) } catch (_: Exception) { }
+                    }, Modifier.height(56.dp)) { Text("Ligar a localização", fontSize = 17.sp) }
+                    LocProblem.NO_FIX -> Button({ attempt++ }, Modifier.height(56.dp)) { Text("Tentar de novo", fontSize = 17.sp) }
+                    null -> {}
+                }
+                // Sem GPS: escolher um posto já registrado.
+                val known0 = vm.ui.value.stations
+                if (loc == null && !searching && known0.isNotEmpty()) {
+                    Text("Ou escolha o posto:", fontSize = 14.sp)
+                    known0.take(6).forEach { st ->
+                        Button({
+                            loc = st.lat to st.lon; known = st; name = st.name; address = st.address
+                            locState = "Posto escolhido da lista"
+                        }, Modifier.fillMaxWidth().height(56.dp)) { Text(st.name, fontSize = 16.sp, maxLines = 1) }
+                    }
+                }
                 if (loc != null) {
                     if (address.isNotBlank()) Text(address, fontSize = 14.sp)
                     OutlinedTextField(name, { name = it }, label = { Text("Nome do posto") }, singleLine = true)
