@@ -66,4 +66,6 @@ Também: hodômetro real (o dono informa o km do painel uma vez; `Store.odoOffse
 
 **Viagem sem o app** (`domain/MissedDistance`, com testes): o adaptador e a central não guardam a viagem. O app lê o PID 31 (km desde que as falhas foram apagadas, se o carro declarar) e, se o contador andou mais que o app viu, acerta o hodômetro, tira o tanque da calibração e da nota do posto (`Store.tankIncomplete`) e mostra um aviso. **Conexão automática no celular** (`data/AutoConnect`, `AdapterPresenceService`, Android 12+): o adaptador vira dispositivo companheiro e o Android liga a leitura quando ele aparece, com o app fechado (Ajustes).
 
+**Ao ligar o carro** (`data/SessionResume`, `domain/ResumeRules` com testes, `data/BootReceiver` só no APK do multimídia): o app volta na última aba (`Store.lastTab`) e no modo da Mídias; se a rádio ou a música tocava quando o carro desligou (marcas de 30 s: vivo x tocando), continua tocando (rádio pelo `RadioPlayer.resume`, outros apps pela sessão ou tecla play, sem abrir o app). Abrir sozinho ao ligar exige a permissão "sobrepor a outros apps" (Ajustes > Ao ligar o carro).
+
 Pendências conhecidas: registro de falhas com foto dos dados (freeze frame, modo 02), previsões por tendência (etapa 3 da Saúde), outros modelos além dos perfis (irmão e cunhado do dono, depois comercializar).

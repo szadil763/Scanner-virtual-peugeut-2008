@@ -139,6 +139,27 @@ class MediaWatcher private constructor(private val app: Application) {
         }, if (sent) 3_000L else 0L)
     }
 
+    /**
+     * Ao ligar o carro: manda o app [pkg] voltar a tocar, sem abri-lo na frente. O celular demora a
+     * reconectar pelo Bluetooth, então tenta por até 40 s; se a sessão aparecer, dá play nela.
+     */
+    fun resumeQuietly(pkg: String) {
+        var tries = 0
+        val attempt = object : Runnable {
+            override fun run() {
+                val sessions = try { msm?.getActiveSessions(component) } catch (e: SecurityException) { null } ?: emptyList()
+                val s = sessions.firstOrNull { it.packageName == pkg }
+                when {
+                    s != null -> s.transportControls.play()
+                    tries == 0 || tries == 3 -> { sendPlayKey(pkg); handler.postDelayed(this, 5_000) }
+                    tries < 8 -> handler.postDelayed(this, 5_000)
+                }
+                tries++
+            }
+        }
+        handler.postDelayed(attempt, 3_000)
+    }
+
     private fun sendPlayKey(pkg: String): Boolean {
         val receiver = app.packageManager.queryBroadcastReceivers(Intent(Intent.ACTION_MEDIA_BUTTON).setPackage(pkg), 0)
             .firstOrNull()?.activityInfo ?: return false

@@ -8,6 +8,7 @@ import android.content.Context
 import android.content.ContextWrapper
 import android.content.Intent
 import android.widget.Toast
+import android.net.Uri
 import android.provider.Settings
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.IntentSenderRequest
@@ -85,6 +86,7 @@ import br.com.monitor2008.data.BtPermissions
 import br.com.monitor2008.data.Features
 import br.com.monitor2008.data.MediaWatcher
 import br.com.monitor2008.data.PlaceFinder
+import br.com.monitor2008.data.Store
 import br.com.monitor2008.data.Updater
 import br.com.monitor2008.data.ConnState
 import br.com.monitor2008.domain.DtcInfo
@@ -129,8 +131,11 @@ private val PHONE_TABS = listOf(Tab.PAINEL, Tab.MIDIAS, Tab.SAUDE, Tab.CONSUMO)
 @Composable
 fun MonitorApp(vm: MonitorEngine) {
     val ui by vm.ui.collectAsStateWithLifecycle()
-    var tab by remember { mutableStateOf(Tab.PAINEL) }
     val ctx = LocalContext.current
+    // Ao ligar o carro o app volta na aba em que estava.
+    val store = remember { Store(ctx.applicationContext) }
+    var tab by remember { mutableStateOf(Tab.values().firstOrNull { it.name == store.lastTab } ?: Tab.PAINEL) }
+    LaunchedEffect(tab) { store.lastTab = tab.name }
     // Confere se há versão nova ao abrir (no máximo a cada 6 h; sem internet, não mostra nada).
     LaunchedEffect(Unit) { Updater.get(ctx.applicationContext as Application).checkQuietly() }
 
@@ -1239,7 +1244,54 @@ private fun AjustesScreen(ui: UiState, vm: MonitorEngine) {
         }
         AdapterPicker(ui, vm)
         AutoConnectSection(ui.moving)
+        StartupSection()
         MapMusicSettings()
+    }
+}
+
+/** Ao ligar o carro: abrir o app sozinho (multimídia) e continuar a rádio ou a música. */
+@Composable
+private fun StartupSection() {
+    val ctx = LocalContext.current
+    val store = remember { Store(ctx.applicationContext) }
+    var resume by remember { mutableStateOf(store.resumeMedia) }
+    var autoOpen by remember { mutableStateOf(store.autoOpen) }
+    var canOverlay by remember { mutableStateOf(Settings.canDrawOverlays(ctx)) }
+    LifecycleResumeEffect(Unit) {
+        canOverlay = Settings.canDrawOverlays(ctx)
+        onPauseOrDispose { }
+    }
+    Text("Ao ligar o carro", fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
+    if (Features.mediaControl) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Switch(autoOpen, { autoOpen = it; store.autoOpen = it })
+            Spacer(Modifier.width(12.dp))
+            Column(Modifier.weight(1f)) {
+                Text("Abrir o Monitor sozinho", fontSize = 18.sp)
+                Text("Quando o multimídia liga, o app abre na aba em que estava.",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 15.sp)
+            }
+        }
+        if (autoOpen && !canOverlay) {
+            Text("Falta uma permissão: o Android só deixa o app abrir sozinho com \"sobrepor a outros apps\" ligado.",
+                color = Warn, fontSize = 15.sp)
+            Button({
+                try {
+                    ctx.startActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:${ctx.packageName}")))
+                } catch (e: Exception) {
+                    ctx.startActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION))
+                }
+            }, Modifier.height(56.dp)) { Text("Permitir abrir sozinho", fontSize = 18.sp) }
+        }
+    }
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Switch(resume, { resume = it; store.resumeMedia = it })
+        Spacer(Modifier.width(12.dp))
+        Column(Modifier.weight(1f)) {
+            Text("Continuar a rádio ou a música", fontSize = 18.sp)
+            Text("Se estava tocando quando o carro desligou, volta a tocar a mesma rádio ou o mesmo app de música.",
+                color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 15.sp)
+        }
     }
 }
 

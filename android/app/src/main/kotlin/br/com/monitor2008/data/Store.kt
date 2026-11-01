@@ -182,6 +182,27 @@ class Store(context: Context) {
         get() = p.getString("missedNotice", null)
         set(v) { p.edit().putString("missedNotice", v).apply() }
 
+    // Voltar como estava ao ligar o carro (data/SessionResume).
+    var lastTab: String?
+        get() = p.getString("lastTab", null)
+        set(v) { p.edit().putString("lastTab", v).apply() }
+    var aliveAtMs: Long
+        get() = p.getLong("aliveAtMs", 0L)
+        set(v) { p.edit().putLong("aliveAtMs", v).apply() }
+    val lastPlayingPkg: String? get() = p.getString("lastPlayingPkg", null)
+    val lastPlayingAtMs: Long get() = p.getLong("lastPlayingAtMs", 0L)
+    fun saveLastPlaying(pkg: String, atMs: Long) {
+        p.edit().putString("lastPlayingPkg", pkg).putLong("lastPlayingAtMs", atMs).apply()
+    }
+    /** Continuar a rádio ou a música que tocava quando o carro desligou. */
+    var resumeMedia: Boolean
+        get() = p.getBoolean("resumeMedia", true)
+        set(v) { p.edit().putBoolean("resumeMedia", v).apply() }
+    /** Abrir o app sozinho quando o multimídia liga (precisa da permissão "sobrepor a outros apps"). */
+    var autoOpen: Boolean
+        get() = p.getBoolean("autoOpen", false)
+        set(v) { p.edit().putBoolean("autoOpen", v).apply() }
+
     /** Aba Mídias: "MUSICA" ou "RADIO" ao lado dos números do Painel. */
     var mediaMode: String
         get() = p.getString("mediaMode", "MUSICA") ?: "MUSICA"

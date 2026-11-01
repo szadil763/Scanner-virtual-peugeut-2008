@@ -20,6 +20,7 @@ import androidx.core.content.ContextCompat
 import br.com.monitor2008.data.BtPermissions
 import br.com.monitor2008.data.MediaWatcher
 import br.com.monitor2008.data.ReadingService
+import br.com.monitor2008.data.SessionResume
 import br.com.monitor2008.ui.MonitorApp
 import br.com.monitor2008.ui.MonitorEngine
 
@@ -82,6 +83,8 @@ class MainActivity : ComponentActivity() {
         super.onResume()
         // Ao voltar da tela de "acesso a notificações", o mini player já começa a mostrar a música.
         MediaWatcher.get(application).start()
+        // Primeira tela depois de ligar o carro: continua a rádio ou a música que tocava.
+        SessionResume.resumeOnce(application)
     }
 
     override fun onStart() {

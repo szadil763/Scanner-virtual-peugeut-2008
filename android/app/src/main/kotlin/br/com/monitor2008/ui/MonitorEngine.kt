@@ -38,6 +38,7 @@ import br.com.monitor2008.domain.Report
 import br.com.monitor2008.domain.ReportInput
 import br.com.monitor2008.domain.Tip
 import br.com.monitor2008.domain.TripAccumulator
+import br.com.monitor2008.data.SessionResume
 import br.com.monitor2008.domain.MissedDistance
 import br.com.monitor2008.domain.TripHealth
 import br.com.monitor2008.domain.Vehicle
@@ -177,7 +178,10 @@ class MonitorEngine private constructor(private val app: Application) {
     private val _ui = MutableStateFlow(snapshot())
     val ui: StateFlow<UiState> = _ui.asStateFlow()
 
-    init { start() }
+    init {
+        start()
+        SessionResume.startHeartbeat(app, scope)
+    }
 
     /** (Re)inicia a leitura com a fonte escolhida nos Ajustes. */
     fun start() {
