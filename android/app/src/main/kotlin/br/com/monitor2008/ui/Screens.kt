@@ -86,6 +86,7 @@ import br.com.monitor2008.data.BtPermissions
 import br.com.monitor2008.data.Features
 import br.com.monitor2008.data.MediaWatcher
 import br.com.monitor2008.data.PlaceFinder
+import br.com.monitor2008.domain.RefuelMath
 import br.com.monitor2008.data.Store
 import br.com.monitor2008.data.Updater
 import br.com.monitor2008.data.ConnState
@@ -698,7 +699,10 @@ private fun RefuelDialog(
     onSave: (Double, Double, Boolean, Boolean, StationDraft?) -> Unit,
 ) {
     val ctx = LocalContext.current
+    val prefs = remember { Store(ctx.applicationContext) }
     var liters by remember { mutableStateOf("") }
+    var money by remember { mutableStateOf("") }
+    var byMoney by remember { mutableStateOf(prefs.refuelByMoney) }
     var p by remember { mutableStateOf(price.f(2)) }
     var full by remember { mutableStateOf(true) }
     var ethanol by remember { mutableStateOf(ethanolNow) }
@@ -758,15 +762,31 @@ private fun RefuelDialog(
             locState = if (address.isNotBlank()) "Posto novo: confira o nome (ex.: Shell, Ipiranga)" else "Posto novo (sem internet para o endereço)"
         }
     }
-    val l = parse(liters)
     val pr = parse(p)
+    // Valor pago: litros = valor ÷ preço da bomba.
+    val l = if (byMoney) RefuelMath.litersFromAmount(parse(money), pr) else parse(liters)
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("Registrar abastecimento") },
         text = {
             Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                OutlinedTextField(liters, { liters = it }, label = { Text("Litros") }, singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal))
-                OutlinedTextField(p, { p = it }, label = { Text("Preço por litro (R$)") }, singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal))
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    FilterChip(selected = byMoney, onClick = { byMoney = true; prefs.refuelByMoney = true },
+                        label = { Text("Valor pago (R$)", fontSize = 17.sp) }, modifier = Modifier.height(56.dp))
+                    FilterChip(selected = !byMoney, onClick = { byMoney = false; prefs.refuelByMoney = false },
+                        label = { Text("Litros", fontSize = 17.sp) }, modifier = Modifier.height(56.dp))
+                }
+                if (byMoney) {
+                    OutlinedTextField(money, { money = it }, label = { Text("Valor pago (R$)") }, singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal))
+                } else {
+                    OutlinedTextField(liters, { liters = it }, label = { Text("Litros") }, singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal))
+                }
+                OutlinedTextField(p, { p = it }, label = { Text("Preço por litro na bomba (R$)") }, singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal))
+                if (byMoney) Text(
+                    if (l != null) "= ${l.f(2)} litros" else "Digite o valor pago e o preço do litro: o app calcula os litros.",
+                    fontSize = if (l != null) 22.sp else 14.sp, fontWeight = if (l != null) FontWeight.Bold else FontWeight.Normal,
+                    color = if (l != null) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                )
                 Row(verticalAlignment = Alignment.CenterVertically) { Switch(full, { full = it }); Spacer(Modifier.width(10.dp)); Text("Tanque cheio") }
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     FilterChip(selected = !ethanol, onClick = { ethanol = false }, label = { Text("Gasolina", fontSize = 17.sp) }, modifier = Modifier.height(56.dp))

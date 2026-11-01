@@ -198,6 +198,10 @@ class Store(context: Context) {
     var resumeMedia: Boolean
         get() = p.getBoolean("resumeMedia", true)
         set(v) { p.edit().putBoolean("resumeMedia", v).apply() }
+    /** Abastecimento: o dono informa o valor pago (true) ou os litros (false). Lembra a última escolha. */
+    var refuelByMoney: Boolean
+        get() = p.getBoolean("refuelByMoney", false)
+        set(v) { p.edit().putBoolean("refuelByMoney", v).apply() }
     /** Abrir o app sozinho quando o multimídia liga (precisa da permissão "sobrepor a outros apps"). */
     var autoOpen: Boolean
         get() = p.getBoolean("autoOpen", false)
