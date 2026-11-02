@@ -14,6 +14,13 @@ class WakeRulesTest {
         assertFalse(WakeRules.isWake(null))
     }
 
+    @Test fun partialIsFaster() {
+        assertTrue(WakeRules.isWakePartial("{\n  \"partial\" : \"monitor\"\n}"))
+        assertFalse(WakeRules.isWakePartial("{\"partial\" : \"[unk] monitor [unk]\"}"))
+        assertFalse(WakeRules.isWakePartial("{\"partial\" : \"\"}"))
+        assertFalse(WakeRules.isWakePartial("{\"text\" : \"monitor\"}"))
+    }
+
     @Test fun listensOnlyWhenFree() {
         assertTrue(WakeRules.shouldListen(enabled = true, modelReady = true, micAllowed = true, assistantBusy = false, inCall = false))
         assertFalse(WakeRules.shouldListen(enabled = true, modelReady = true, micAllowed = true, assistantBusy = true, inCall = false))

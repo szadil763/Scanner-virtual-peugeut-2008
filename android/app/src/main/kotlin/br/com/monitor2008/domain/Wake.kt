@@ -18,6 +18,17 @@ object WakeRules {
         return VoiceCommands.normalize(text).split(' ').any { it == WORD }
     }
 
+    private val partialField = Regex("\"partial\"\\s*:\\s*\"([^\"]*)\"")
+
+    /**
+     * Resultado parcial ({"partial" : "monitor"}): chega enquanto a pessoa ainda fala, sem esperar a
+     * pausa. Usado para acionar mais rápido; só vale se a palavra for "monitor" sozinha.
+     */
+    fun isWakePartial(json: String?): Boolean {
+        val text = json?.let { partialField.find(it)?.groupValues?.get(1) } ?: return false
+        return VoiceCommands.normalize(text) == WORD
+    }
+
     /** Escuta a palavra só quando está tudo pronto e o microfone está livre. */
     fun shouldListen(enabled: Boolean, modelReady: Boolean, micAllowed: Boolean, assistantBusy: Boolean, inCall: Boolean): Boolean =
         enabled && modelReady && micAllowed && !assistantBusy && !inCall

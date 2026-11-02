@@ -26,6 +26,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -101,7 +102,13 @@ class VoiceAssistant private constructor(private val app: Application) {
     fun canListenDirectly() = SpeechRecognizer.isRecognitionAvailable(app)
 
     /** Começa a ouvir. Sem permissão do microfone ou sem reconhecimento, mostra o motivo. */
-    fun listen() {
+    /**
+     * [beepWhenReady]: chamado pela palavra "Monitor" — bipa só quando o reconhecimento está pronto
+     * (falar antes perdia o começo do pedido). [retry]: segunda chance quando não ouviu nada.
+     */
+    fun listen(beepWhenReady: Boolean = false, retry: Int = 0) {
+        handsFree = beepWhenReady || !VoiceActions.screenVisible
+        retries = retry
         initTts()
         if (!micAllowed()) { fail("Falta a permissão do microfone. Abra o Monitor e libere o microfone."); return }
         if (!canListenDirectly()) {
@@ -116,7 +123,10 @@ class VoiceAssistant private constructor(private val app: Application) {
         if (r == null) { fail("Não foi possível abrir o reconhecimento de voz."); return }
         recognizer = r
         r.setRecognitionListener(object : RecognitionListener {
-            override fun onReadyForSpeech(params: Bundle?) { _state.value = VoiceState.Listening() }
+            override fun onReadyForSpeech(params: Bundle?) {
+                _state.value = VoiceState.Listening()
+                if (beepWhenReady) beep()
+            }
             override fun onBeginningOfSpeech() {}
             override fun onRmsChanged(rmsdB: Float) {}
             override fun onBufferReceived(buffer: ByteArray?) {}
@@ -131,6 +141,18 @@ class VoiceAssistant private constructor(private val app: Application) {
             }
             override fun onError(error: Int) {
                 destroyRecognizer()
+                // Sem tela (palavra "Monitor" ou janela flutuante): uma segunda chance antes de desistir.
+                val nothingHeard = error == SpeechRecognizer.ERROR_NO_MATCH || error == SpeechRecognizer.ERROR_SPEECH_TIMEOUT
+                if (nothingHeard && handsFree && retries < 1) {
+                    _state.value = VoiceState.Idle
+                    speak("Não entendi. Pode repetir?")
+                    scope.launch {
+                        delay(400)
+                        while (speaking) delay(100)
+                        listen(beepWhenReady = true, retry = retries + 1)
+                    }
+                    return
+                }
                 fail(errorText(error))
             }
             override fun onEvent(eventType: Int, params: Bundle?) {}
@@ -138,7 +160,11 @@ class VoiceAssistant private constructor(private val app: Application) {
         _state.value = VoiceState.Listening()
         try {
             r.startListening(recognizeIntent().putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
-                .putExtra(RecognizerIntent.EXTRA_CALLING_PACKAGE, app.packageName))
+                .putExtra(RecognizerIntent.EXTRA_CALLING_PACKAGE, app.packageName)
+                // Pausas curtas no meio do pedido ("abasteci cem reais... a seis e onze") não encerram a escuta.
+                .putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS, 1500L)
+                .putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_POSSIBLY_COMPLETE_SILENCE_LENGTH_MILLIS, 1500L)
+                .putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_MINIMUM_LENGTH_MILLIS, 2000L))
         } catch (e: Exception) {
             destroyRecognizer()
             fail("Não foi possível abrir o reconhecimento de voz.")
@@ -208,6 +234,13 @@ class VoiceAssistant private constructor(private val app: Application) {
         } else {
             _state.value = VoiceState.Error(message)
         }
+    }
+
+    @Volatile private var handsFree = false
+    @Volatile private var retries = 0
+
+    private fun beep() {
+        try { android.media.ToneGenerator(AudioManager.STREAM_MUSIC, 80).startTone(android.media.ToneGenerator.TONE_PROP_BEEP, 150) } catch (_: Exception) { }
     }
 
     /** Ouvindo ou falando: a escuta da palavra "Monitor" espera (o microfone é um só). */

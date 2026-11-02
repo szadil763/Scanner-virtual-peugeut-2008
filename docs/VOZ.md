@@ -66,3 +66,5 @@ Mapa pela voz: abre 0,5 s depois, quando a janela da conversa já fechou e o Mon
 - **Microfone em segundo plano** (`data/MicService`): o Android só deixa com serviço em primeiro plano do tipo microfone, iniciado com o app na frente (ao abrir o app ou ao mostrar a janela flutuante). Fica ligado com a palavra ligada ou a janela flutuante na tela. Para de escutar a palavra enquanto o comando de voz ouve ou fala e durante ligações (`AudioManager.mode`).
 - **Pedidos sem a tela** (`data/VoiceActions`): rota, mapa, rádio, música, pausar/próxima funcionam com o Monitor atrás; abrir aba e abastecimento trazem o Monitor para a frente. Erros, sem a tela, são falados.
 - APK só com bibliotecas ARM (`abiFilters` arm64-v8a e armeabi-v7a), por causa da biblioteca nativa do Vosk.
+
+Ajustes do teste da 0.1.54 (às vezes demorava ou não captava o pedido): aciona pelo resultado parcial "monitor" (sem esperar a pausa); o bipe toca quando o reconhecimento já está pronto (antes tocava cedo e o começo do pedido se perdia); pausas curtas no meio do pedido não encerram a escuta (1,5 s); sem ouvir nada, pergunta "Pode repetir?" e ouve de novo uma vez.

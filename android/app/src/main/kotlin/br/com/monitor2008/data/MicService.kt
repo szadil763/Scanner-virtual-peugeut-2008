@@ -98,7 +98,8 @@ class MicService : Service() {
             val rec = Recognizer(m, 16_000f, WakeRules.GRAMMAR)
             val s = SpeechService(rec, 16_000f)
             s.startListening(object : RecognitionListener {
-                override fun onPartialResult(hypothesis: String?) {}
+                // Parcial: aciona assim que reconhece "monitor", sem esperar a pausa depois da palavra.
+                override fun onPartialResult(hypothesis: String?) { if (WakeRules.isWakePartial(hypothesis)) heard() }
                 override fun onResult(hypothesis: String?) { if (WakeRules.isWake(hypothesis)) heard() }
                 override fun onFinalResult(hypothesis: String?) { if (WakeRules.isWake(hypothesis)) heard() }
                 override fun onError(exception: Exception?) { stopWake() }
@@ -119,12 +120,10 @@ class MicService : Service() {
 
     /** Ouviu "Monitor": solta o microfone, bipa e abre o comando de voz. */
     private fun heard() {
+        if (speech == null) return // já acionou (parcial e final chegam os dois)
         stopWake()
-        try { ToneGenerator(AudioManager.STREAM_MUSIC, 80).startTone(ToneGenerator.TONE_PROP_BEEP, 150) } catch (_: Exception) { }
-        scope.launch {
-            delay(300)
-            VoiceAssistant.get(application).listen()
-        }
+        // O bipe toca quando o reconhecimento já está pronto para ouvir (antes ele tocava cedo e o começo do pedido se perdia).
+        VoiceAssistant.get(application).listen(beepWhenReady = true)
     }
 
     override fun onDestroy() {
