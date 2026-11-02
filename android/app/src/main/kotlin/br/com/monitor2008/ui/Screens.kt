@@ -171,6 +171,8 @@ fun MonitorApp(vm: MonitorEngine) {
     }
     // Primeira abertura num aparelho novo: qual é o carro (consumo e dicas dependem do motor).
     if (ui.vehicle == null) VehicleDialog(vm)
+    // Conversa do comando de voz (botão 🎤 Voz).
+    VoiceOverlay(ui)
 }
 
 @Composable
@@ -207,6 +209,11 @@ private fun PhoneLayout(ui: UiState, vm: MonitorEngine, tab: Tab, onTab: (Tab) -
                     label = { Text(t.label, fontSize = 14.sp, maxLines = 1) }, alwaysShowLabel = true,
                 )
             }
+            val voiceStart = rememberVoiceStart()
+            NavigationBarItem(
+                selected = false, onClick = voiceStart, icon = {},
+                label = { Text("🎤 Voz", fontSize = 14.sp, maxLines = 1) }, alwaysShowLabel = true,
+            )
             val inMore = tab !in PHONE_TABS
             NavigationBarItem(
                 selected = inMore, onClick = { more = true },
@@ -512,6 +519,7 @@ private fun MediaBar(compact: Boolean, showPlayer: Boolean) {
     val buttons: @Composable () -> Unit = {
         Button({ open(launcher.openMap(activity)) }, Modifier.height(56.dp)) { Text("Mapa", fontSize = 17.sp) }
         OutlinedButton({ open(launcher.openMusic(activity)) }, Modifier.height(56.dp)) { Text("Música", fontSize = 17.sp) }
+        VoiceButton()
     }
     // Botões antes do nome da música: no fim da linha eles ficavam cortados pela moldura do multimídia.
     val player: @Composable (Modifier) -> Unit = { mod ->
@@ -1319,6 +1327,7 @@ private fun AjustesScreen(ui: UiState, vm: MonitorEngine) {
         AdapterPicker(ui, vm)
         AutoConnectSection(ui.moving)
         StartupSection()
+        VoiceSection()
         MapMusicSettings()
     }
 }
