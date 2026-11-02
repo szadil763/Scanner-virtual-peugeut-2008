@@ -18,6 +18,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.core.content.ContextCompat
 import br.com.monitor2008.data.BtPermissions
+import br.com.monitor2008.data.FloatingPanel
 import br.com.monitor2008.data.MediaWatcher
 import br.com.monitor2008.data.ReadingService
 import br.com.monitor2008.data.SessionResume
@@ -71,6 +72,8 @@ class MainActivity : ComponentActivity() {
     override fun onUserLeaveHint() {
         super.onUserLeaveHint()
         if (!vm.ui.value.pipOnLeave) return
+        // Janela própria do Monitor (tamanho escolhido), quando liberada; senão a do Android.
+        if (FloatingPanel.available(this)) { FloatingPanel.show(this); return }
         if (!packageManager.hasSystemFeature(PackageManager.FEATURE_PICTURE_IN_PICTURE)) return
         try {
             enterPictureInPictureMode(PictureInPictureParams.Builder().setAspectRatio(Rational(16, 9)).build())
@@ -81,6 +84,8 @@ class MainActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
+        // De volta ao app: a janela flutuante própria some.
+        FloatingPanel.hide(this)
         // Ao voltar da tela de "acesso a notificações", o mini player já começa a mostrar a música.
         MediaWatcher.get(application).start()
         // Primeira tela depois de ligar o carro: continua a rádio ou a música que tocava.

@@ -126,6 +126,9 @@ class AppLauncher(private val context: Context) {
         intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         if (activity?.isInMultiWindowMode == true) {
             intent.addFlags(Intent.FLAG_ACTIVITY_LAUNCH_ADJACENT)
+        } else if (activity != null && FloatingPanel.available(context)) {
+            // Janela própria do Monitor, no tamanho escolhido em Ajustes.
+            FloatingPanel.show(context)
         } else if (activity != null && pm.hasSystemFeature(PackageManager.FEATURE_PICTURE_IN_PICTURE)) {
             try {
                 activity.enterPictureInPictureMode(PictureInPictureParams.Builder().setAspectRatio(Rational(16, 9)).build())

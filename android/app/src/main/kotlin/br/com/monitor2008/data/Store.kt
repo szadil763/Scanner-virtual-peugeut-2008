@@ -202,6 +202,23 @@ class Store(context: Context) {
     var refuelByMoney: Boolean
         get() = p.getBoolean("refuelByMoney", false)
         set(v) { p.edit().putBoolean("refuelByMoney", v).apply() }
+    /** Janela flutuante: "MONITOR" (própria, tamanho escolhido) ou "ANDROID" (a do sistema). */
+    var floatMode: String
+        get() = p.getString("floatMode", "MONITOR") ?: "MONITOR"
+        set(v) { p.edit().putString("floatMode", v).apply() }
+    var floatSize: Int
+        get() = p.getInt("floatSize", 1)
+        set(v) { p.edit().putInt("floatSize", v).apply() }
+    var floatItems: String?
+        get() = p.getString("floatItems", null)
+        set(v) { p.edit().putString("floatItems", v).apply() }
+    var floatX: Int
+        get() = p.getInt("floatX", 24)
+        set(v) { p.edit().putInt("floatX", v).apply() }
+    var floatY: Int
+        get() = p.getInt("floatY", 120)
+        set(v) { p.edit().putInt("floatY", v).apply() }
+
     /** Voz do comando de voz (nome técnico da voz do leitor); null = a melhor que o app achar. */
     var ttsVoice: String?
         get() = p.getString("ttsVoice", null)

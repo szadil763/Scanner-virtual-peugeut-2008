@@ -3,6 +3,9 @@
 package br.com.monitor2008.ui
 
 import br.com.monitor2008.data.SystemSettings
+import br.com.monitor2008.data.FloatingPanel
+import br.com.monitor2008.domain.FloatItem
+import br.com.monitor2008.domain.FloatRules
 import android.app.Application
 import android.app.Activity
 import android.content.Context
@@ -1419,6 +1422,7 @@ private fun AjustesScreen(ui: UiState, vm: MonitorEngine) {
                     color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 15.sp)
             }
         }
+        if (Features.ownFloatingWindow) FloatingSection()
         if (!ui.simulated && ui.conn.message.isNotBlank()) {
             Text(ui.conn.message, color = if (ui.conn.state == ConnState.ERROR) Warn else MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 16.sp)
         }
@@ -1510,6 +1514,58 @@ private fun AutoConnectSection(moving: Boolean) {
         }, Modifier.height(56.dp), enabled = !moving) { Text("Ativar conexão automática", fontSize = 18.sp) }
     }
     message?.let { Text(it, color = Warn, fontSize = 15.sp) }
+}
+
+/**
+ * Janela flutuante (multimídia): a própria do Monitor, com tamanho e números escolhidos, ou a do
+ * Android. A própria precisa de "sobrepor a outros apps".
+ */
+@Composable
+private fun FloatingSection() {
+    val ctx = LocalContext.current
+    val store = remember { Store(ctx.applicationContext) }
+    var mode by remember { mutableStateOf(store.floatMode) }
+    var size by remember { mutableStateOf(store.floatSize) }
+    var items by remember { mutableStateOf(FloatRules.parse(store.floatItems)) }
+    var canOverlay by remember { mutableStateOf(Settings.canDrawOverlays(ctx)) }
+    LifecycleResumeEffect(Unit) {
+        canOverlay = Settings.canDrawOverlays(ctx)
+        onPauseOrDispose { }
+    }
+    Text("Tipo de janela flutuante", fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
+    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        FilterChip(selected = mode == "MONITOR", onClick = { mode = "MONITOR"; store.floatMode = "MONITOR" },
+            label = { Text("Do Monitor (tamanho à escolha)", fontSize = 17.sp) }, modifier = Modifier.height(56.dp))
+        FilterChip(selected = mode == "ANDROID", onClick = { mode = "ANDROID"; store.floatMode = "ANDROID"; FloatingPanel.hide(ctx) },
+            label = { Text("Do Android", fontSize = 17.sp) }, modifier = Modifier.height(56.dp))
+    }
+    if (mode != "MONITOR") return
+    if (!canOverlay) {
+        Text("Falta liberar \"sobrepor a outros apps\" para o Monitor. Sem isso, fica a janela do Android.", color = Warn, fontSize = 15.sp)
+        Button({ SystemSettings.overlay(ctx) }, Modifier.height(56.dp)) { Text("Permitir a janela do Monitor", fontSize = 17.sp) }
+    }
+    Text("Arraste a janela para onde quiser; um toque nela volta para o Monitor. Os botões − e + mudam o tamanho na própria janela.",
+        color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 15.sp)
+    Text("Tamanho", fontSize = 17.sp)
+    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        FloatRules.SIZES.forEachIndexed { i, s ->
+            FilterChip(selected = size == i, onClick = { size = i; store.floatSize = i; FloatingPanel.refresh(ctx) },
+                label = { Text(s.label, fontSize = 17.sp) }, modifier = Modifier.height(56.dp))
+        }
+    }
+    Text("Números na janela", fontSize = 17.sp)
+    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        FloatItem.values().forEach { item ->
+            FilterChip(selected = item in items, onClick = {
+                items = FloatRules.toggle(items, item)
+                store.floatItems = FloatRules.serialize(items)
+                FloatingPanel.refresh(ctx)
+            }, label = { Text(item.label, fontSize = 17.sp) }, modifier = Modifier.height(56.dp))
+        }
+    }
+    if (canOverlay) OutlinedButton({ if (FloatingPanel.showing) FloatingPanel.hide(ctx) else FloatingPanel.show(ctx) }, Modifier.height(56.dp)) {
+        Text("Ver como fica / esconder", fontSize = 17.sp)
+    }
 }
 
 /** Lista os aparelhos pareados para tocar no adaptador, em vez de digitar o nome. */

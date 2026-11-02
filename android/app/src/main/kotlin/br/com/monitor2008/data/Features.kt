@@ -11,6 +11,12 @@ object Features {
      */
     val mediaControl: Boolean = BuildConfig.FLAVOR == "multimidia"
 
+    /**
+     * Janela flutuante própria (precisa de "sobrepor a outros apps", declarada só no APK do
+     * multimídia). No celular fica a janela flutuante do Android.
+     */
+    val ownFloatingWindow: Boolean = mediaControl
+
     /** APK deste aparelho na página de Releases (a atualização baixa o do mesmo tipo). */
     val apkName: String = UpdateRules.apkName(phone = !mediaControl)
 }
