@@ -108,7 +108,7 @@ object VoiceCommands {
 
     /** Ordem importa: "mídias" antes de "música" não importa, mas "rádio" e "música" antes de "mídias" sim. */
     private val navTargets: List<Pair<VoiceNav, List<String>>> = listOf(
-        VoiceNav.MAPA to listOf("mapa", "navegacao", "navegador", "gps", "waze"),
+        VoiceNav.MAPA to listOf("mapa", "maps", "navegacao", "navegador", "gps", "waze"),
         VoiceNav.RADIO to listOf("radio"),
         VoiceNav.MUSICA to listOf("musica", "spotify"),
         VoiceNav.MIDIAS to listOf("midia"),

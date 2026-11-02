@@ -16,6 +16,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.ui.Alignment
 import br.com.monitor2008.data.Store
+import br.com.monitor2008.data.SystemSettings
 import br.com.monitor2008.domain.TtsVoices
 import br.com.monitor2008.domain.VoiceCommands
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
@@ -90,7 +91,7 @@ internal fun rememberVoiceStart(): () -> Unit {
         voice.listen()
     }
     val mic = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { ok ->
-        if (ok) start() else voice.listen() // mostra "falta a permissão do microfone"
+        if (ok) start() else voice.listen() // mostra "falta a permissão do microfone" com o botão para liberar
     }
     return {
         if (voice.micAllowed()) start() else mic.launch(Manifest.permission.RECORD_AUDIO)
@@ -135,7 +136,24 @@ internal fun VoiceOverlay(ui: UiState) {
                         Text("Você: \"${s.heard}\"", fontSize = 16.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         Text(s.text, fontSize = 24.sp, fontWeight = FontWeight.SemiBold)
                     }
-                    is VoiceState.Error -> Text(s.message, fontSize = 20.sp, color = Warn)
+                    is VoiceState.Error -> {
+                        Text(s.message, fontSize = 20.sp, color = Warn)
+                        val ctx = LocalContext.current
+                        // Leva direto para onde se resolve.
+                        when {
+                            s.message.contains("microfone", true) && s.message.contains("permiss", true) ->
+                                Button({ SystemSettings.app(ctx) }, Modifier.height(56.dp)) { Text("Liberar o microfone", fontSize = 17.sp) }
+                            s.message.contains("reconhecimento de voz instalado", true) ->
+                                Button({ SystemSettings.playStore(ctx, SystemSettings.GOOGLE_APP) }, Modifier.height(56.dp)) {
+                                    Text("Instalar o app Google", fontSize = 17.sp)
+                                }
+                            s.message.contains("internet", true) ->
+                                Button({ ctx.startActivity(android.content.Intent(android.provider.Settings.ACTION_WIFI_SETTINGS)
+                                    .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)) }, Modifier.height(56.dp)) {
+                                    Text("Abrir o Wi-Fi", fontSize = 17.sp)
+                                }
+                        }
+                    }
                     VoiceState.Idle -> {}
                 }
             }
@@ -154,6 +172,7 @@ internal fun VoiceOverlay(ui: UiState) {
 /** Ajustes: teste do comando de voz neste aparelho (microfone, reconhecimento e voz em português). */
 @Composable
 internal fun VoiceSection(moving: Boolean) {
+    val ctx = LocalContext.current
     val voice = rememberVoice()
     var check by remember { mutableStateOf<VoiceCheck?>(null) }
     var tick by remember { mutableStateOf(0) }
@@ -186,6 +205,10 @@ internal fun VoiceSection(moving: Boolean) {
             c.recognizerActivity -> "Reconhecimento de voz pela tela do sistema"
             else -> "Sem reconhecimento de voz neste aparelho: precisa do app Google (ou de uma versão com reconhecimento offline)"
         })
+        if (!c.micAllowed) OutlinedButton({ SystemSettings.app(ctx) }, Modifier.height(56.dp)) { Text("Liberar o microfone", fontSize = 16.sp) }
+        if (!c.recognizer && !c.recognizerActivity) OutlinedButton({ SystemSettings.playStore(ctx, SystemSettings.GOOGLE_APP) }, Modifier.height(56.dp)) {
+            Text("Instalar o app Google", fontSize = 16.sp)
+        }
         line(c.ttsPortuguese, when (c.ttsPortuguese) {
             true -> "Voz em português instalada"
             null -> "Iniciando a voz do app..."
@@ -214,11 +237,12 @@ internal fun VoiceChoiceSection() {
     }
     Text("Voz do app", fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
     if (options.isEmpty()) {
-        Text("Nenhuma voz em português encontrada. Instale ou atualize \"Serviços de fala do Google\" na Play Store e baixe " +
-            "a voz Português (Brasil) em Configurações do Android > Idioma > Saída de texto para fala.",
+        Text("Nenhuma voz em português encontrada. Instale \"Serviços de fala do Google\" e baixe a voz Português (Brasil).",
             color = Warn, fontSize = 15.sp)
+        VoiceSettingsButtons()
     } else {
-        Text("Toque em Ouvir para comparar e em Usar para escolher. As de alta qualidade soam mais naturais.",
+        Text("Toque em Ouvir para comparar e em Usar para escolher. As de alta qualidade soam mais naturais. " +
+            "Para ter mais vozes, use os botões abaixo da lista.",
             color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 15.sp)
         (if (showAll) options else options.take(6)).forEach { o ->
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -235,9 +259,23 @@ internal fun VoiceChoiceSection() {
         if (options.size > 6 && !showAll) {
             OutlinedButton({ showAll = true }, Modifier.height(56.dp)) { Text("Ver todas as ${options.size} vozes", fontSize = 16.sp) }
         }
+        VoiceSettingsButtons()
     }
     VoiceStepper("Velocidade da fala", rate, onChange = { rate = it; voice.rate = it; voice.speak("Velocidade ${VoiceCommands.n(it.toDouble(), 1)}.") })
     VoiceStepper("Tom da voz", pitch, onChange = { pitch = it; voice.pitch = it; voice.speak("Tom ${VoiceCommands.n(it.toDouble(), 1)}.") })
+}
+
+/** Atalhos para conseguir mais vozes: baixar no leitor, configurar a saída de fala, instalar o leitor do Google. */
+@Composable
+private fun VoiceSettingsButtons() {
+    val ctx = LocalContext.current
+    FlowRow(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        OutlinedButton({ SystemSettings.installVoices(ctx) }, Modifier.height(56.dp)) { Text("Baixar vozes", fontSize = 16.sp) }
+        OutlinedButton({ SystemSettings.textToSpeech(ctx) }, Modifier.height(56.dp)) { Text("Saída de texto para fala", fontSize = 16.sp) }
+        OutlinedButton({ SystemSettings.playStore(ctx, SystemSettings.GOOGLE_TTS) }, Modifier.height(56.dp)) {
+            Text("Serviços de fala do Google", fontSize = 16.sp)
+        }
+    }
 }
 
 @Composable

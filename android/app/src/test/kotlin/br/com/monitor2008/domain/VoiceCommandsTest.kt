@@ -75,6 +75,9 @@ class VoiceCommandsTest {
         assertEquals(VoiceNav.MUSICA, VoiceCommands.parse("vai para a música").nav)
         assertEquals(VoiceNav.MIDIAS, VoiceCommands.parse("abre mídias").nav)
         assertEquals(VoiceNav.MAPA, VoiceCommands.parse("abrir o mapa").nav)
+        assertEquals(VoiceNav.MAPA, VoiceCommands.parse("abrir os mapas").nav)
+        assertEquals(VoiceNav.MAPA, VoiceCommands.parse("abre o Google Maps").nav)
+        assertEquals(VoiceNav.MAPA, VoiceCommands.parse("abrir o Waze").nav)
         assertEquals(VoiceNav.POSTOS, VoiceCommands.parse("mostra os postos").nav)
         assertEquals(VoiceNav.PAINEL, VoiceCommands.parse("voltar para o painel").nav)
         // Perguntas continuam perguntas.

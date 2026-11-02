@@ -1,5 +1,6 @@
 package br.com.monitor2008.ui
 
+import br.com.monitor2008.data.SystemSettings
 import android.app.Application
 import br.com.monitor2008.domain.VoiceNav
 import br.com.monitor2008.data.VoiceAssistant
@@ -196,7 +197,7 @@ private fun MusicPlayer(modifier: Modifier, large: Boolean) {
             if (!allowed && Features.mediaControl) {
                 Text("Para ver e controlar a música dos outros apps, libere o \"acesso a notificações\" do Monitor 2008 " +
                     "(o app não lê nem guarda suas notificações).", fontSize = 15.sp, color = Warn)
-                Button({ ctx.startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)) }, Modifier.height(56.dp)) {
+                Button({ SystemSettings.notificationAccess(ctx) }, Modifier.height(56.dp)) {
                     Text("Liberar", fontSize = 17.sp)
                 }
             }

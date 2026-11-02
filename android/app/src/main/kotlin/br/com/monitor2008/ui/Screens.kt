@@ -2,6 +2,7 @@
 
 package br.com.monitor2008.ui
 
+import br.com.monitor2008.data.SystemSettings
 import android.app.Application
 import android.app.Activity
 import android.content.Context
@@ -94,6 +95,7 @@ import br.com.monitor2008.data.RadioPlayer
 import br.com.monitor2008.data.RadioBrowser
 import androidx.compose.runtime.rememberCoroutineScope
 import kotlinx.coroutines.launch
+import androidx.lifecycle.withResumed
 import br.com.monitor2008.domain.VoiceNav
 import br.com.monitor2008.domain.VoiceRefuel
 import br.com.monitor2008.data.Store
@@ -153,6 +155,19 @@ fun MonitorApp(vm: MonitorEngine) {
     val voiceAction by voice.action.collectAsStateWithLifecycle()
     // Busca de rádio fora do LaunchedEffect: limpar o pedido muda a chave e cancelaria a busca.
     val voiceScope = rememberCoroutineScope()
+    /**
+     * Abrir o mapa pela voz: espera a janela da conversa fechar e o Monitor voltar ao primeiro plano
+     * (vindo da tela de reconhecimento do sistema ele ainda está pausado, e aí o Android não deixa
+     * virar janela flutuante). Depois abre igual ao botão Mapa: ao lado, ou o Monitor vira janela flutuante.
+     */
+    fun openWhenReady(open: (Activity?) -> Unit) {
+        val act = ctx.findActivity()
+        voiceScope.launch {
+            delay(500)
+            val owner = act as? androidx.lifecycle.LifecycleOwner
+            if (owner != null) owner.lifecycle.withResumed { open(act) } else open(act)
+        }
+    }
     LaunchedEffect(voiceAction) {
         val a = voiceAction ?: return@LaunchedEffect
         val app = ctx.applicationContext as Application
@@ -162,7 +177,7 @@ fun MonitorApp(vm: MonitorEngine) {
                 voice.consumeAction()
                 val q = a.query ?: return@LaunchedEffect
                 val address = VoiceCommands.placeFor(q, store.places()) ?: q
-                AppLauncher(app).routeTo(address, ctx.findActivity())?.let { voice.say(it) }
+                openWhenReady { act -> AppLauncher(app).routeTo(address, act)?.let { voice.say(it) } }
             }
             // "tocar rádio jovem pan": favoritas primeiro, depois a lista de rádios pela internet.
             VoiceIntent.TOCAR_RADIO -> {
@@ -199,7 +214,7 @@ fun MonitorApp(vm: MonitorEngine) {
             VoiceIntent.ABRIR -> when (val nav = a.nav) {
                 VoiceNav.MAPA -> {
                     voice.consumeAction()
-                    AppLauncher(ctx.applicationContext).openMap(ctx.findActivity())?.let { Toast.makeText(ctx, it, Toast.LENGTH_LONG).show() }
+                    openWhenReady { act -> AppLauncher(app).openMap(act)?.let { voice.say(it); Toast.makeText(ctx, it, Toast.LENGTH_LONG).show() } }
                 }
                 // A aba Mídias atende (troca para Música ou Rádio e, se pediu "tocar", toca).
                 VoiceNav.MUSICA, VoiceNav.RADIO -> tab = Tab.MIDIAS
@@ -605,8 +620,9 @@ private fun MediaBar(compact: Boolean, showPlayer: Boolean) {
             }
             Column(Modifier.weight(1f)) {
                 when {
-                    !allowed && Features.mediaControl -> Text("Para ver a música tocando, libere em Ajustes.", fontSize = 15.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    !allowed && Features.mediaControl -> OutlinedButton({ SystemSettings.notificationAccess(ctx) }, Modifier.height(56.dp)) {
+                        Text("Liberar a música tocando", fontSize = 15.sp)
+                    }
                     n == null -> Text("Nada tocando", fontSize = 16.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     else -> {
                         // O app Bluetooth do multimídia (música do celular) costuma não mandar o nome da faixa.
@@ -676,7 +692,7 @@ private fun MapMusicSettings() {
     } else if (allowed) {
         Text("Mini player ativado: o Painel mostra a música tocando.", color = OkGreen, fontSize = 15.sp)
     } else {
-        Button({ ctx.startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)) }, Modifier.height(56.dp)) {
+        Button({ SystemSettings.notificationAccess(ctx) }, Modifier.height(56.dp)) {
             Text("Mostrar a música tocando no Painel", fontSize = 17.sp)
         }
         Text("Abre \"acesso a notificações\": ative o Monitor 2008. É o que permite ver e controlar a música; " +
@@ -814,9 +830,7 @@ private fun RefuelDialog(
         allowed = ok
         // Recusada antes com "não perguntar de novo": o Android nem mostra o pedido; abre os ajustes do app.
         if (!ok && askedByButton) {
-            try {
-                ctx.startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:${ctx.packageName}")))
-            } catch (_: Exception) { }
+            SystemSettings.app(ctx)
         }
         askedByButton = false
     }
@@ -891,7 +905,7 @@ private fun RefuelDialog(
                         Text("Permitir localização", fontSize = 17.sp)
                     }
                     LocProblem.LOCATION_OFF -> Button({
-                        try { ctx.startActivity(Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS)) } catch (_: Exception) { }
+                        SystemSettings.location(ctx)
                     }, Modifier.height(56.dp)) { Text("Ligar a localização", fontSize = 17.sp) }
                     LocProblem.NO_FIX -> Button({ attempt++ }, Modifier.height(56.dp)) { Text("Tentar de novo", fontSize = 17.sp) }
                     null -> {}
@@ -1446,10 +1460,8 @@ private fun StartupSection() {
                 color = Warn, fontSize = 15.sp)
             Button({
                 try {
-                    ctx.startActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:${ctx.packageName}")))
-                } catch (e: Exception) {
-                    ctx.startActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION))
-                }
+                    SystemSettings.overlay(ctx)
+                } catch (e: Exception) { }
             }, Modifier.height(56.dp)) { Text("Permitir abrir sozinho", fontSize = 18.sp) }
         }
     }
@@ -1504,7 +1516,11 @@ private fun AutoConnectSection(moving: Boolean) {
 @Composable
 private fun AdapterPicker(ui: UiState, vm: MonitorEngine) {
     val context = LocalContext.current
-    val askPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { vm.refreshPaired() }
+    val askPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { r ->
+        vm.refreshPaired()
+        // Negada antes com "não perguntar de novo": o Android nem mostra o pedido; abre a tela do app.
+        if (r.values.any { !it }) SystemSettings.app(context)
+    }
     // Atualiza ao abrir a tela e ao voltar das configurações de Bluetooth.
     LifecycleResumeEffect(Unit) {
         vm.refreshPaired()
@@ -1516,7 +1532,7 @@ private fun AdapterPicker(ui: UiState, vm: MonitorEngine) {
         color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 16.sp)
     FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         OutlinedButton({ vm.refreshPaired() }, Modifier.height(56.dp)) { Text("Atualizar lista", fontSize = 18.sp) }
-        OutlinedButton({ context.startActivity(Intent(Settings.ACTION_BLUETOOTH_SETTINGS)) }, Modifier.height(56.dp), enabled = !ui.moving) {
+        OutlinedButton({ SystemSettings.bluetooth(context) }, Modifier.height(56.dp), enabled = !ui.moving) {
             Text("Abrir Bluetooth do aparelho", fontSize = 18.sp)
         }
     }

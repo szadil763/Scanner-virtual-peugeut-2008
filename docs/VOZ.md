@@ -48,3 +48,9 @@ Números por extenso viram dígitos ("cento e vinte e cinco" = 125); "seis e onz
 - **Voz do app** (Ajustes, `domain/TtsVoices` com testes): lista as vozes em português do leitor do aparelho como "Voz 1, 2..." (melhores primeiro: instalada, sem internet, maior qualidade), com Ouvir e Usar; velocidade e tom de 0,6 a 1,6. Sem escolha, usa a melhor. Mais vozes: instalar "Serviços de fala do Google" e baixar Português (Brasil).
 - Ajustes > Comando de voz > **Testar este aparelho**: mostra se há microfone permitido, reconhecimento de voz e voz em português.
 - Permissão `RECORD_AUDIO`, pedida no primeiro toque; `<queries>` para enxergar os serviços de reconhecimento e de voz.
+
+## Permissões e configurações
+
+Pedido do dono: onde faltar permissão, levar direto à tela do Android (`data/SystemSettings`). Microfone negado → tela do app; sem reconhecimento → app Google na Play Store; sem internet → Wi-Fi; poucas vozes → Baixar vozes, Saída de texto para fala e Serviços de fala do Google. O mesmo vale fora da voz: acesso a notificações (já na chave do Monitor no Android 11+; o mini player virou botão "Liberar a música tocando"), sobrepor a outros apps, localização, Bluetooth (negado de vez → tela do app).
+
+Mapa pela voz: abre 0,5 s depois, quando a janela da conversa já fechou e o Monitor está em primeiro plano (vindo da tela de reconhecimento do sistema ele ainda estava pausado e não virava janela flutuante, 0.1.49). "Google Maps" e "mapas" também valem.
