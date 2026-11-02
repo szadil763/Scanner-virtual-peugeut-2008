@@ -1,6 +1,8 @@
 package br.com.monitor2008.ui
 
 import android.app.Application
+import br.com.monitor2008.domain.VoiceNav
+import br.com.monitor2008.data.VoiceAssistant
 import android.content.Intent
 import android.os.SystemClock
 import android.provider.Settings
@@ -419,6 +421,21 @@ internal fun MidiasScreen(ui: UiState, compact: Boolean) {
     val ctx = LocalContext.current
     val store = remember { Store(ctx.applicationContext) }
     var mode by remember { mutableStateOf(MediaMode.values().firstOrNull { it.name == store.mediaMode } ?: MediaMode.MUSICA) }
+    // Comando de voz: "abrir o rádio", "tocar rádio", "ouvir música".
+    val voice = remember { VoiceAssistant.get(ctx.applicationContext as Application) }
+    val voiceAction by voice.action.collectAsStateWithLifecycle()
+    LaunchedEffect(voiceAction) {
+        val a = voiceAction ?: return@LaunchedEffect
+        val m = when (a.nav) { VoiceNav.RADIO -> MediaMode.RADIO; VoiceNav.MUSICA -> MediaMode.MUSICA; else -> return@LaunchedEffect }
+        voice.consumeAction()
+        mode = m
+        store.mediaMode = m.name
+        if (a.play) {
+            val app = ctx.applicationContext as Application
+            if (m == MediaMode.RADIO) RadioPlayer.get(app).resume()
+            else MediaWatcher.get(app).let { w -> if (w.now.value?.playing != true) w.playPause() }
+        }
+    }
     val media: @Composable (Modifier) -> Unit = { mod ->
         Column(mod, verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {

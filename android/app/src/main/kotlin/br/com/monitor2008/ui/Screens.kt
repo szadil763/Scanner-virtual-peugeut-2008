@@ -87,6 +87,10 @@ import br.com.monitor2008.data.Features
 import br.com.monitor2008.data.MediaWatcher
 import br.com.monitor2008.data.PlaceFinder
 import br.com.monitor2008.domain.RefuelMath
+import br.com.monitor2008.data.VoiceAssistant
+import br.com.monitor2008.domain.VoiceIntent
+import br.com.monitor2008.domain.VoiceNav
+import br.com.monitor2008.domain.VoiceRefuel
 import br.com.monitor2008.data.Store
 import br.com.monitor2008.data.Updater
 import br.com.monitor2008.data.ConnState
@@ -139,6 +143,27 @@ fun MonitorApp(vm: MonitorEngine) {
     LaunchedEffect(tab) { store.lastTab = tab.name }
     // Confere se há versão nova ao abrir (no máximo a cada 6 h; sem internet, não mostra nada).
     LaunchedEffect(Unit) { Updater.get(ctx.applicationContext as Application).checkQuietly() }
+    // Comando de voz: "abrir a saúde", "abrir o mapa", "tocar rádio", "abasteci cem reais...".
+    val voice = remember { VoiceAssistant.get(ctx.applicationContext as Application) }
+    val voiceAction by voice.action.collectAsStateWithLifecycle()
+    LaunchedEffect(voiceAction) {
+        val a = voiceAction ?: return@LaunchedEffect
+        when (a.intent) {
+            VoiceIntent.ABRIR -> when (val nav = a.nav) {
+                VoiceNav.MAPA -> {
+                    voice.consumeAction()
+                    AppLauncher(ctx.applicationContext).openMap(ctx.findActivity())?.let { Toast.makeText(ctx, it, Toast.LENGTH_LONG).show() }
+                }
+                // A aba Mídias atende (troca para Música ou Rádio e, se pediu "tocar", toca).
+                VoiceNav.MUSICA, VoiceNav.RADIO -> tab = Tab.MIDIAS
+                null -> voice.consumeAction()
+                else -> { voice.consumeAction(); Tab.values().firstOrNull { it.name == nav.name }?.let { tab = it } }
+            }
+            // A aba Consumo abre o registro preenchido.
+            VoiceIntent.ABASTECER -> tab = Tab.CONSUMO
+            else -> voice.consumeAction()
+        }
+    }
 
     BoxWithConstraints(Modifier.fillMaxSize()) {
         val compact = maxWidth < COMPACT_WIDTH
@@ -635,6 +660,7 @@ private fun methodLabel(m: FlowMethod?) = when (m) {
 
 @Composable
 private fun ConsumoScreen(ui: UiState, vm: MonitorEngine, phone: Boolean = false) {
+    val ctx = LocalContext.current
     var dialog by remember { mutableStateOf(false) }
     var confirmReset by remember { mutableStateOf(false) }
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(16.dp)) {
@@ -683,8 +709,18 @@ private fun ConsumoScreen(ui: UiState, vm: MonitorEngine, phone: Boolean = false
                 if (r.full) " · cheio" else " · parcial", r.realKmPerL?.let { " · ${it.f(1)} km/l real" } ?: ""))
         }
     }
-    if (dialog) RefuelDialog(ui.fuelPrice, ui.ethanolFraction >= 0.9, vm, onDismiss = { dialog = false }) { l, p, full, eth, place ->
-        vm.registerRefuel(l, p, full, eth, place); dialog = false
+    // Abastecimento falado ("abasteci cem reais a seis e onze"): abre o registro já preenchido.
+    val voice = remember { VoiceAssistant.get(ctx.applicationContext as Application) }
+    val voiceAction by voice.action.collectAsStateWithLifecycle()
+    var prefill by remember { mutableStateOf<VoiceRefuel?>(null) }
+    LaunchedEffect(voiceAction) {
+        val a = voiceAction ?: return@LaunchedEffect
+        if (a.intent != VoiceIntent.ABASTECER) return@LaunchedEffect
+        voice.consumeAction()
+        if (!ui.moving) { prefill = a.refuel; dialog = true }
+    }
+    if (dialog) RefuelDialog(ui.fuelPrice, ui.ethanolFraction >= 0.9, vm, prefill, onDismiss = { dialog = false; prefill = null }) { l, p, full, eth, place ->
+        vm.registerRefuel(l, p, full, eth, place); dialog = false; prefill = null
     }
     if (confirmReset) AlertDialog(
         onDismissRequest = { confirmReset = false },
@@ -703,17 +739,18 @@ private enum class LocProblem { NO_PERMISSION, LOCATION_OFF, NO_FIX }
 
 @Composable
 private fun RefuelDialog(
-    price: Double, ethanolNow: Boolean, vm: MonitorEngine, onDismiss: () -> Unit,
+    price: Double, ethanolNow: Boolean, vm: MonitorEngine, prefill: VoiceRefuel?, onDismiss: () -> Unit,
     onSave: (Double, Double, Boolean, Boolean, StationDraft?) -> Unit,
 ) {
     val ctx = LocalContext.current
     val prefs = remember { Store(ctx.applicationContext) }
-    var liters by remember { mutableStateOf("") }
-    var money by remember { mutableStateOf("") }
-    var byMoney by remember { mutableStateOf(prefs.refuelByMoney) }
-    var p by remember { mutableStateOf(price.f(2)) }
-    var full by remember { mutableStateOf(true) }
-    var ethanol by remember { mutableStateOf(ethanolNow) }
+    // Preenchido pelo comando de voz, quando veio de lá: valor pago (ou litros), preço, cheio, combustível.
+    var liters by remember { mutableStateOf(prefill?.takeIf { it.amount == null }?.liters?.f(2) ?: "") }
+    var money by remember { mutableStateOf(prefill?.amount?.f(2) ?: "") }
+    var byMoney by remember { mutableStateOf(prefill?.let { it.amount != null || it.liters == null && prefs.refuelByMoney } ?: prefs.refuelByMoney) }
+    var p by remember { mutableStateOf((prefill?.pricePerLiter ?: price).f(2)) }
+    var full by remember { mutableStateOf(prefill?.full ?: true) }
+    var ethanol by remember { mutableStateOf(prefill?.ethanol ?: ethanolNow) }
     var allowed by remember { mutableStateOf(PlaceFinder.allowed(ctx)) }
     var loc by remember { mutableStateOf<Pair<Double, Double>?>(null) }
     var locState by remember { mutableStateOf("Localizando o posto...") }

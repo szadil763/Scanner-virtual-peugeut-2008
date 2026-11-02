@@ -4,7 +4,26 @@ import java.text.Normalizer
 import java.util.Locale
 
 /** O que o dono perguntou pelo comando de voz (primeira versão: só consultas, nada muda no app). */
-enum class VoiceIntent { CONSUMO, VIAGEM, TEMPERATURA, BATERIA, OLEO, FALHAS, SAUDE, VELOCIDADE, ROTACAO, AJUDA, DESCONHECIDO }
+enum class VoiceIntent { ABRIR, ABASTECER, CONSUMO, VIAGEM, TEMPERATURA, BATERIA, OLEO, FALHAS, SAUDE, VELOCIDADE, ROTACAO, AJUDA, DESCONHECIDO }
+
+/** Telas do app que o comando de voz abre (MAPA abre o app de mapa; MUSICA e RADIO, a aba Mídias nesse modo). */
+enum class VoiceNav(val spoken: String) {
+    PAINEL("o Painel"), MIDIAS("Mídias"), MUSICA("a Música"), RADIO("o Rádio"), CONSUMO("Consumo"), POSTOS("Postos"),
+    SAUDE("Saúde"), MANUTENCAO("Manutenção"), DIAGNOSTICO("Diagnóstico"), AJUSTES("Ajustes"), MAPA("o mapa"),
+}
+
+/** Abastecimento falado: o que deu para entender (null = não disse). [liters] já vem calculado do valor, se der. */
+data class VoiceRefuel(
+    val amount: Double? = null,
+    val liters: Double? = null,
+    val pricePerLiter: Double? = null,
+    val full: Boolean? = null,
+    val ethanol: Boolean? = null,
+)
+
+/** Pergunta ou pedido entendido. */
+/** [play]: "tocar rádio", "ouvir música": além de abrir, começa a tocar. */
+data class VoiceCommand(val intent: VoiceIntent, val nav: VoiceNav? = null, val refuel: VoiceRefuel? = null, val play: Boolean = false)
 
 /** Indicador da Saúde fora do normal, para a resposta falada. */
 data class VoiceAlert(val title: String, val alert: Boolean)
@@ -28,6 +47,8 @@ data class VoiceSnapshot(
     val alerts: List<VoiceAlert> = emptyList(),
     /** Null = falhas ainda não lidas. */
     val dtcs: List<String>? = null,
+    /** Carro andando: não abre o registro de abastecimento. */
+    val moving: Boolean = false,
 )
 
 /**
@@ -69,6 +90,201 @@ object VoiceCommands {
         return VoiceIntent.DESCONHECIDO to (candidates.firstOrNull() ?: "")
     }
 
+    // ---------- Abrir telas e registrar abastecimento ----------
+
+    private val navVerbs = listOf("abrir", "abre", "abra", "ir para", "ir pra", "vai para", "vai pra", "va para", "va pra",
+        "mostrar", "mostra", "mostre", "mudar para", "mudar pra", "muda para", "muda pra", "trocar para", "trocar pra",
+        "troca para", "troca pra", "entrar", "entra", "voltar para", "voltar pra", "volta para", "volta pra", "tela", "aba")
+    private val playVerbs = listOf("tocar", "toca", "toque", "ligar", "liga", "ligue", "ouvir", "colocar", "coloca", "bota", "botar")
+
+    /** Ordem importa: "mídias" antes de "música" não importa, mas "rádio" e "música" antes de "mídias" sim. */
+    private val navTargets: List<Pair<VoiceNav, List<String>>> = listOf(
+        VoiceNav.MAPA to listOf("mapa", "navegacao", "navegador", "gps", "waze"),
+        VoiceNav.RADIO to listOf("radio"),
+        VoiceNav.MUSICA to listOf("musica", "spotify"),
+        VoiceNav.MIDIAS to listOf("midia"),
+        VoiceNav.PAINEL to listOf("painel", "inicio", "tela principal"),
+        VoiceNav.CONSUMO to listOf("consumo"),
+        VoiceNav.POSTOS to listOf("posto"),
+        VoiceNav.SAUDE to listOf("saude"),
+        VoiceNav.MANUTENCAO to listOf("manutencao", "revisao"),
+        VoiceNav.DIAGNOSTICO to listOf("diagnostico"),
+        VoiceNav.AJUSTES to listOf("ajuste", "configurac"),
+    )
+
+    private val refuelWords = listOf("abasteci", "abastecer", "abastecimento", "abastece", "coloquei", "botei", "enchi o tanque",
+        "completei o tanque", "registrar gasolina", "registrar etanol")
+
+    fun parse(text: String): VoiceCommand {
+        val t = normalize(text)
+        if (t.isEmpty()) return VoiceCommand(VoiceIntent.DESCONHECIDO)
+        if (keywords.first().second.any { t.contains(it) }) return VoiceCommand(VoiceIntent.AJUDA)
+        if (refuelWords.any { t.contains(it) }) return VoiceCommand(VoiceIntent.ABASTECER, refuel = refuel(text))
+        val target = navTargets.firstOrNull { (_, w) -> w.any { t.contains(it) } }?.first
+        if (target != null) {
+            val verb = navVerbs.any { Regex("\\b$it\\b").containsMatchIn(t) }
+            val play = (target == VoiceNav.RADIO || target == VoiceNav.MUSICA) && playVerbs.any { Regex("\\b$it\\b").containsMatchIn(t) }
+            // Só o nome da tela ("rádio", "mapa") também vale; perguntas ("como está a saúde") não.
+            val alone = t.split(' ').size <= 2 && target != VoiceNav.SAUDE && target != VoiceNav.CONSUMO
+            if (verb || play || alone) return VoiceCommand(VoiceIntent.ABRIR, nav = target, play = play)
+        }
+        return VoiceCommand(intent(text))
+    }
+
+    /** Várias versões da frase: vale a primeira que o app entende. */
+    fun parse(candidates: List<String>): Pair<VoiceCommand, String> {
+        candidates.forEach { c -> parse(c).let { if (it.intent != VoiceIntent.DESCONHECIDO) return it to c } }
+        return VoiceCommand(VoiceIntent.DESCONHECIDO) to (candidates.firstOrNull() ?: "")
+    }
+
+    fun answer(cmd: VoiceCommand, s: VoiceSnapshot): String = when (cmd.intent) {
+        VoiceIntent.ABRIR -> if (cmd.play && cmd.nav == VoiceNav.RADIO) "Tocando a última rádio." else "Abrindo ${cmd.nav?.spoken ?: "a tela"}."
+        VoiceIntent.ABASTECER -> refuelAnswer(cmd.refuel ?: VoiceRefuel(), s)
+        else -> answer(cmd.intent, s)
+    }
+
+    private fun refuelAnswer(r: VoiceRefuel, s: VoiceSnapshot): String {
+        if (s.moving) return "Pare o carro para registrar o abastecimento."
+        val confirm = " Confira o posto e toque em Salvar."
+        return when {
+            r.amount != null && r.pricePerLiter != null && r.liters != null ->
+                "${money(r.amount)} a ${n(r.pricePerLiter, 2)} o litro: ${n(r.liters, 2)} litros.$confirm"
+            r.liters != null && r.pricePerLiter != null ->
+                "${lt(r.liters)} litros a ${n(r.pricePerLiter, 2)} o litro: ${money(r.liters * r.pricePerLiter)}.$confirm"
+            r.amount != null -> "${money(r.amount)}. Confira o preço do litro na tela e toque em Salvar."
+            r.liters != null -> "${lt(r.liters)} litros. Confira o preço do litro na tela e toque em Salvar."
+            else -> "Abrindo o registro de abastecimento. Da próxima vez, diga, por exemplo: abasteci cem reais a seis e onze."
+        }
+    }
+
+    /** Litros: inteiro quando for ("40 litros"), senão duas casas ("16,37 litros"). */
+    private fun lt(v: Double) = if (Math.abs(v - Math.round(v)) < 0.005) n(v, 0) else n(v, 2)
+
+    private fun money(v: Double): String {
+        val cents = Math.round(v * 100) % 100
+        val reais = Math.round(v * 100) / 100
+        return if (cents == 0L) "$reais reais" else "$reais reais e $cents centavos"
+    }
+
+    private val numberWords = mapOf(
+        "zero" to 0, "um" to 1, "uma" to 1, "dois" to 2, "duas" to 2, "tres" to 3, "quatro" to 4, "cinco" to 5, "seis" to 6,
+        "sete" to 7, "oito" to 8, "nove" to 9, "dez" to 10, "onze" to 11, "doze" to 12, "treze" to 13, "quatorze" to 14,
+        "catorze" to 14, "quinze" to 15, "dezesseis" to 16, "dezessete" to 17, "dezoito" to 18, "dezenove" to 19,
+        "vinte" to 20, "trinta" to 30, "quarenta" to 40, "cinquenta" to 50, "sessenta" to 60, "setenta" to 70,
+        "oitenta" to 80, "noventa" to 90, "cem" to 100, "cento" to 100, "duzentos" to 200, "trezentos" to 300,
+        "quatrocentos" to 400, "quinhentos" to 500, "seiscentos" to 600, "setecentos" to 700, "oitocentos" to 800,
+        "novecentos" to 900,
+    )
+
+    /**
+     * Texto com números por extenso virando dígitos ("cento e vinte" -> "120"); "seis e onze" fica
+     * "6 e 11" (não é um número só: é o preço falado). Vírgula decimal vira ponto ("6,11" -> "6.11").
+     */
+    fun numbers(text: String): List<String> {
+        val base = Normalizer.normalize(text.lowercase(Locale("pt", "BR")), Normalizer.Form.NFD)
+            .replace(Regex("\\p{M}+"), "")
+            .replace("r$", " r ")
+            .replace(Regex("(\\d)[,.](\\d)"), "$1.$2")
+            .replace(Regex("[^a-z0-9. ]"), " ")
+            .replace(Regex("(?<!\\d)\\.|\\.(?!\\d)"), " ")
+        val tokens = base.split(Regex("\\s+")).filter { it.isNotEmpty() }
+        val out = mutableListOf<String>()
+        var i = 0
+        while (i < tokens.size) {
+            val w = tokens[i]
+            val first = numberWords[w] ?: if (w == "mil") 1000 else null
+            if (first == null) { out += w; i++; continue }
+            var value: Int = first
+            var last: Int = first
+            i++
+            while (i < tokens.size) {
+                val tk = tokens[i]
+                if (tk == "mil" && value in 1..999) { value *= 1000; last = value; i++; continue }
+                if (tk == "e" && i + 1 < tokens.size) {
+                    val b = numberWords[tokens[i + 1]] ?: break
+                    val place = when { last >= 1000 -> 1000; last >= 100 -> 100; last >= 10 && last % 10 == 0 -> 10; else -> 0 }
+                    if (place == 0 || last % place != 0 || b >= place) break
+                    value += b; last = b; i += 2; continue
+                }
+                val b = numberWords[tk]
+                // "vinte cinco" (sem o "e"), como alguns reconhecedores escrevem.
+                if (b != null && last >= 20 && last < 100 && last % 10 == 0 && b < 10) { value += b; last = b; i++; continue }
+                break
+            }
+            out += value.toString()
+        }
+        return out
+    }
+
+    private data class Num(val value: Double, val start: Int, val end: Int, val currency: Boolean, val liters: Boolean, val priceMark: Boolean)
+
+    fun refuel(text: String): VoiceRefuel {
+        val tk = numbers(text)
+        fun num(k: Int) = tk.getOrNull(k)?.toDoubleOrNull()
+        val found = mutableListOf<Num>()
+        var k = 0
+        while (k < tk.size) {
+            var v = num(k)
+            if (v == null) { k++; continue }
+            val start = k
+            var end = k
+            var currency = tk.getOrNull(k - 1) == "r"
+            val isInt = !tk[k].contains('.')
+            // "6 reais e 11 centavos", "6 e 11 centavos", "6 e 11" (preço falado)
+            var j = k + 1
+            if (tk.getOrNull(j) == "reais" || tk.getOrNull(j) == "real") { currency = true; end = j; j++ }
+            if (isInt && tk.getOrNull(j) == "e") {
+                val c = num(j + 1)
+                val centavos = tk.getOrNull(j + 2) == "centavos" || tk.getOrNull(j + 2) == "centavo"
+                if (c != null && c == Math.floor(c) && c < 100 && (centavos || (c >= 10 && v < 20))) {
+                    v += c / 100
+                    end = if (centavos) j + 2 else j + 1
+                }
+            }
+            val next = tk.getOrNull(end + 1)
+            val liters = next == "litros" || (next == "litro" && tk.getOrNull(start - 1) != "a") || next == "l"
+            val before = tk.getOrNull(start - 1)
+            val after = tk.subList(minOf(end + 1, tk.size), minOf(end + 3, tk.size)).joinToString(" ")
+            val priceMark = before in setOf("a", "por", "preco", "custando", "litro") ||
+                after.startsWith("o litro") || after.startsWith("por litro") || after.startsWith("cada litro") || after.startsWith("no litro")
+            found += Num(v, start, end, currency, liters && !priceMark, priceMark)
+            k = end + 1
+        }
+        val liters = found.firstOrNull { it.liters && it.value > 0 && it.value < 200 }?.value
+        val rest = found.filter { !it.liters }
+        val marked = rest.firstOrNull { it.priceMark && it.value in 1.0..20.0 }
+        var price: Double? = null
+        var amount: Double? = null
+        when {
+            marked != null -> {
+                price = marked.value
+                amount = rest.firstOrNull { it !== marked }?.value
+            }
+            rest.size >= 2 -> {
+                val sorted = rest.sortedBy { it.value }
+                if (sorted.first().value in 1.0..20.0) price = sorted.first().value
+                amount = sorted.last().value
+            }
+            rest.size == 1 -> {
+                val v = rest.first().value
+                if (liters != null && v in 1.0..20.0) price = v else amount = v
+            }
+        }
+        val t = normalize(text)
+        val full = when {
+            listOf("nao enchi", "nao completei", "parcial", "nao foi cheio", "nao e cheio").any { t.contains(it) } -> false
+            listOf("cheio", "completei", "completo", "enchi").any { t.contains(it) } -> true
+            else -> null
+        }
+        val ethanol = when {
+            t.contains("etanol") || t.contains("alcool") -> true
+            t.contains("gasolina") -> false
+            else -> null
+        }
+        val computed = liters ?: RefuelMath.litersFromAmount(amount, price)
+        return VoiceRefuel(amount, computed, price, full, ethanol)
+    }
+
     fun answer(intent: VoiceIntent, s: VoiceSnapshot): String = when (intent) {
         VoiceIntent.CONSUMO -> consumo(s)
         VoiceIntent.VIAGEM -> viagem(s)
@@ -100,11 +316,13 @@ object VoiceCommands {
         VoiceIntent.VELOCIDADE -> live(s, s.speedKmh) { "${n(it, 0)} quilômetros por hora." }
         VoiceIntent.ROTACAO -> live(s, s.rpm) { "${n(it, 0)} rotações por minuto." }
         VoiceIntent.AJUDA -> HELP
+        VoiceIntent.ABRIR, VoiceIntent.ABASTECER -> HELP
         VoiceIntent.DESCONHECIDO -> "Não entendi. $HELP"
     }
 
-    const val HELP = "Pergunte, por exemplo: qual o consumo, como está a viagem, temperatura do motor, bateria, " +
-        "troca de óleo, tem alguma falha, ou como está o carro."
+    const val HELP = "Pergunte, por exemplo: qual o consumo, temperatura do motor, bateria, troca de óleo, " +
+        "tem alguma falha, ou como está o carro. Ou peça: abrir a saúde, tocar rádio, abrir o mapa, " +
+        "ou abasteci cem reais a seis e onze."
 
     private fun live(s: VoiceSnapshot, v: Double?, text: (Double) -> String): String = when {
         !s.connected -> "O carro não está conectado agora."

@@ -67,4 +67,58 @@ class VoiceCommandsTest {
         assertTrue(VoiceCommands.answer(VoiceIntent.OLEO, live.copy(oilKmLeft = -50.0)).contains("vencida"))
         assertTrue(VoiceCommands.answer(VoiceIntent.OLEO, live.copy(oilKmLeft = null)).contains("ainda não foi informada"))
     }
+
+    @Test fun opensScreens() {
+        assertEquals(VoiceNav.SAUDE, VoiceCommands.parse("abrir a saúde").nav)
+        assertEquals(VoiceNav.RADIO, VoiceCommands.parse("tocar rádio").nav)
+        assertEquals(VoiceNav.RADIO, VoiceCommands.parse("rádio").nav)
+        assertEquals(VoiceNav.MUSICA, VoiceCommands.parse("vai para a música").nav)
+        assertEquals(VoiceNav.MIDIAS, VoiceCommands.parse("abre mídias").nav)
+        assertEquals(VoiceNav.MAPA, VoiceCommands.parse("abrir o mapa").nav)
+        assertEquals(VoiceNav.POSTOS, VoiceCommands.parse("mostra os postos").nav)
+        assertEquals(VoiceNav.PAINEL, VoiceCommands.parse("voltar para o painel").nav)
+        // Perguntas continuam perguntas.
+        assertEquals(VoiceIntent.SAUDE, VoiceCommands.parse("como está a saúde do carro").intent)
+        assertEquals(VoiceIntent.CONSUMO, VoiceCommands.parse("qual o consumo").intent)
+        assertEquals(VoiceIntent.OLEO, VoiceCommands.parse("quanto falta pra troca de óleo").intent)
+    }
+
+    @Test fun numbersInWords() {
+        assertEquals(listOf("abasteci", "100", "reais", "a", "6", "e", "11"), VoiceCommands.numbers("Abasteci cem reais a seis e onze"))
+        assertEquals(listOf("125"), VoiceCommands.numbers("cento e vinte e cinco"))
+        assertEquals(listOf("2000"), VoiceCommands.numbers("dois mil"))
+        assertEquals(listOf("r", "100", "a", "6.11"), VoiceCommands.numbers("R$ 100 a 6,11"))
+    }
+
+    @Test fun refuelByMoney() {
+        val r = VoiceCommands.parse("abasteci cem reais a seis e onze").refuel!!
+        assertEquals(100.0, r.amount!!, 1e-9)
+        assertEquals(6.11, r.pricePerLiter!!, 1e-9)
+        assertEquals(16.367, r.liters!!, 1e-9)
+        val r2 = VoiceCommands.refuel("Abasteci R$ 150,00 de etanol, o litro a 4,29, tanque cheio")
+        assertEquals(150.0, r2.amount!!, 1e-9)
+        assertEquals(4.29, r2.pricePerLiter!!, 1e-9)
+        assertEquals(true, r2.full)
+        assertEquals(true, r2.ethanol)
+        val r3 = VoiceCommands.refuel("coloquei 80 reais de gasolina a 6 reais e 19 centavos")
+        assertEquals(80.0, r3.amount!!, 1e-9)
+        assertEquals(6.19, r3.pricePerLiter!!, 1e-9)
+        assertEquals(false, r3.ethanol)
+    }
+
+    @Test fun refuelByLiters() {
+        val r = VoiceCommands.refuel("abasteci 40 litros a 6,11, não enchi o tanque")
+        assertEquals(40.0, r.liters!!, 1e-9)
+        assertEquals(6.11, r.pricePerLiter!!, 1e-9)
+        assertEquals(null, r.amount)
+        assertEquals(false, r.full)
+        val a = VoiceCommands.answer(VoiceCommands.parse("abasteci 40 litros a 6,11"), live.copy(speedKmh = 0.0))
+        assertEquals("40 litros a 6,11 o litro: 244 reais e 40 centavos. Confira o posto e toque em Salvar.", a)
+    }
+
+    @Test fun refuelNeedsTheCarStopped() {
+        assertEquals("Pare o carro para registrar o abastecimento.",
+            VoiceCommands.answer(VoiceCommands.parse("abasteci cem reais"), live.copy(moving = true)))
+        assertEquals(VoiceIntent.ABASTECER, VoiceCommands.parse("registrar abastecimento").intent)
+    }
 }

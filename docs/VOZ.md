@@ -18,7 +18,17 @@ Regras por palavra-chave em `domain/Voice.kt` (`VoiceCommands`, com testes), sem
 | "velocidade", "rotação" | valor atual |
 | "ajuda" | lista de perguntas |
 
-Primeira versão: só consulta, nada muda no app. Depois de confirmar que o multimídia reconhece bem a voz: rádio, música, mapa e abastecimento por voz.
+## Pedidos (fase 2)
+
+| Pedido (exemplos) | O que faz |
+|---|---|
+| "abrir a saúde", "vai para o consumo", "mostra os postos", "voltar para o painel" | troca de aba (precisa de um verbo; só "rádio", "mapa" etc. também vale) |
+| "abrir o rádio", "ouvir música" | aba Mídias no modo Rádio ou Música |
+| "tocar rádio" / "tocar música" | além de abrir, toca a última rádio ou dá play na música |
+| "abrir o mapa" | abre o app de mapa escolhido |
+| "abasteci cem reais a seis e onze", "coloquei 40 litros a 6,11, não enchi", "abasteci 150 de etanol a 4,29, tanque cheio" | abre o registro de abastecimento **preenchido** (valor ou litros, preço, cheio/parcial, combustível); o dono confere o posto e toca em Salvar. Com o carro andando, não abre. |
+
+Números por extenso viram dígitos ("cento e vinte e cinco" = 125); "seis e onze" é o preço 6,11; "6 reais e 19 centavos" = 6,19. O preço é o número depois de "a", "por" ou antes de "o litro"; sem marca, o menor entre 1 e 20. Testes em `VoiceCommandsTest`.
 
 ## Como funciona no aparelho (`data/VoiceAssistant`)
 

@@ -54,6 +54,7 @@ internal fun UiState.voiceSnapshot() = VoiceSnapshot(
     alerts = health.filter { it.status == HealthStatus.ALERTA || it.status == HealthStatus.ATENCAO }
         .map { VoiceAlert(it.title, it.status == HealthStatus.ALERTA) },
     dtcs = dtcs,
+    moving = moving,
 )
 
 @Composable
@@ -158,6 +159,8 @@ internal fun VoiceSection() {
     }
     Text("Comando de voz", fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
     Text("Toque em 🎤 Voz e pergunte: consumo, viagem, temperatura, bateria, troca de óleo, falhas ou \"como está o carro\". " +
+        "Ou peça: \"abrir a saúde\", \"tocar rádio\", \"ouvir música\", \"abrir o mapa\", " +
+        "\"abasteci cem reais a seis e onze\" (abre o registro preenchido para conferir e salvar). " +
         "O app responde em voz alta. O microfone só liga quando você toca no botão.",
         color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 15.sp)
     FlowRow(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {

@@ -14,6 +14,7 @@ import android.speech.SpeechRecognizer
 import android.speech.tts.TextToSpeech
 import android.speech.tts.UtteranceProgressListener
 import androidx.core.content.ContextCompat
+import br.com.monitor2008.domain.VoiceCommand
 import br.com.monitor2008.domain.VoiceCommands
 import br.com.monitor2008.domain.VoiceIntent
 import br.com.monitor2008.domain.VoiceSnapshot
@@ -55,6 +56,14 @@ class VoiceAssistant private constructor(private val app: Application) {
     private var pendingSpeech: String? = null
     private val audio = app.getSystemService(AudioManager::class.java)
     private var focus: AudioFocusRequest? = null
+
+    /**
+     * Pedido para a tela (abrir uma aba, abrir o registro de abastecimento preenchido). Quem atende
+     * limpa com [consumeAction].
+     */
+    private val _action = MutableStateFlow<VoiceCommand?>(null)
+    val action: StateFlow<VoiceCommand?> = _action.asStateFlow()
+    fun consumeAction() { _action.value = null }
 
     /** Lê o que o app sabe agora, na hora da pergunta. */
     var snapshot: () -> VoiceSnapshot = { VoiceSnapshot(connected = false) }
@@ -129,9 +138,13 @@ class VoiceAssistant private constructor(private val app: Application) {
     /** Resultado vindo da tela de reconhecimento do sistema (alternativa). */
     fun handle(candidates: List<String>) {
         if (candidates.isEmpty()) { fail("Não ouvi nada. Toque em Voz e fale perto do microfone."); return }
-        val (intent, heard) = VoiceCommands.intent(candidates)
-        val text = VoiceCommands.answer(intent, snapshot())
-        _state.value = VoiceState.Answer(heard, intent, text)
+        val (cmd, heard) = VoiceCommands.parse(candidates)
+        val snap = snapshot()
+        val text = VoiceCommands.answer(cmd, snap)
+        val acts = cmd.intent == VoiceIntent.ABRIR || (cmd.intent == VoiceIntent.ABASTECER && !snap.moving)
+        // Abrir tela ou abastecimento: fecha a conversa (a tela pedida aparece) e só fala a confirmação.
+        _state.value = if (acts) VoiceState.Idle else VoiceState.Answer(heard, cmd.intent, text)
+        if (acts) _action.value = cmd
         speak(text)
     }
 
