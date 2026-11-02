@@ -54,3 +54,7 @@ Números por extenso viram dígitos ("cento e vinte e cinco" = 125); "seis e onz
 Pedido do dono: onde faltar permissão, levar direto à tela do Android (`data/SystemSettings`). Microfone negado → tela do app; sem reconhecimento → app Google na Play Store; sem internet → Wi-Fi; poucas vozes → Baixar vozes, Saída de texto para fala e Serviços de fala do Google. O mesmo vale fora da voz: acesso a notificações (já na chave do Monitor no Android 11+; o mini player virou botão "Liberar a música tocando"), sobrepor a outros apps, localização, Bluetooth (negado de vez → tela do app).
 
 Mapa pela voz: abre 0,5 s depois, quando a janela da conversa já fechou e o Monitor está em primeiro plano (vindo da tela de reconhecimento do sistema ele ainda estava pausado e não virava janela flutuante, 0.1.49). "Google Maps" e "mapas" também valem.
+
+## Controle do que está tocando
+
+"desligar o rádio", "pausar", "para a música" (mas "vai para a música" abre a tela), "próxima", "pula", "música anterior": age no rádio do app se ele estiver tocando (pausa, próxima/anterior entre as favoritas); senão no app de música pela sessão de mídia (APK do multimídia). Testes em `VoiceCommandsTest.mediaControls`.

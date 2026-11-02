@@ -150,12 +150,13 @@ class VoiceAssistant private constructor(private val app: Application) {
         val (cmd, heard) = VoiceCommands.parse(candidates)
         val snap = snapshot()
         val text = VoiceCommands.answer(cmd, snap)
-        val acts = cmd.intent in setOf(VoiceIntent.ABRIR, VoiceIntent.IR_PARA, VoiceIntent.TOCAR_RADIO, VoiceIntent.TOCAR_MUSICA) ||
+        val acts = cmd.intent in setOf(VoiceIntent.ABRIR, VoiceIntent.IR_PARA, VoiceIntent.TOCAR_RADIO, VoiceIntent.TOCAR_MUSICA,
+            VoiceIntent.PAUSAR, VoiceIntent.PROXIMA, VoiceIntent.ANTERIOR) ||
             (cmd.intent == VoiceIntent.ABASTECER && !snap.moving)
         // Abrir tela ou abastecimento: fecha a conversa (a tela pedida aparece) e só fala a confirmação.
         _state.value = if (acts) VoiceState.Idle else VoiceState.Answer(heard, cmd.intent, text)
         if (acts) _action.value = cmd
-        speak(text)
+        if (text.isNotBlank()) speak(text)
     }
 
     fun close() {

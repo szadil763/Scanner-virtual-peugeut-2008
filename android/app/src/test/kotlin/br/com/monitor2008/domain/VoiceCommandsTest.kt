@@ -173,4 +173,20 @@ class VoiceCommandsTest {
         assertEquals(VoiceNav.MUSICA, play.nav)
         assertTrue(play.play)
     }
+
+    @Test fun mediaControls() {
+        assertEquals(VoiceIntent.PAUSAR, VoiceCommands.parse("desligar o rádio").intent)
+        assertEquals(VoiceIntent.PAUSAR, VoiceCommands.parse("desliga a música").intent)
+        assertEquals(VoiceIntent.PAUSAR, VoiceCommands.parse("pausar").intent)
+        assertEquals(VoiceIntent.PAUSAR, VoiceCommands.parse("para a música").intent)
+        assertEquals(VoiceIntent.PROXIMA, VoiceCommands.parse("próxima música").intent)
+        assertEquals(VoiceIntent.PROXIMA, VoiceCommands.parse("pula essa").intent)
+        assertEquals(VoiceIntent.ANTERIOR, VoiceCommands.parse("música anterior").intent)
+        // Ligar continua ligar.
+        assertEquals(VoiceIntent.ABRIR, VoiceCommands.parse("liga o rádio").intent)
+        assertEquals(VoiceIntent.TOCAR_RADIO, VoiceCommands.parse("liga a rádio Transamérica").intent)
+        // "ir para" e "voltar para" não são pausar nem anterior.
+        assertEquals(VoiceNav.PAINEL, VoiceCommands.parse("voltar para o painel").nav)
+        assertEquals(VoiceIntent.IR_PARA, VoiceCommands.parse("ir para a rua augusta").intent)
+    }
 }

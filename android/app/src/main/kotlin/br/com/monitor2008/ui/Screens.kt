@@ -182,6 +182,22 @@ fun MonitorApp(vm: MonitorEngine) {
                 val address = VoiceCommands.placeFor(q, store.places()) ?: q
                 openWhenReady { act -> AppLauncher(app).routeTo(address, act)?.let { voice.say(it) } }
             }
+            // "desligar o rádio", "pausar", "próxima", "anterior": o rádio do app se estiver tocando; senão o app de música.
+            VoiceIntent.PAUSAR, VoiceIntent.PROXIMA, VoiceIntent.ANTERIOR -> {
+                voice.consumeAction()
+                val radio = RadioPlayer.get(app)
+                val media = MediaWatcher.get(app)
+                val radioOn = radio.state.value.playing
+                when (a.intent) {
+                    VoiceIntent.PAUSAR -> when {
+                        radioOn -> { radio.toggle(); voice.say("Rádio pausado.") }
+                        media.now.value?.playing == true -> { media.playPause(); voice.say("Música pausada.") }
+                        else -> voice.say("Nada tocando agora.")
+                    }
+                    VoiceIntent.PROXIMA -> if (radioOn) radio.step(true) else media.next()
+                    else -> if (radioOn) radio.step(false) else media.previous()
+                }
+            }
             // "tocar rádio jovem pan": favoritas primeiro, depois a lista de rádios pela internet.
             VoiceIntent.TOCAR_RADIO -> {
                 voice.consumeAction()
