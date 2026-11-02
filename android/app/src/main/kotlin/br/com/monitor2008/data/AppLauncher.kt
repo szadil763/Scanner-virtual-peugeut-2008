@@ -83,6 +83,36 @@ class AppLauncher(private val context: Context) {
         return start(intent, "mapa", activity)
     }
 
+    /**
+     * Rota até um endereço falado ("rua augusta 500"): Waze e Google Maps já abrem navegando; os
+     * outros mapas, na busca do endereço.
+     */
+    fun routeTo(address: String, activity: Activity?): String? {
+        val pkg = (mapPackage ?: mapApps().firstOrNull()?.pkg)?.takeIf { pm.getLaunchIntentForPackage(it) != null }
+        val q = Uri.encode(address)
+        val intent = when (pkg) {
+            "com.waze" -> Intent(Intent.ACTION_VIEW, Uri.parse("https://waze.com/ul?q=$q&navigate=yes"))
+            "com.google.android.apps.maps" -> Intent(Intent.ACTION_VIEW, Uri.parse("google.navigation:q=$q"))
+            else -> Intent(Intent.ACTION_VIEW, Uri.parse("geo:0,0?q=$q"))
+        }
+        pkg?.let { intent.setPackage(it) }
+        return start(intent, "mapa", activity)
+    }
+
+    /** App de música para a busca falada: o pedido ("no Spotify"), o escolhido em Ajustes ou o primeiro instalado. */
+    fun musicFor(requested: String?): String? =
+        requested?.takeIf { pm.getLaunchIntentForPackage(it) != null } ?: musicPackage ?: musicApps().firstOrNull()?.pkg
+
+    /** Pede ao app de música para buscar e tocar (Spotify, YouTube Music e outros aceitam). Abre o app. */
+    fun playFromSearch(pkg: String, query: String, activity: Activity?): String? {
+        val intent = Intent(android.provider.MediaStore.INTENT_ACTION_MEDIA_PLAY_FROM_SEARCH)
+            .setPackage(pkg)
+            .putExtra(android.app.SearchManager.QUERY, query)
+            .putExtra(android.provider.MediaStore.EXTRA_MEDIA_FOCUS, "vnd.android.cursor.item/*")
+        if (pm.resolveActivity(intent, 0) == null) return "${label(pkg)} não aceita busca por voz."
+        return start(intent, "música", activity)
+    }
+
     /** Abre um app qualquer (fonte de música da aba Mídias), com o mesmo comportamento de [openMusic]. */
     fun openApp(pkg: String, activity: Activity?): String? = open(pkg, "música", activity)
 

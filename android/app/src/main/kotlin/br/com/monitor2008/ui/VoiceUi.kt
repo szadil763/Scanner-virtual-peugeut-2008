@@ -10,6 +10,12 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.ui.Alignment
+import br.com.monitor2008.data.Store
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.height
@@ -145,7 +151,7 @@ internal fun VoiceOverlay(ui: UiState) {
 
 /** Ajustes: teste do comando de voz neste aparelho (microfone, reconhecimento e voz em português). */
 @Composable
-internal fun VoiceSection() {
+internal fun VoiceSection(moving: Boolean) {
     val voice = rememberVoice()
     var check by remember { mutableStateOf<VoiceCheck?>(null) }
     var tick by remember { mutableStateOf(0) }
@@ -159,7 +165,8 @@ internal fun VoiceSection() {
     }
     Text("Comando de voz", fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
     Text("Toque em 🎤 Voz e pergunte: consumo, viagem, temperatura, bateria, troca de óleo, falhas ou \"como está o carro\". " +
-        "Ou peça: \"abrir a saúde\", \"tocar rádio\", \"ouvir música\", \"abrir o mapa\", " +
+        "Ou peça: \"abrir a saúde\", \"ir para casa\", \"ir para a rua Augusta 500\", \"tocar rádio Jovem Pan\", " +
+        "\"tocar Péricles no Spotify\", \"abrir o mapa\", " +
         "\"abasteci cem reais a seis e onze\" (abre o registro preenchido para conferir e salvar). " +
         "O app responde em voz alta. O microfone só liga quando você toca no botão.",
         color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 15.sp)
@@ -182,6 +189,54 @@ internal fun VoiceSection() {
             null -> "Iniciando a voz do app..."
             false -> "Sem voz em português: instale \"Serviços de fala do Google\" ou outra voz em português"
         })
+    }
+}
+
+/** Lugares para "ir para casa", "me leva pro trabalho": nome e endereço, cadastrados com o carro parado. */
+@Composable
+internal fun PlacesSection(moving: Boolean) {
+    val ctx = LocalContext.current
+    val store = remember { Store(ctx.applicationContext) }
+    var places by remember { mutableStateOf(store.places()) }
+    var adding by remember { mutableStateOf(false) }
+    Text("Lugares salvos", fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
+    Text("Para dizer \"ir para casa\" ou \"me leva pro trabalho\". Sem lugar salvo, o app manda para o mapa o endereço falado.",
+        color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 15.sp)
+    places.forEach { (name, address) ->
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            Column(Modifier.weight(1f)) {
+                Text(name, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
+                Text(address, fontSize = 15.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            OutlinedButton({
+                places = places.filter { it.first != name }
+                store.savePlaces(places)
+            }, Modifier.height(56.dp), enabled = !moving) { Text("Apagar", fontSize = 16.sp) }
+        }
+    }
+    Button({ adding = true }, Modifier.height(56.dp), enabled = !moving) { Text("Salvar um lugar", fontSize = 17.sp) }
+    if (moving) Text("Pare o carro para cadastrar.", color = Warn)
+    if (adding) {
+        var name by remember { mutableStateOf(if (places.none { it.first.equals("Casa", true) }) "Casa" else "") }
+        var address by remember { mutableStateOf("") }
+        AlertDialog(
+            onDismissRequest = { adding = false },
+            title = { Text("Salvar um lugar") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    OutlinedTextField(name, { name = it }, label = { Text("Nome (ex.: Casa, Trabalho, Mãe)") }, singleLine = true)
+                    OutlinedTextField(address, { address = it }, label = { Text("Endereço (rua, número, cidade)") })
+                }
+            },
+            confirmButton = {
+                TextButton({
+                    places = places.filter { !it.first.equals(name.trim(), true) } + (name.trim() to address.trim())
+                    store.savePlaces(places)
+                    adding = false
+                }, enabled = name.isNotBlank() && address.isNotBlank() && !moving) { Text("Salvar") }
+            },
+            dismissButton = { TextButton({ adding = false }) { Text("Cancelar") } },
+        )
     }
 }
 

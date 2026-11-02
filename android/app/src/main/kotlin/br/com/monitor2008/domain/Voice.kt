@@ -4,7 +4,7 @@ import java.text.Normalizer
 import java.util.Locale
 
 /** O que o dono perguntou pelo comando de voz (primeira versão: só consultas, nada muda no app). */
-enum class VoiceIntent { ABRIR, ABASTECER, CONSUMO, VIAGEM, TEMPERATURA, BATERIA, OLEO, FALHAS, SAUDE, VELOCIDADE, ROTACAO, AJUDA, DESCONHECIDO }
+enum class VoiceIntent { ABRIR, ABASTECER, IR_PARA, TOCAR_RADIO, TOCAR_MUSICA, CONSUMO, VIAGEM, TEMPERATURA, BATERIA, OLEO, FALHAS, SAUDE, VELOCIDADE, ROTACAO, AJUDA, DESCONHECIDO }
 
 /** Telas do app que o comando de voz abre (MAPA abre o app de mapa; MUSICA e RADIO, a aba Mídias nesse modo). */
 enum class VoiceNav(val spoken: String) {
@@ -23,7 +23,16 @@ data class VoiceRefuel(
 
 /** Pergunta ou pedido entendido. */
 /** [play]: "tocar rádio", "ouvir música": além de abrir, começa a tocar. */
-data class VoiceCommand(val intent: VoiceIntent, val nav: VoiceNav? = null, val refuel: VoiceRefuel? = null, val play: Boolean = false)
+data class VoiceCommand(
+    val intent: VoiceIntent,
+    val nav: VoiceNav? = null,
+    val refuel: VoiceRefuel? = null,
+    val play: Boolean = false,
+    /** Destino (IR_PARA), nome da rádio (TOCAR_RADIO) ou música/artista (TOCAR_MUSICA). */
+    val query: String? = null,
+    /** App de música pedido ("no Spotify"): pacote; null = o escolhido em Ajustes. */
+    val app: String? = null,
+)
 
 /** Indicador da Saúde fora do normal, para a resposta falada. */
 data class VoiceAlert(val title: String, val alert: Boolean)
@@ -120,6 +129,8 @@ object VoiceCommands {
         if (t.isEmpty()) return VoiceCommand(VoiceIntent.DESCONHECIDO)
         if (keywords.first().second.any { t.contains(it) }) return VoiceCommand(VoiceIntent.AJUDA)
         if (refuelWords.any { t.contains(it) }) return VoiceCommand(VoiceIntent.ABASTECER, refuel = refuel(text))
+        goTo(t)?.let { return it }
+        playRequest(t)?.let { return it }
         val target = navTargets.firstOrNull { (_, w) -> w.any { t.contains(it) } }?.first
         if (target != null) {
             val verb = navVerbs.any { Regex("\\b$it\\b").containsMatchIn(t) }
@@ -131,6 +142,85 @@ object VoiceCommands {
         return VoiceCommand(intent(text))
     }
 
+    // ---------- Rota, rádio pelo nome e música ----------
+
+    private val goVerbs = listOf("navegar ate", "navegar para", "navegar pra", "me leva para", "me leva pra", "me leva ate",
+        "me leve para", "me leve pra", "me leve ate", "leva para", "leva pra", "levar ate", "ir para", "ir pra", "ir ate",
+        "vai para", "vai pra", "va para", "va pra", "vamos para", "vamos pra", "rota para", "rota pra", "rota ate",
+        "como chego em", "como chego no", "como chego na", "como chego ao", "como chegar em", "como chegar no",
+        "como chegar na", "como chegar ao", "caminho para", "caminho pra")
+    private val articles = setOf("o", "a", "os", "as", "ao", "um", "uma", "no", "na", "de", "do", "da", "e")
+
+    /** O verbo que aparece primeiro na frase (o mais longo, se dois começam juntos) e onde ele termina. */
+    private fun firstMatch(t: String, verbs: List<String>): Pair<String, Int>? =
+        verbs.mapNotNull { v -> Regex("\\b$v\\b").find(t)?.let { v to it.range } }
+            .minWithOrNull(compareBy<Pair<String, IntRange>> { it.second.first }.thenByDescending { it.first.length })
+            ?.let { (v, r) -> v to r.last + 1 }
+
+    private fun dropLeading(words: List<String>, drop: Set<String>): List<String> = words.dropWhile { it in drop }
+
+    /** "ir para a saúde" é aba; "ir para a rua augusta 500" é rota. */
+    private fun goTo(t: String): VoiceCommand? {
+        val (_, end) = firstMatch(t, goVerbs) ?: return null
+        val rest = dropLeading(t.substring(end).trim().split(' ').filter { it.isNotEmpty() }, articles)
+        if (rest.isEmpty()) return null
+        val core = rest.filter { it !in setOf("tela", "aba") && it !in articles }.joinToString(" ")
+        val tab = navTargets.firstOrNull { (_, w) -> w.any { core == it || core == it + "s" } }?.first
+        if (tab != null) return VoiceCommand(VoiceIntent.ABRIR, nav = tab)
+        return VoiceCommand(VoiceIntent.IR_PARA, query = rest.joinToString(" "))
+    }
+
+    private val musicApps = listOf(
+        "spotify" to "com.spotify.music", "youtube music" to "com.google.android.apps.youtube.music",
+        "youtube" to "com.google.android.apps.youtube.music", "deezer" to "deezer.android.app", "amazon music" to "com.amazon.mp3",
+    )
+    private val playStarts = listOf("quero ouvir", "quero escutar", "tocar", "toca", "toque", "coloca", "colocar",
+        "coloque", "bota", "botar", "bote", "ouvir", "escutar", "poe", "ligar", "liga", "ligue")
+    private val musicFiller = setOf("a", "o", "as", "os", "musica", "musicas", "cancao", "do", "da", "de", "dos", "das", "artista",
+        "cantor", "cantora", "banda", "album", "disco", "um", "uma", "pouco", "alguma", "algo", "som")
+
+    /** "tocar rádio jovem pan", "tocar a band fm", "tocar péricles no spotify", "ouvir música". */
+    private fun playRequest(t: String): VoiceCommand? {
+        val (verb, end) = firstMatch(t, playStarts) ?: return null
+        val words = t.substring(end).trim().split(' ').filter { it.isNotEmpty() }
+        val radioOnly = verb in setOf("ligar", "liga", "ligue")
+        if ("radio" in words || "fm" in words) {
+            val name = dropLeading(words.filter { it != "radio" }, articles).joinToString(" ")
+            return if (name.isEmpty()) VoiceCommand(VoiceIntent.ABRIR, nav = VoiceNav.RADIO, play = true)
+            else VoiceCommand(VoiceIntent.TOCAR_RADIO, query = name)
+        }
+        if (radioOnly) return null
+        var rest = words.joinToString(" ")
+        var app: String? = null
+        for ((name, pkg) in musicApps) {
+            val r = Regex("\\b(no |na |pelo |pela )?$name\\b")
+            if (r.containsMatchIn(rest)) { app = pkg; rest = r.replace(rest, " ").trim(); break }
+        }
+        val core = dropLeading(rest.split(' ').filter { it.isNotEmpty() }, musicFiller)
+        if (core.isEmpty() || core.all { it in musicFiller }) {
+            return VoiceCommand(VoiceIntent.ABRIR, nav = VoiceNav.MUSICA, play = true, app = app)
+        }
+        return VoiceCommand(VoiceIntent.TOCAR_MUSICA, query = core.joinToString(" "), app = app)
+    }
+
+    /** Lugar salvo ("casa", "trabalho") pelo nome falado; devolve o endereço. */
+    fun placeFor(query: String, places: List<Pair<String, String>>): String? {
+        val q = dropLeading(normalize(query).split(' '), articles + setOf("minha", "meu", "pra", "para")).joinToString(" ")
+        return places.firstOrNull { (name, _) -> normalize(name) == q }?.second
+    }
+
+    /**
+     * Rádio pelo nome falado: prefere a que tem todas as palavras no nome, as favoritas antes (vêm
+     * primeiro em [candidates]); senão a primeira que tenha alguma palavra que não seja "fm".
+     */
+    fun bestRadio(query: String, candidates: List<RadioStation>): RadioStation? {
+        val words = normalize(query).split(' ').filter { it.isNotEmpty() && it != "fm" && it != "radio" }
+        if (words.isEmpty()) return null
+        fun name(st: RadioStation) = normalize(st.name)
+        return candidates.firstOrNull { st -> words.all { w -> name(st).split(' ').any { it.startsWith(w) } } }
+            ?: candidates.firstOrNull { st -> words.any { w -> w.length >= 3 && name(st).contains(w) } }
+    }
+
     /** Várias versões da frase: vale a primeira que o app entende. */
     fun parse(candidates: List<String>): Pair<VoiceCommand, String> {
         candidates.forEach { c -> parse(c).let { if (it.intent != VoiceIntent.DESCONHECIDO) return it to c } }
@@ -138,6 +228,9 @@ object VoiceCommands {
     }
 
     fun answer(cmd: VoiceCommand, s: VoiceSnapshot): String = when (cmd.intent) {
+        VoiceIntent.IR_PARA -> "Abrindo a rota para ${cmd.query}."
+        VoiceIntent.TOCAR_RADIO -> "Procurando a rádio ${cmd.query}."
+        VoiceIntent.TOCAR_MUSICA -> "Pedindo para tocar ${cmd.query}."
         VoiceIntent.ABRIR -> if (cmd.play && cmd.nav == VoiceNav.RADIO) "Tocando a última rádio." else "Abrindo ${cmd.nav?.spoken ?: "a tela"}."
         VoiceIntent.ABASTECER -> refuelAnswer(cmd.refuel ?: VoiceRefuel(), s)
         else -> answer(cmd.intent, s)
@@ -316,13 +409,13 @@ object VoiceCommands {
         VoiceIntent.VELOCIDADE -> live(s, s.speedKmh) { "${n(it, 0)} quilômetros por hora." }
         VoiceIntent.ROTACAO -> live(s, s.rpm) { "${n(it, 0)} rotações por minuto." }
         VoiceIntent.AJUDA -> HELP
-        VoiceIntent.ABRIR, VoiceIntent.ABASTECER -> HELP
+        VoiceIntent.ABRIR, VoiceIntent.ABASTECER, VoiceIntent.IR_PARA, VoiceIntent.TOCAR_RADIO, VoiceIntent.TOCAR_MUSICA -> HELP
         VoiceIntent.DESCONHECIDO -> "Não entendi. $HELP"
     }
 
     const val HELP = "Pergunte, por exemplo: qual o consumo, temperatura do motor, bateria, troca de óleo, " +
-        "tem alguma falha, ou como está o carro. Ou peça: abrir a saúde, tocar rádio, abrir o mapa, " +
-        "ou abasteci cem reais a seis e onze."
+        "tem alguma falha, ou como está o carro. Ou peça: abrir a saúde, ir para casa, tocar rádio Jovem Pan, " +
+        "tocar Péricles no Spotify, ou abasteci cem reais a seis e onze."
 
     private fun live(s: VoiceSnapshot, v: Double?, text: (Double) -> String): String = when {
         !s.connected -> "O carro não está conectado agora."

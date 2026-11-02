@@ -141,7 +141,8 @@ class VoiceAssistant private constructor(private val app: Application) {
         val (cmd, heard) = VoiceCommands.parse(candidates)
         val snap = snapshot()
         val text = VoiceCommands.answer(cmd, snap)
-        val acts = cmd.intent == VoiceIntent.ABRIR || (cmd.intent == VoiceIntent.ABASTECER && !snap.moving)
+        val acts = cmd.intent in setOf(VoiceIntent.ABRIR, VoiceIntent.IR_PARA, VoiceIntent.TOCAR_RADIO, VoiceIntent.TOCAR_MUSICA) ||
+            (cmd.intent == VoiceIntent.ABASTECER && !snap.moving)
         // Abrir tela ou abastecimento: fecha a conversa (a tela pedida aparece) e só fala a confirmação.
         _state.value = if (acts) VoiceState.Idle else VoiceState.Answer(heard, cmd.intent, text)
         if (acts) _action.value = cmd
@@ -153,6 +154,13 @@ class VoiceAssistant private constructor(private val app: Application) {
         tts?.stop()
         abandonFocus()
         _state.value = VoiceState.Idle
+    }
+
+    /** Fala depois do que já está falando (resultado de uma busca, por exemplo). */
+    fun say(text: String) {
+        if (ttsReady != true) { speak(text); return }
+        requestFocus()
+        tts?.speak(text, TextToSpeech.QUEUE_ADD, null, "monitor-voz-2")
     }
 
     /** Fala um texto (também usado pelo teste em Ajustes). */

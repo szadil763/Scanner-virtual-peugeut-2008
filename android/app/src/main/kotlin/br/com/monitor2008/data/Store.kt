@@ -235,6 +235,19 @@ class Store(context: Context) {
         get() = p.getString("lastRadio", null)?.let { runCatching { radioFrom(JSONObject(it)) }.getOrNull() }
         set(v) { p.edit().putString("lastRadio", v?.let { radioJson(it).toString() }).apply() }
 
+    /** Lugares salvos para o comando de voz ("ir para casa"): nome e endereço. */
+    fun places(): List<Pair<String, String>> = try {
+        val arr = JSONArray(p.getString("places", "[]"))
+        (0 until arr.length()).map { arr.getJSONObject(it) }.map { it.optString("name") to it.optString("address") }
+            .filter { it.first.isNotBlank() && it.second.isNotBlank() }
+    } catch (e: Exception) { emptyList() }
+
+    fun savePlaces(list: List<Pair<String, String>>) {
+        val arr = JSONArray()
+        list.forEach { (n, a) -> arr.put(org.json.JSONObject().put("name", n).put("address", a)) }
+        p.edit().putString("places", arr.toString()).apply()
+    }
+
     fun radioFavorites(): List<RadioStation> {
         val arr = JSONArray(p.getString("radioFavorites", "[]"))
         return (0 until arr.length()).mapNotNull { runCatching { radioFrom(arr.getJSONObject(it)) }.getOrNull() }

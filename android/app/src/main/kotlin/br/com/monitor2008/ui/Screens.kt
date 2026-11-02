@@ -89,6 +89,11 @@ import br.com.monitor2008.data.PlaceFinder
 import br.com.monitor2008.domain.RefuelMath
 import br.com.monitor2008.data.VoiceAssistant
 import br.com.monitor2008.domain.VoiceIntent
+import br.com.monitor2008.domain.VoiceCommands
+import br.com.monitor2008.data.RadioPlayer
+import br.com.monitor2008.data.RadioBrowser
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.launch
 import br.com.monitor2008.domain.VoiceNav
 import br.com.monitor2008.domain.VoiceRefuel
 import br.com.monitor2008.data.Store
@@ -146,9 +151,51 @@ fun MonitorApp(vm: MonitorEngine) {
     // Comando de voz: "abrir a saúde", "abrir o mapa", "tocar rádio", "abasteci cem reais...".
     val voice = remember { VoiceAssistant.get(ctx.applicationContext as Application) }
     val voiceAction by voice.action.collectAsStateWithLifecycle()
+    // Busca de rádio fora do LaunchedEffect: limpar o pedido muda a chave e cancelaria a busca.
+    val voiceScope = rememberCoroutineScope()
     LaunchedEffect(voiceAction) {
         val a = voiceAction ?: return@LaunchedEffect
+        val app = ctx.applicationContext as Application
         when (a.intent) {
+            // "ir para casa", "ir para a rua augusta 500": lugar salvo ou o endereço falado.
+            VoiceIntent.IR_PARA -> {
+                voice.consumeAction()
+                val q = a.query ?: return@LaunchedEffect
+                val address = VoiceCommands.placeFor(q, store.places()) ?: q
+                AppLauncher(app).routeTo(address, ctx.findActivity())?.let { voice.say(it) }
+            }
+            // "tocar rádio jovem pan": favoritas primeiro, depois a lista de rádios pela internet.
+            VoiceIntent.TOCAR_RADIO -> {
+                voice.consumeAction()
+                val q = a.query ?: return@LaunchedEffect
+                voiceScope.launch {
+                    val player = RadioPlayer.get(app)
+                    var offline = false
+                    val found = VoiceCommands.bestRadio(q, player.state.value.favorites) ?: try {
+                        val list = RadioBrowser.search(name = q, limit = 20).ifEmpty {
+                            RadioBrowser.search(name = q.removeSuffix(" fm").trim(), limit = 20)
+                        }
+                        VoiceCommands.bestRadio(q, list) ?: list.firstOrNull()
+                    } catch (e: Exception) { offline = true; null }
+                    when {
+                        found != null -> { player.play(found); voice.say("Tocando ${found.name}.") }
+                        offline -> voice.say("Sem internet para procurar a rádio.")
+                        else -> voice.say("Não achei a rádio $q.")
+                    }
+                }
+            }
+            // "tocar péricles no spotify": pela sessão do app, sem tirá-lo do fundo; senão abre o app com a busca.
+            VoiceIntent.TOCAR_MUSICA -> {
+                voice.consumeAction()
+                val q = a.query ?: return@LaunchedEffect
+                val launcher = AppLauncher(app)
+                val pkg = launcher.musicFor(a.app)
+                when {
+                    pkg == null -> voice.say("Nenhum app de música instalado.")
+                    MediaWatcher.get(app).playFromSearchQuietly(pkg, q) -> {}
+                    else -> launcher.playFromSearch(pkg, q, ctx.findActivity())?.let { voice.say(it) }
+                }
+            }
             VoiceIntent.ABRIR -> when (val nav = a.nav) {
                 VoiceNav.MAPA -> {
                     voice.consumeAction()
@@ -1364,7 +1411,8 @@ private fun AjustesScreen(ui: UiState, vm: MonitorEngine) {
         AdapterPicker(ui, vm)
         AutoConnectSection(ui.moving)
         StartupSection()
-        VoiceSection()
+        VoiceSection(ui.moving)
+        PlacesSection(ui.moving)
         MapMusicSettings()
     }
 }

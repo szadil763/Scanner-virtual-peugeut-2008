@@ -28,6 +28,17 @@ Regras por palavra-chave em `domain/Voice.kt` (`VoiceCommands`, com testes), sem
 | "abrir o mapa" | abre o app de mapa escolhido |
 | "abasteci cem reais a seis e onze", "coloquei 40 litros a 6,11, não enchi", "abasteci 150 de etanol a 4,29, tanque cheio" | abre o registro de abastecimento **preenchido** (valor ou litros, preço, cheio/parcial, combustível); o dono confere o posto e toca em Salvar. Com o carro andando, não abre. |
 
+## Rota, rádio pelo nome e música (fase 3)
+
+| Pedido (exemplos) | O que faz |
+|---|---|
+| "ir para a rua Augusta 500", "navegar até o shopping Ibirapuera", "como chegar no posto Shell" | abre a rota no mapa escolhido (Waze e Google Maps já navegando; outros, na busca) |
+| "ir para casa", "me leva pro trabalho" | usa o **lugar salvo** (Ajustes > Lugares salvos: nome e endereço) |
+| "tocar rádio Jovem Pan", "toca a Band FM", "liga a rádio Transamérica" | procura nas favoritas e depois no radio-browser.info; toca e fala o nome achado |
+| "tocar Péricles no Spotify", "toca a música Separação", "quero ouvir Até que durou" | pede ao app de música para buscar e tocar: pela sessão dele, sem tirá-lo do fundo (APK multimídia, com acesso a notificações); senão abre o app com a busca (`MEDIA_PLAY_FROM_SEARCH`). Spotify grátis pode tocar o artista no aleatório; Bluetooth do celular não aceita busca |
+
+"Ir para" + nome de aba continua abrindo a aba ("ir para a saúde").
+
 Números por extenso viram dígitos ("cento e vinte e cinco" = 125); "seis e onze" é o preço 6,11; "6 reais e 19 centavos" = 6,19. O preço é o número depois de "a", "por" ou antes de "o litro"; sem marca, o menor entre 1 e 20. Testes em `VoiceCommandsTest`.
 
 ## Como funciona no aparelho (`data/VoiceAssistant`)

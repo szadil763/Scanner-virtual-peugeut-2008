@@ -140,6 +140,19 @@ class MediaWatcher private constructor(private val app: Application) {
     }
 
     /**
+     * Busca e toca [query] no app [pkg] pela sessão de mídia dele, sem trazer o app para a frente.
+     * Falso se não houver sessão (app fechado ou sem acesso a notificações): aí abre-se o app.
+     */
+    fun playFromSearchQuietly(pkg: String, query: String): Boolean {
+        val sessions = try { msm?.getActiveSessions(component) } catch (e: SecurityException) { null } ?: return false
+        val s = sessions.firstOrNull { it.packageName == pkg } ?: return false
+        return try {
+            s.transportControls.playFromSearch(query, android.os.Bundle())
+            true
+        } catch (e: Exception) { false }
+    }
+
+    /**
      * Ao ligar o carro: manda o app [pkg] voltar a tocar, sem abri-lo na frente. O celular demora a
      * reconectar pelo Bluetooth, então tenta por até 40 s; se a sessão aparecer, dá play nela.
      */

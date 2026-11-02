@@ -121,4 +121,53 @@ class VoiceCommandsTest {
             VoiceCommands.answer(VoiceCommands.parse("abasteci cem reais"), live.copy(moving = true)))
         assertEquals(VoiceIntent.ABASTECER, VoiceCommands.parse("registrar abastecimento").intent)
     }
+
+    @Test fun routeToAnAddress() {
+        val c = VoiceCommands.parse("ir para Rua Augusta, 500")
+        assertEquals(VoiceIntent.IR_PARA, c.intent)
+        assertEquals("rua augusta 500", c.query)
+        assertEquals("shopping ibirapuera", VoiceCommands.parse("navegar até o Shopping Ibirapuera").query)
+        assertEquals("posto shell", VoiceCommands.parse("como chegar no posto Shell").query)
+        assertEquals("casa", VoiceCommands.parse("me leva pra casa").query)
+        // Aba continua aba.
+        assertEquals(VoiceNav.SAUDE, VoiceCommands.parse("ir para a saúde").nav)
+        assertEquals(VoiceIntent.ABRIR, VoiceCommands.parse("vai para os postos").intent)
+    }
+
+    @Test fun savedPlaces() {
+        val places = listOf("Casa" to "Rua das Flores, 10", "Trabalho" to "Av. Paulista, 1000")
+        assertEquals("Rua das Flores, 10", VoiceCommands.placeFor("minha casa", places))
+        assertEquals("Av. Paulista, 1000", VoiceCommands.placeFor("o trabalho", places))
+        assertEquals(null, VoiceCommands.placeFor("rua augusta 500", places))
+    }
+
+    @Test fun radioByName() {
+        val c = VoiceCommands.parse("tocar rádio Jovem Pan")
+        assertEquals(VoiceIntent.TOCAR_RADIO, c.intent)
+        assertEquals("jovem pan", c.query)
+        assertEquals("band fm", VoiceCommands.parse("toca a Band FM").query)
+        assertEquals("transamerica", VoiceCommands.parse("liga a rádio Transamérica").query)
+        val list = listOf(
+            RadioStation("1", "Band FM 96.1", "u1"), RadioStation("2", "Jovem Pan FM 100.9 São Paulo", "u2"),
+            RadioStation("3", "Rádio Jovem Brasil", "u3"),
+        )
+        assertEquals("2", VoiceCommands.bestRadio("jovem pan", list)?.id)
+        assertEquals("1", VoiceCommands.bestRadio("band fm", list)?.id)
+        assertEquals(null, VoiceCommands.bestRadio("fm", list))
+    }
+
+    @Test fun musicSearch() {
+        val c = VoiceCommands.parse("tocar Péricles no Spotify")
+        assertEquals(VoiceIntent.TOCAR_MUSICA, c.intent)
+        assertEquals("pericles", c.query)
+        assertEquals("com.spotify.music", c.app)
+        assertEquals("separacao", VoiceCommands.parse("toca a música Separação").query)
+        assertEquals("ate que durou", VoiceCommands.parse("quero ouvir Até que durou").query)
+        assertEquals(null, VoiceCommands.parse("toca a música Separação").app)
+        // Sem nome: só dá play.
+        val play = VoiceCommands.parse("tocar música")
+        assertEquals(VoiceIntent.ABRIR, play.intent)
+        assertEquals(VoiceNav.MUSICA, play.nav)
+        assertTrue(play.play)
+    }
 }
