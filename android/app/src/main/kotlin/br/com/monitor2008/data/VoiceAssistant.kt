@@ -108,6 +108,7 @@ class VoiceAssistant private constructor(private val app: Application) {
      */
     fun listen(beepWhenReady: Boolean = false, retry: Int = 0) {
         handsFree = beepWhenReady || !VoiceActions.screenVisible
+        lastUseMs = System.currentTimeMillis()
         retries = retry
         initTts()
         if (!micAllowed()) { fail("Falta a permissão do microfone. Abra o Monitor e libere o microfone."); return }
@@ -242,6 +243,9 @@ class VoiceAssistant private constructor(private val app: Application) {
     }
 
     @Volatile private var handsFree = false
+    /** Último uso do comando de voz: renova os 15 minutos da escuta da palavra "Monitor". */
+    @Volatile var lastUseMs = 0L
+        private set
     /** Tocava quando o comando de voz começou a ouvir (antes de pausar para ouvir). */
     @Volatile var radioWasPlaying = false
         private set

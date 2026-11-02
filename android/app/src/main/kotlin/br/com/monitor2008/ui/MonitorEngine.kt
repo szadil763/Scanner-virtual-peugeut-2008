@@ -39,6 +39,7 @@ import br.com.monitor2008.domain.ReportInput
 import br.com.monitor2008.domain.Tip
 import br.com.monitor2008.domain.TripAccumulator
 import br.com.monitor2008.data.SessionResume
+import br.com.monitor2008.data.MicService
 import br.com.monitor2008.domain.MissedDistance
 import br.com.monitor2008.domain.TripHealth
 import br.com.monitor2008.domain.Vehicle
@@ -200,6 +201,8 @@ class MonitorEngine private constructor(private val app: Application) {
             src.info.collect {
                 // Conexão perdida ou carro desligado: a viagem termina aqui.
                 if (it.state != ConnState.CONNECTED) closeTrip()
+                // Carro ligou: a escuta da palavra "Monitor" volta (ela dorme 15 min depois do carro desligar).
+                if (it.state == ConnState.CONNECTED && conn.state != ConnState.CONNECTED) MicService.update(app)
                 conn = it
                 // Falhas: lidas assim que conecta, mesmo com o motor desligado (só a ignição ligada).
                 if (it.state == ConnState.CONNECTED && !tripDtcsRead) readTripDtcs()

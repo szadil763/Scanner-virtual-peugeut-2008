@@ -17,6 +17,7 @@ import androidx.core.app.ServiceCompat
 import androidx.core.content.ContextCompat
 import br.com.monitor2008.MainActivity
 import br.com.monitor2008.domain.WakeRules
+import br.com.monitor2008.ui.MonitorEngine
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -62,7 +63,7 @@ class MicService : Service() {
         val notification = NotificationCompat.Builder(this, CHANNEL)
             .setSmallIcon(android.R.drawable.ic_btn_speak_now)
             .setContentTitle("Monitor 2008")
-            .setContentText(if (store.wakeWord) "Diga \"Monitor\" para falar com o app" else "Comando de voz pronto")
+            .setContentText(if (store.wakeWord) "Diga \"Monitor\". Desliga sozinho 15 min depois do carro." else "Comando de voz pronto")
             .setContentIntent(open)
             .setOngoing(true)
             .setPriority(NotificationCompat.PRIORITY_LOW)
@@ -75,6 +76,8 @@ class MicService : Service() {
             stopSelf()
             return START_NOT_STICKY
         }
+        // Cada pedido para ligar (app aberto, janela flutuante, carro conectado) renova os 15 minutos.
+        lastActivity = System.currentTimeMillis()
         if (!looping) { looping = true; scope.launch { loop() } }
         return START_STICKY
     }
@@ -82,11 +85,24 @@ class MicService : Service() {
     /** A cada segundo: escuta a palavra quando pode; solta o microfone quando o comando de voz precisa. */
     private suspend fun loop() {
         val voice = VoiceAssistant.get(application)
+        val engine = MonitorEngine.get(application)
         val audio = getSystemService(AudioManager::class.java)
         while (scope.isActive) {
             val store = Store(this)
+            val now = System.currentTimeMillis()
+            val ui = engine.ui.value
+            val carConnected = !ui.simulated && ui.conn.state == ConnState.CONNECTED
+            if (carConnected) lastActivity = now
+            if (voice.lastUseMs > lastActivity) lastActivity = voice.lastUseMs
+            val awake = WakeRules.awake(now, carConnected, lastActivity)
+            // Carro desligado há 15 min, sem uso da voz e sem a janela flutuante: desliga o microfone e some.
+            if (!awake && !FloatingPanel.showing) {
+                stopWake()
+                stopSelf()
+                return
+            }
             val inCall = audio?.mode == AudioManager.MODE_IN_CALL || audio?.mode == AudioManager.MODE_IN_COMMUNICATION
-            val listen = WakeRules.shouldListen(
+            val listen = awake && WakeRules.shouldListen(
                 enabled = store.wakeWord, modelReady = WakeModel.ready(this), micAllowed = voice.micAllowed(),
                 assistantBusy = voice.busy, inCall = inCall,
             )
@@ -94,6 +110,9 @@ class MicService : Service() {
             delay(1_000)
         }
     }
+
+    /** Última atividade (carro conectado, uso da voz, app aberto): conta os 15 minutos. */
+    private var lastActivity = System.currentTimeMillis()
 
     /**
      * Escuta a palavra com o microfone do próprio app (não o do Vosk), para ligar o redutor de ruído

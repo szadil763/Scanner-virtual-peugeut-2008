@@ -21,6 +21,13 @@ class WakeRulesTest {
         assertFalse(WakeRules.isWakePartial("{\"text\" : \"monitor\"}"))
     }
 
+    @Test fun sleepsFifteenMinutesAfterTheCar() {
+        val t0 = 1_000_000L
+        assertTrue(WakeRules.awake(t0 + 60 * 60_000L, carConnected = true, lastActivityMs = t0))
+        assertTrue(WakeRules.awake(t0 + 14 * 60_000L, carConnected = false, lastActivityMs = t0))
+        assertFalse(WakeRules.awake(t0 + 15 * 60_000L, carConnected = false, lastActivityMs = t0))
+    }
+
     @Test fun listensOnlyWhenFree() {
         assertTrue(WakeRules.shouldListen(enabled = true, modelReady = true, micAllowed = true, assistantBusy = false, inCall = false))
         assertFalse(WakeRules.shouldListen(enabled = true, modelReady = true, micAllowed = true, assistantBusy = true, inCall = false))
