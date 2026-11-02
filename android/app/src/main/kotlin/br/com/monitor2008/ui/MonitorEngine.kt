@@ -201,8 +201,6 @@ class MonitorEngine private constructor(private val app: Application) {
             src.info.collect {
                 // Conexão perdida ou carro desligado: a viagem termina aqui.
                 if (it.state != ConnState.CONNECTED) closeTrip()
-                // Carro ligou: a escuta da palavra "Monitor" volta (ela dorme 15 min depois do carro desligar).
-                if (it.state == ConnState.CONNECTED && conn.state != ConnState.CONNECTED) MicService.update(app)
                 conn = it
                 // Falhas: lidas assim que conecta, mesmo com o motor desligado (só a ignição ligada).
                 if (it.state == ConnState.CONNECTED && !tripDtcsRead) readTripDtcs()
@@ -214,7 +212,13 @@ class MonitorEngine private constructor(private val app: Application) {
         }
     }
 
+    /** Motor girando na amostra anterior: ao ligar o motor, a escuta da palavra "Monitor" volta. */
+    private var engineWasRunning = false
+
     private fun onSample(s: Sample) {
+        val running = (s.rpm ?: 0.0) > 300
+        if (running && !engineWasRunning) MicService.update(app, renew = true)
+        engineWasRunning = running
         val dt = if (lastTimeMs == 0L) 0.0 else ((s.timeMs - lastTimeMs) / 1000.0).coerceIn(0.0, 5.0)
         lastTimeMs = s.timeMs
         val speed = s.speedKmh ?: 0.0

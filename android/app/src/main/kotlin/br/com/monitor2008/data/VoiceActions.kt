@@ -35,6 +35,7 @@ object VoiceActions {
 
     /** Atende sem a tela do Monitor. */
     fun handles(cmd: VoiceCommand): Boolean = when (cmd.intent) {
+        VoiceIntent.DESATIVAR_ESCUTA,
         VoiceIntent.IR_PARA, VoiceIntent.TOCAR_RADIO, VoiceIntent.TOCAR_MUSICA,
         VoiceIntent.PAUSAR, VoiceIntent.PROXIMA, VoiceIntent.ANTERIOR -> true
         VoiceIntent.ABRIR -> cmd.nav == VoiceNav.MAPA ||
@@ -56,6 +57,8 @@ object VoiceActions {
 
     fun execute(app: Application, cmd: VoiceCommand, voice: VoiceAssistant) {
         when (cmd.intent) {
+            // "Monitor, desativar": para de escutar a palavra até o motor ligar ou o app abrir.
+            VoiceIntent.DESATIVAR_ESCUTA -> MicService.snooze(app)
             // "ir para casa", "ir para a rua augusta 500": lugar salvo ou o endereço falado.
             VoiceIntent.IR_PARA -> {
                 val q = cmd.query ?: return

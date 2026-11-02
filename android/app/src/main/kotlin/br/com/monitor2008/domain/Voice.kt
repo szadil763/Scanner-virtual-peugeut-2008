@@ -4,7 +4,7 @@ import java.text.Normalizer
 import java.util.Locale
 
 /** O que o dono perguntou pelo comando de voz (primeira versão: só consultas, nada muda no app). */
-enum class VoiceIntent { ABRIR, ABASTECER, IR_PARA, TOCAR_RADIO, TOCAR_MUSICA, PAUSAR, PROXIMA, ANTERIOR, CONSUMO, VIAGEM, TEMPERATURA, BATERIA, OLEO, FALHAS, SAUDE, VELOCIDADE, ROTACAO, AJUDA, DESCONHECIDO }
+enum class VoiceIntent { DESATIVAR_ESCUTA, ABRIR, ABASTECER, IR_PARA, TOCAR_RADIO, TOCAR_MUSICA, PAUSAR, PROXIMA, ANTERIOR, CONSUMO, VIAGEM, TEMPERATURA, BATERIA, OLEO, FALHAS, SAUDE, VELOCIDADE, ROTACAO, AJUDA, DESCONHECIDO }
 
 /** Telas do app que o comando de voz abre (MAPA abre o app de mapa; MUSICA e RADIO, a aba Mídias nesse modo). */
 enum class VoiceNav(val spoken: String) {
@@ -129,6 +129,7 @@ object VoiceCommands {
         if (t.isEmpty()) return VoiceCommand(VoiceIntent.DESCONHECIDO)
         if (keywords.first().second.any { t.contains(it) }) return VoiceCommand(VoiceIntent.AJUDA)
         if (refuelWords.any { t.contains(it) }) return VoiceCommand(VoiceIntent.ABASTECER, refuel = refuel(text))
+        if (sleepWords.any { Regex("\\b$it\\b").containsMatchIn(t) }) return VoiceCommand(VoiceIntent.DESATIVAR_ESCUTA)
         mediaControl(t)?.let { return VoiceCommand(it) }
         goTo(t)?.let { return it }
         playRequest(t)?.let { return it }
@@ -204,6 +205,11 @@ object VoiceCommands {
         return VoiceCommand(VoiceIntent.TOCAR_MUSICA, query = core.joinToString(" "), app = app)
     }
 
+    /** "desativar", "desligar a escuta": a palavra "Monitor" para até o motor ligar ou o app abrir. */
+    private val sleepWords = listOf("desativar", "desativa", "desative", "desligar a escuta", "desliga a escuta",
+        "desligar escuta", "desliga escuta", "desligar o microfone", "desliga o microfone", "parar de ouvir", "para de ouvir",
+        "pare de ouvir", "parar de escutar", "para de escutar", "pare de escutar", "vai dormir", "pode dormir", "dormir")
+
     private val pauseWords = listOf("desliga", "desligar", "desligue", "parar", "pare", "pausa", "pausar", "pause",
         "silencio", "para de tocar", "para tudo", "chega de musica", "tira o som")
     /** "para a música" é pausar; "vai para a música" é abrir a tela. */
@@ -246,6 +252,7 @@ object VoiceCommands {
 
     fun answer(cmd: VoiceCommand, s: VoiceSnapshot): String = when (cmd.intent) {
         VoiceIntent.IR_PARA -> "Abrindo a rota para ${cmd.query}."
+        VoiceIntent.DESATIVAR_ESCUTA -> "Escuta desligada. Volto quando o motor ligar ou quando você abrir o Monitor."
         VoiceIntent.PAUSAR -> "" // a tela fala o resultado ("Pausado." ou "Nada tocando agora.")
         VoiceIntent.PROXIMA -> "Próxima."
         VoiceIntent.ANTERIOR -> "Anterior."
@@ -430,7 +437,7 @@ object VoiceCommands {
         VoiceIntent.ROTACAO -> live(s, s.rpm) { "${n(it, 0)} rotações por minuto." }
         VoiceIntent.AJUDA -> HELP
         VoiceIntent.ABRIR, VoiceIntent.ABASTECER, VoiceIntent.IR_PARA, VoiceIntent.TOCAR_RADIO, VoiceIntent.TOCAR_MUSICA,
-        VoiceIntent.PAUSAR, VoiceIntent.PROXIMA, VoiceIntent.ANTERIOR -> HELP
+        VoiceIntent.PAUSAR, VoiceIntent.PROXIMA, VoiceIntent.ANTERIOR, VoiceIntent.DESATIVAR_ESCUTA -> HELP
         VoiceIntent.DESCONHECIDO -> "Não entendi. $HELP"
     }
 

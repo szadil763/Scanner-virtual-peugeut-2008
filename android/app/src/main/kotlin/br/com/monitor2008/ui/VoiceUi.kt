@@ -230,7 +230,7 @@ internal fun WakeWordSection() {
     val model by WakeModel.state.collectAsStateWithLifecycle()
     LaunchedEffect(Unit) { WakeModel.refresh(ctx) }
     // Depois de baixar, liga a escuta (o app está na frente, então o Android deixa).
-    LaunchedEffect(model, on) { MicService.update(ctx) }
+    LaunchedEffect(model, on) { MicService.update(ctx, renew = true) }
     val mic = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { ok ->
         if (!ok) SystemSettings.app(ctx)
         MicService.update(ctx)
@@ -244,7 +244,7 @@ internal fun WakeWordSection() {
                 if (!voice.micAllowed()) mic.launch(Manifest.permission.RECORD_AUDIO)
                 if (!WakeModel.ready(ctx)) WakeModel.download(ctx)
             }
-            MicService.update(ctx)
+            MicService.update(ctx, renew = true)
         })
         Column(Modifier.weight(1f)) {
             Text("Diga \"Monitor\", espere o bipe e faça o pedido", fontSize = 17.sp)

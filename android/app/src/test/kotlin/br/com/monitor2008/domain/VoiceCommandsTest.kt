@@ -174,6 +174,15 @@ class VoiceCommandsTest {
         assertTrue(play.play)
     }
 
+    @Test fun sleepCommand() {
+        assertEquals(VoiceIntent.DESATIVAR_ESCUTA, VoiceCommands.parse("desativar").intent)
+        assertEquals(VoiceIntent.DESATIVAR_ESCUTA, VoiceCommands.parse("Monitor desativar").intent)
+        assertEquals(VoiceIntent.DESATIVAR_ESCUTA, VoiceCommands.parse("desligar a escuta").intent)
+        assertEquals(VoiceIntent.DESATIVAR_ESCUTA, VoiceCommands.parse("pare de ouvir").intent)
+        // Desligar o rádio continua pausar.
+        assertEquals(VoiceIntent.PAUSAR, VoiceCommands.parse("desligar o rádio").intent)
+    }
+
     @Test fun mediaControls() {
         assertEquals(VoiceIntent.PAUSAR, VoiceCommands.parse("desligar o rádio").intent)
         assertEquals(VoiceIntent.PAUSAR, VoiceCommands.parse("desliga a música").intent)

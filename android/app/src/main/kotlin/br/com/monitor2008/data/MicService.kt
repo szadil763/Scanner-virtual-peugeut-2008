@@ -57,6 +57,12 @@ class MicService : Service() {
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        // Botão "Desligar escuta" da notificação.
+        if (intent?.action == ACTION_SNOOZE) {
+            snoozed = true
+            stopWake()
+            if (!FloatingPanel.showing) { stopSelf(); return START_NOT_STICKY }
+        }
         createChannel()
         val open = PendingIntent.getActivity(this, 1, Intent(this, MainActivity::class.java), PendingIntent.FLAG_IMMUTABLE)
         val store = Store(this)
@@ -65,6 +71,13 @@ class MicService : Service() {
             .setContentTitle("Monitor 2008")
             .setContentText(if (store.wakeWord) "Diga \"Monitor\". Desliga sozinho 15 min depois do carro." else "Comando de voz pronto")
             .setContentIntent(open)
+            .apply {
+                if (store.wakeWord) addAction(
+                    android.R.drawable.ic_lock_silent_mode, "Desligar escuta",
+                    PendingIntent.getService(this@MicService, 2, Intent(this@MicService, MicService::class.java).setAction(ACTION_SNOOZE),
+                        PendingIntent.FLAG_IMMUTABLE),
+                )
+            }
             .setOngoing(true)
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .build()
@@ -76,8 +89,8 @@ class MicService : Service() {
             stopSelf()
             return START_NOT_STICKY
         }
-        // Cada pedido para ligar (app aberto, janela flutuante, carro conectado) renova os 15 minutos.
-        lastActivity = System.currentTimeMillis()
+        // App aberto ou motor que acabou de ligar renovam os 15 minutos (reconectar ao adaptador não renova).
+        if (intent?.getBooleanExtra(EXTRA_RENEW, false) == true) lastActivity = System.currentTimeMillis()
         if (!looping) { looping = true; scope.launch { loop() } }
         return START_STICKY
     }
@@ -91,18 +104,21 @@ class MicService : Service() {
             val store = Store(this)
             val now = System.currentTimeMillis()
             val ui = engine.ui.value
-            val carConnected = !ui.simulated && ui.conn.state == ConnState.CONNECTED
-            if (carConnected) lastActivity = now
+            // Motor girando, e não só "conectado ao adaptador": ele fica ligado na tomada com o carro desligado.
+            val engineRunning = WakeRules.engineRunning(!ui.simulated && ui.conn.state == ConnState.CONNECTED, ui.sample?.rpm)
+            if (engineRunning) lastActivity = now
             if (voice.lastUseMs > lastActivity) lastActivity = voice.lastUseMs
-            val awake = WakeRules.awake(now, carConnected, lastActivity)
-            // Carro desligado há 15 min, sem uso da voz e sem a janela flutuante: desliga o microfone e some.
-            if (!awake && !FloatingPanel.showing) {
+            val awake = WakeRules.awake(now, engineRunning, lastActivity)
+            // Carro desligado há 15 min (ou "desativar"), sem uso da voz e sem a janela flutuante: desliga o microfone e some.
+            if ((!awake || snoozed) && !FloatingPanel.showing) {
                 stopWake()
                 stopSelf()
                 return
             }
             val inCall = audio?.mode == AudioManager.MODE_IN_CALL || audio?.mode == AudioManager.MODE_IN_COMMUNICATION
-            val listen = awake && WakeRules.shouldListen(
+            // No celular, só dentro do carro: motor girando ou Bluetooth de áudio do multimídia conectado.
+            val inCar = WakeRules.inCar(phone = !Features.mediaControl, engineRunning = engineRunning, bluetoothAudio = bluetoothAudio())
+            val listen = awake && inCar && !snoozed && WakeRules.shouldListen(
                 enabled = store.wakeWord, modelReady = WakeModel.ready(this), micAllowed = voice.micAllowed(),
                 assistantBusy = voice.busy, inCall = inCall,
             )
@@ -111,7 +127,17 @@ class MicService : Service() {
         }
     }
 
-    /** Última atividade (carro conectado, uso da voz, app aberto): conta os 15 minutos. */
+    /** Celular ligado a um aparelho de áudio Bluetooth (o multimídia do carro, para chamadas e música). */
+    @android.annotation.SuppressLint("MissingPermission") // sem a permissão, cai no catch e vale "não"
+    private fun bluetoothAudio(): Boolean = try {
+        val adapter = getSystemService(android.bluetooth.BluetoothManager::class.java)?.adapter
+        adapter != null && adapter.isEnabled && (
+            adapter.getProfileConnectionState(android.bluetooth.BluetoothProfile.A2DP) == android.bluetooth.BluetoothProfile.STATE_CONNECTED ||
+                adapter.getProfileConnectionState(android.bluetooth.BluetoothProfile.HEADSET) == android.bluetooth.BluetoothProfile.STATE_CONNECTED
+            )
+    } catch (e: Exception) { false }
+
+    /** Última atividade (motor girando, uso da voz, app aberto): conta os 15 minutos. */
     private var lastActivity = System.currentTimeMillis()
 
     /**
@@ -207,16 +233,29 @@ class MicService : Service() {
         private const val CHANNEL = "voz"
         private const val NOTIFICATION_ID = 2
         private const val RATE = 16_000
+        private const val ACTION_SNOOZE = "br.com.monitor2008.DESLIGAR_ESCUTA"
+        private const val EXTRA_RENEW = "renovar"
+
+        /** "Desativar" ou botão da notificação: não escuta "Monitor" até o motor ligar ou o app abrir. */
+        @Volatile var snoozed = false
+            private set
+
+        fun snooze(context: Context) {
+            snoozed = true
+            update(context)
+        }
 
         /**
          * Liga ou desliga conforme a necessidade (palavra ligada ou janela flutuante na tela). Chamar
          * com o app na frente: com ele atrás o Android não deixa iniciar o serviço de microfone.
          */
-        fun update(context: Context) {
+        fun update(context: Context, renew: Boolean = false) {
             val app = context.applicationContext as Application
-            val needed = (Store(app).wakeWord && WakeModel.ready(app) || FloatingPanel.showing) &&
+            // App aberto ou motor ligado: desfaz o "desativar".
+            if (renew) snoozed = false
+            val needed = (Store(app).wakeWord && WakeModel.ready(app) && !snoozed || FloatingPanel.showing) &&
                 VoiceAssistant.get(app).micAllowed()
-            val intent = Intent(app, MicService::class.java)
+            val intent = Intent(app, MicService::class.java).putExtra(EXTRA_RENEW, renew)
             try {
                 if (needed) ContextCompat.startForegroundService(app, intent) else app.stopService(intent)
             } catch (_: Exception) { }

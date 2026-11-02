@@ -90,7 +90,7 @@ class MainActivity : ComponentActivity() {
         FloatingPanel.hide(this)
         VoiceActions.onResumed(this)
         // Microfone para a palavra "Monitor" (só dá para ligar com o app na frente).
-        MicService.update(this)
+        MicService.update(this, renew = true)
         // Ao voltar da tela de "acesso a notificações", o mini player já começa a mostrar a música.
         MediaWatcher.get(application).start()
         // Primeira tela depois de ligar o carro: continua a rádio ou a música que tocava.

@@ -37,8 +37,22 @@ object WakeRules {
      * a última atividade (carro conectado, uso da voz ou abertura do app) e depois desliga sozinho.
      * Antes o celular seguia escutando fora do carro e acionava até no WhatsApp (relato da 0.1.56).
      */
-    fun awake(nowMs: Long, carConnected: Boolean, lastActivityMs: Long, idleMs: Long = IDLE_MS): Boolean =
-        carConnected || nowMs - lastActivityMs < idleMs
+    fun awake(nowMs: Long, engineRunning: Boolean, lastActivityMs: Long, idleMs: Long = IDLE_MS): Boolean =
+        engineRunning || nowMs - lastActivityMs < idleMs
+
+    /**
+     * Motor girando: rotação acima de 300 rpm. Antes valia "conectado ao adaptador", mas o adaptador
+     * fica sempre ligado na tomada OBD; o app reconectava com o carro desligado e os 15 minutos nunca
+     * acabavam (relato da 0.1.57).
+     */
+    fun engineRunning(connected: Boolean, rpm: Double?): Boolean = connected && (rpm ?: 0.0) > 300
+
+    /**
+     * No celular, só escuta dentro do carro: motor girando ou celular ligado ao Bluetooth de áudio
+     * (multimídia do carro). No multimídia sempre vale, porque ele só liga com o carro.
+     */
+    fun inCar(phone: Boolean, engineRunning: Boolean, bluetoothAudio: Boolean): Boolean =
+        !phone || engineRunning || bluetoothAudio
 
     /** Escuta a palavra só quando está tudo pronto e o microfone está livre. */
     fun shouldListen(enabled: Boolean, modelReady: Boolean, micAllowed: Boolean, assistantBusy: Boolean, inCall: Boolean): Boolean =

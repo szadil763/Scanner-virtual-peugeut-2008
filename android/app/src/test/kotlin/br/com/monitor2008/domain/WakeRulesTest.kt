@@ -23,9 +23,24 @@ class WakeRulesTest {
 
     @Test fun sleepsFifteenMinutesAfterTheCar() {
         val t0 = 1_000_000L
-        assertTrue(WakeRules.awake(t0 + 60 * 60_000L, carConnected = true, lastActivityMs = t0))
-        assertTrue(WakeRules.awake(t0 + 14 * 60_000L, carConnected = false, lastActivityMs = t0))
-        assertFalse(WakeRules.awake(t0 + 15 * 60_000L, carConnected = false, lastActivityMs = t0))
+        assertTrue(WakeRules.awake(t0 + 60 * 60_000L, engineRunning = true, lastActivityMs = t0))
+        assertTrue(WakeRules.awake(t0 + 14 * 60_000L, engineRunning = false, lastActivityMs = t0))
+        assertFalse(WakeRules.awake(t0 + 15 * 60_000L, engineRunning = false, lastActivityMs = t0))
+    }
+
+    @Test fun adapterConnectedIsNotEngineRunning() {
+        // O adaptador responde com o carro desligado (rotação 0): não conta como carro ligado.
+        assertFalse(WakeRules.engineRunning(connected = true, rpm = 0.0))
+        assertFalse(WakeRules.engineRunning(connected = true, rpm = null))
+        assertFalse(WakeRules.engineRunning(connected = false, rpm = 800.0))
+        assertTrue(WakeRules.engineRunning(connected = true, rpm = 780.0))
+    }
+
+    @Test fun phoneListensOnlyInTheCar() {
+        assertTrue(WakeRules.inCar(phone = false, engineRunning = false, bluetoothAudio = false))
+        assertFalse(WakeRules.inCar(phone = true, engineRunning = false, bluetoothAudio = false))
+        assertTrue(WakeRules.inCar(phone = true, engineRunning = false, bluetoothAudio = true))
+        assertTrue(WakeRules.inCar(phone = true, engineRunning = true, bluetoothAudio = false))
     }
 
     @Test fun listensOnlyWhenFree() {
