@@ -45,5 +45,6 @@ Números por extenso viram dígitos ("cento e vinte e cinco" = 125); "seis e onz
 
 - Reconhecimento de fala do próprio aparelho (`SpeechRecognizer`, pt-BR). Sem serviço para o app usar direto, tenta a tela de reconhecimento do sistema. Muitos multimídias chineses vêm sem o app Google: aí não há reconhecimento (alternativa futura: reconhecimento offline, ~50 MB).
 - Resposta pelo leitor de voz do Android (`TextToSpeech`, pt-BR), como orientação de navegação: a música abaixa enquanto ouve e fala.
+- **Voz do app** (Ajustes, `domain/TtsVoices` com testes): lista as vozes em português do leitor do aparelho como "Voz 1, 2..." (melhores primeiro: instalada, sem internet, maior qualidade), com Ouvir e Usar; velocidade e tom de 0,6 a 1,6. Sem escolha, usa a melhor. Mais vozes: instalar "Serviços de fala do Google" e baixar Português (Brasil).
 - Ajustes > Comando de voz > **Testar este aparelho**: mostra se há microfone permitido, reconhecimento de voz e voz em português.
 - Permissão `RECORD_AUDIO`, pedida no primeiro toque; `<queries>` para enxergar os serviços de reconhecimento e de voz.

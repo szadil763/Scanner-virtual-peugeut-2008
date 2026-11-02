@@ -16,6 +16,8 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.ui.Alignment
 import br.com.monitor2008.data.Store
+import br.com.monitor2008.domain.TtsVoices
+import br.com.monitor2008.domain.VoiceCommands
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.height
@@ -189,6 +191,62 @@ internal fun VoiceSection(moving: Boolean) {
             null -> "Iniciando a voz do app..."
             false -> "Sem voz em português: instale \"Serviços de fala do Google\" ou outra voz em português"
         })
+    }
+}
+
+/** Ajustes: qual voz o app usa para responder, a velocidade e o tom. */
+@Composable
+internal fun VoiceChoiceSection() {
+    val voice = rememberVoice()
+    var options by remember { mutableStateOf(voice.voiceOptions()) }
+    var current by remember { mutableStateOf(voice.currentVoice()) }
+    var rate by remember { mutableStateOf(voice.rate) }
+    var pitch by remember { mutableStateOf(voice.pitch) }
+    var showAll by remember { mutableStateOf(false) }
+    // O leitor de voz demora a iniciar: tenta ler a lista por alguns segundos.
+    LaunchedEffect(Unit) {
+        repeat(8) {
+            if (options.isNotEmpty()) return@LaunchedEffect
+            delay(1_000)
+            options = voice.voiceOptions()
+            current = voice.currentVoice()
+        }
+    }
+    Text("Voz do app", fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
+    if (options.isEmpty()) {
+        Text("Nenhuma voz em português encontrada. Instale ou atualize \"Serviços de fala do Google\" na Play Store e baixe " +
+            "a voz Português (Brasil) em Configurações do Android > Idioma > Saída de texto para fala.",
+            color = Warn, fontSize = 15.sp)
+    } else {
+        Text("Toque em Ouvir para comparar e em Usar para escolher. As de alta qualidade soam mais naturais.",
+            color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 15.sp)
+        (if (showAll) options else options.take(6)).forEach { o ->
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                Column(Modifier.weight(1f)) {
+                    Text((if (o.name == current) "✓ " else "") + o.label, fontSize = 17.sp, fontWeight = FontWeight.SemiBold,
+                        color = if (o.name == current) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface)
+                    Text(o.detail, fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                OutlinedButton({ voice.preview(o.name) }, Modifier.height(56.dp)) { Text("Ouvir", fontSize = 16.sp) }
+                Button({ voice.chooseVoice(o.name); current = o.name; voice.speak("Esta é a voz do Monitor.") },
+                    Modifier.height(56.dp), enabled = o.name != current) { Text("Usar", fontSize = 16.sp) }
+            }
+        }
+        if (options.size > 6 && !showAll) {
+            OutlinedButton({ showAll = true }, Modifier.height(56.dp)) { Text("Ver todas as ${options.size} vozes", fontSize = 16.sp) }
+        }
+    }
+    VoiceStepper("Velocidade da fala", rate, onChange = { rate = it; voice.rate = it; voice.speak("Velocidade ${VoiceCommands.n(it.toDouble(), 1)}.") })
+    VoiceStepper("Tom da voz", pitch, onChange = { pitch = it; voice.pitch = it; voice.speak("Tom ${VoiceCommands.n(it.toDouble(), 1)}.") })
+}
+
+@Composable
+private fun VoiceStepper(label: String, value: Float, onChange: (Float) -> Unit) {
+    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        Text(label, fontSize = 17.sp, modifier = Modifier.weight(1f))
+        OutlinedButton({ onChange(TtsVoices.step(value, false)) }, Modifier.height(56.dp), enabled = value > 0.6f) { Text("−", fontSize = 22.sp) }
+        Text(VoiceCommands.n(value.toDouble(), 1) + if (value == 1.0f) " (normal)" else "", fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
+        OutlinedButton({ onChange(TtsVoices.step(value, true)) }, Modifier.height(56.dp), enabled = value < 1.6f) { Text("+", fontSize = 22.sp) }
     }
 }
 

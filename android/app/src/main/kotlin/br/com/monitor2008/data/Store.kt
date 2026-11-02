@@ -202,6 +202,17 @@ class Store(context: Context) {
     var refuelByMoney: Boolean
         get() = p.getBoolean("refuelByMoney", false)
         set(v) { p.edit().putBoolean("refuelByMoney", v).apply() }
+    /** Voz do comando de voz (nome técnico da voz do leitor); null = a melhor que o app achar. */
+    var ttsVoice: String?
+        get() = p.getString("ttsVoice", null)
+        set(v) { p.edit().putString("ttsVoice", v).apply() }
+    /** Velocidade e tom da fala (1,0 = normal). */
+    var ttsRate: Float
+        get() = p.getFloat("ttsRate", 1.0f)
+        set(v) { p.edit().putFloat("ttsRate", v).apply() }
+    var ttsPitch: Float
+        get() = p.getFloat("ttsPitch", 1.0f)
+        set(v) { p.edit().putFloat("ttsPitch", v).apply() }
     /** Abrir o app sozinho quando o multimídia liga (precisa da permissão "sobrepor a outros apps"). */
     var autoOpen: Boolean
         get() = p.getBoolean("autoOpen", false)

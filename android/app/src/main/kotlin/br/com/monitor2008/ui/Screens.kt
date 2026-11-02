@@ -1412,6 +1412,7 @@ private fun AjustesScreen(ui: UiState, vm: MonitorEngine) {
         AutoConnectSection(ui.moving)
         StartupSection()
         VoiceSection(ui.moving)
+        VoiceChoiceSection()
         PlacesSection(ui.moving)
         MapMusicSettings()
     }

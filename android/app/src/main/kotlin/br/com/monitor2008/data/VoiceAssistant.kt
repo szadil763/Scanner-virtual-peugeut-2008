@@ -14,6 +14,9 @@ import android.speech.SpeechRecognizer
 import android.speech.tts.TextToSpeech
 import android.speech.tts.UtteranceProgressListener
 import androidx.core.content.ContextCompat
+import br.com.monitor2008.domain.TtsVoiceInfo
+import br.com.monitor2008.domain.TtsVoiceOption
+import br.com.monitor2008.domain.TtsVoices
 import br.com.monitor2008.domain.VoiceCommand
 import br.com.monitor2008.domain.VoiceCommands
 import br.com.monitor2008.domain.VoiceIntent
@@ -52,6 +55,7 @@ class VoiceAssistant private constructor(private val app: Application) {
 
     private var recognizer: SpeechRecognizer? = null
     private var tts: TextToSpeech? = null
+    private val store = Store(app)
     private var ttsReady: Boolean? = null
     private var pendingSpeech: String? = null
     private val audio = app.getSystemService(AudioManager::class.java)
@@ -211,9 +215,64 @@ class VoiceAssistant private constructor(private val app: Application) {
                     @Deprecated("Deprecated in Java")
                     override fun onError(utteranceId: String?) { abandonFocus() }
                 })
+                applyVoice()
                 pendingSpeech?.let { pendingSpeech = null; speak(it) }
             }
         }
+    }
+
+    // ---------- Escolha da voz (Ajustes) ----------
+
+    private fun ptVoices(): List<android.speech.tts.Voice> = try {
+        tts?.voices.orEmpty().filter { it.locale.language == "pt" && (it.locale.country.isEmpty() || it.locale.country == "BR") }
+    } catch (e: Exception) { emptyList() }
+
+    private fun info(v: android.speech.tts.Voice) = TtsVoiceInfo(
+        v.name, v.quality, v.isNetworkConnectionRequired,
+        v.features?.contains(TextToSpeech.Engine.KEY_FEATURE_NOT_INSTALLED) == true,
+    )
+
+    /** Vozes em português para a tela de Ajustes (vazia enquanto o leitor inicia). */
+    fun voiceOptions(): List<TtsVoiceOption> {
+        initTts()
+        return TtsVoices.options(ptVoices().map(::info))
+    }
+
+    /** Nome da voz em uso (a escolhida ou a melhor achada). */
+    fun currentVoice(): String? = store.ttsVoice ?: TtsVoices.best(ptVoices().map(::info))?.name
+
+    var rate: Float
+        get() = store.ttsRate
+        set(v) { store.ttsRate = v; applyVoice() }
+    var pitch: Float
+        get() = store.ttsPitch
+        set(v) { store.ttsPitch = v; applyVoice() }
+
+    fun chooseVoice(name: String) {
+        store.ttsVoice = name
+        applyVoice()
+    }
+
+    /** Fala uma frase de exemplo com a voz [name], sem trocar a escolhida. */
+    fun preview(name: String) {
+        val t = tts ?: return
+        if (ttsReady != true) return
+        ptVoices().firstOrNull { it.name == name }?.let { try { t.voice = it } catch (_: Exception) { } }
+        speak("Motor a noventa graus. Consumo de doze vírgula três quilômetros por litro.")
+        // O leitor guarda a voz junto com cada fala pedida: já dá para voltar para a escolhida.
+        applyVoice()
+    }
+
+    /** Aplica a voz escolhida (ou a melhor), a velocidade e o tom. */
+    private fun applyVoice() {
+        val t = tts ?: return
+        if (ttsReady != true) return
+        val voices = ptVoices()
+        val chosen = voices.firstOrNull { it.name == store.ttsVoice }
+            ?: TtsVoices.best(voices.map(::info))?.let { b -> voices.firstOrNull { it.name == b.name } }
+        try { chosen?.let { t.voice = it } } catch (_: Exception) { }
+        t.setSpeechRate(store.ttsRate)
+        t.setPitch(store.ttsPitch)
     }
 
     /** Abaixa a música enquanto ouve e fala (o rádio do app e os outros apps de música respeitam). */
