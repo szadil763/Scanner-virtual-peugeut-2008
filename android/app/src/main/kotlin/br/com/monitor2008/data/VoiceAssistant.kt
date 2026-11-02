@@ -103,13 +103,14 @@ class VoiceAssistant private constructor(private val app: Application) {
     /** Começa a ouvir. Sem permissão do microfone ou sem reconhecimento, mostra o motivo. */
     fun listen() {
         initTts()
-        if (!micAllowed()) { _state.value = VoiceState.Error("Falta a permissão do microfone."); return }
+        if (!micAllowed()) { fail("Falta a permissão do microfone. Abra o Monitor e libere o microfone."); return }
         if (!canListenDirectly()) {
-            _state.value = VoiceState.Error("Este aparelho não tem reconhecimento de voz instalado (veja o teste em Ajustes > Comando de voz).")
+            fail("Este aparelho não tem reconhecimento de voz instalado (veja o teste em Ajustes > Comando de voz).")
             return
         }
         tts?.stop()
         stopListening()
+        beforeListen?.invoke()
         requestFocus()
         val r = try { SpeechRecognizer.createSpeechRecognizer(app) } catch (e: Exception) { null }
         if (r == null) { fail("Não foi possível abrir o reconhecimento de voz."); return }
@@ -150,13 +151,25 @@ class VoiceAssistant private constructor(private val app: Application) {
         val (cmd, heard) = VoiceCommands.parse(candidates)
         val snap = snapshot()
         val text = VoiceCommands.answer(cmd, snap)
-        val acts = cmd.intent in setOf(VoiceIntent.ABRIR, VoiceIntent.IR_PARA, VoiceIntent.TOCAR_RADIO, VoiceIntent.TOCAR_MUSICA,
-            VoiceIntent.PAUSAR, VoiceIntent.PROXIMA, VoiceIntent.ANTERIOR) ||
-            (cmd.intent == VoiceIntent.ABASTECER && !snap.moving)
-        // Abrir tela ou abastecimento: fecha a conversa (a tela pedida aparece) e só fala a confirmação.
-        _state.value = if (acts) VoiceState.Idle else VoiceState.Answer(heard, cmd.intent, text)
-        if (acts) _action.value = cmd
+        // Fala primeiro: as ações abaixo podem falar depois (resultado da busca da rádio, por exemplo).
         if (text.isNotBlank()) speak(text)
+        val needsScreen = cmd.intent == VoiceIntent.ABRIR || (cmd.intent == VoiceIntent.ABASTECER && !snap.moving)
+        when {
+            // Rota, mapa, rádio, música, pausar: atende mesmo com o Monitor atrás do mapa.
+            VoiceActions.handles(cmd) -> {
+                _state.value = VoiceState.Idle
+                VoiceActions.execute(app, cmd, this)
+            }
+            // Abrir aba ou abastecimento: a tela atende (e o Monitor vem para a frente, se estava atrás).
+            needsScreen -> {
+                _state.value = VoiceState.Idle
+                _action.value = cmd
+                VoiceActions.bringToFront(app)
+            }
+            // Pergunta com o Monitor atrás (🎤 da janela flutuante ou "Monitor"): só a resposta falada.
+            !VoiceActions.screenVisible -> _state.value = VoiceState.Idle
+            else -> _state.value = VoiceState.Answer(heard, cmd.intent, text)
+        }
     }
 
     fun close() {
@@ -188,8 +201,19 @@ class VoiceAssistant private constructor(private val app: Application) {
 
     private fun fail(message: String) {
         abandonFocus()
-        _state.value = VoiceState.Error(message)
+        if (!VoiceActions.screenVisible) {
+            // Sem a tela do Monitor (janela flutuante ou "Monitor"): o motivo vai falado.
+            _state.value = VoiceState.Idle
+            speak(message)
+        } else {
+            _state.value = VoiceState.Error(message)
+        }
     }
+
+    /** Ouvindo ou falando: a escuta da palavra "Monitor" espera (o microfone é um só). */
+    val busy: Boolean get() = _state.value is VoiceState.Listening || recognizer != null || speaking
+
+    @Volatile private var speaking = false
 
     private fun stopListening() {
         try { recognizer?.cancel() } catch (_: Exception) { }
@@ -216,10 +240,10 @@ class VoiceAssistant private constructor(private val app: Application) {
                         .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH).build(),
                 )
                 t?.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
-                    override fun onStart(utteranceId: String?) {}
-                    override fun onDone(utteranceId: String?) { abandonFocus() }
+                    override fun onStart(utteranceId: String?) { speaking = true }
+                    override fun onDone(utteranceId: String?) { speaking = false; abandonFocus() }
                     @Deprecated("Deprecated in Java")
-                    override fun onError(utteranceId: String?) { abandonFocus() }
+                    override fun onError(utteranceId: String?) { speaking = false; abandonFocus() }
                 })
                 applyVoice()
                 pendingSpeech?.let { pendingSpeech = null; speak(it) }
@@ -342,6 +366,9 @@ class VoiceAssistant private constructor(private val app: Application) {
     }
 
     companion object {
+        /** A escuta da palavra "Monitor" (MicService) solta o microfone aqui, antes de o comando de voz ouvir. */
+        @Volatile var beforeListen: (() -> Unit)? = null
+
         @Volatile private var instance: VoiceAssistant? = null
 
         fun get(app: Application): VoiceAssistant =

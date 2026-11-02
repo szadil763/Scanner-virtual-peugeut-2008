@@ -16,6 +16,9 @@ android {
         val build = System.getenv("GITHUB_RUN_NUMBER")?.toIntOrNull() ?: 1
         versionCode = build
         versionName = "0.1.$build"
+        // Reconhecimento offline da palavra "Monitor" (Vosk) tem biblioteca nativa: só ARM, como os
+        // multimídias e celulares; deixa o APK ~20 MB menor que com x86.
+        ndk { abiFilters += listOf("arm64-v8a", "armeabi-v7a") }
     }
 
     // Chave de debug fixa e pública (não é segredo): mantém a mesma assinatura em todo APK gerado,
@@ -72,6 +75,9 @@ dependencies {
     // Android Auto (telas de modelo). Ver docs/ANDROID-AUTO.md.
     implementation("androidx.car.app:app:1.4.0")
     // Rádio pela internet (aba Mídias): player e sessão de mídia. Ver docs/MIDIAS.md.
+    // Palavra "Monitor" para chamar o comando de voz, reconhecida no próprio aparelho, sem internet.
+    implementation("com.alphacephei:vosk-android:0.3.47@aar")
+    implementation("net.java.dev.jna:jna:5.13.0@aar")
     implementation("androidx.media3:media3-exoplayer:1.4.1")
     implementation("androidx.media3:media3-exoplayer-hls:1.4.1")
     implementation("androidx.media3:media3-session:1.4.1")

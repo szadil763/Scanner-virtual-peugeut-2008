@@ -31,6 +31,7 @@
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <!-- Comando de voz: o microfone só é usado enquanto o dono segura a conversa (botão Voz). -->
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
 
     <uses-feature android:name="android.hardware.bluetooth" android:required="false" />
     <uses-feature android:name="android.hardware.bluetooth_le" android:required="false" />
@@ -103,6 +104,12 @@
             android:name=".data.ReadingService"
             android:exported="false"
             android:foregroundServiceType="connectedDevice" />
+
+        <!-- Microfone com o Monitor atrás do mapa: 🎤 da janela flutuante e a palavra "Monitor". -->
+        <service
+            android:name=".data.MicService"
+            android:exported="false"
+            android:foregroundServiceType="microphone" />
 
 
         <service

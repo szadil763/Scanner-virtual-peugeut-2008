@@ -156,85 +156,13 @@ fun MonitorApp(vm: MonitorEngine) {
     // Comando de voz: "abrir a saúde", "abrir o mapa", "tocar rádio", "abasteci cem reais...".
     val voice = remember { VoiceAssistant.get(ctx.applicationContext as Application) }
     val voiceAction by voice.action.collectAsStateWithLifecycle()
-    // Busca de rádio fora do LaunchedEffect: limpar o pedido muda a chave e cancelaria a busca.
-    val voiceScope = rememberCoroutineScope()
-    /**
-     * Abrir o mapa pela voz: espera a janela da conversa fechar e o Monitor voltar ao primeiro plano
-     * (vindo da tela de reconhecimento do sistema ele ainda está pausado, e aí o Android não deixa
-     * virar janela flutuante). Depois abre igual ao botão Mapa: ao lado, ou o Monitor vira janela flutuante.
-     */
-    fun openWhenReady(open: (Activity?) -> Unit) {
-        val act = ctx.findActivity()
-        voiceScope.launch {
-            delay(500)
-            val owner = act as? androidx.lifecycle.LifecycleOwner
-            if (owner != null) owner.lifecycle.withResumed { open(act) } else open(act)
-        }
-    }
+    // Rota, mapa, rádio, música e pausar são atendidos em data/VoiceActions (funcionam com o Monitor atrás);
+    // aqui ficam os que precisam da tela: abrir uma aba e o registro de abastecimento.
     LaunchedEffect(voiceAction) {
         val a = voiceAction ?: return@LaunchedEffect
         val app = ctx.applicationContext as Application
         when (a.intent) {
-            // "ir para casa", "ir para a rua augusta 500": lugar salvo ou o endereço falado.
-            VoiceIntent.IR_PARA -> {
-                voice.consumeAction()
-                val q = a.query ?: return@LaunchedEffect
-                val address = VoiceCommands.placeFor(q, store.places()) ?: q
-                openWhenReady { act -> AppLauncher(app).routeTo(address, act)?.let { voice.say(it) } }
-            }
-            // "desligar o rádio", "pausar", "próxima", "anterior": o rádio do app se estiver tocando; senão o app de música.
-            VoiceIntent.PAUSAR, VoiceIntent.PROXIMA, VoiceIntent.ANTERIOR -> {
-                voice.consumeAction()
-                val radio = RadioPlayer.get(app)
-                val media = MediaWatcher.get(app)
-                val radioOn = radio.state.value.playing
-                when (a.intent) {
-                    VoiceIntent.PAUSAR -> when {
-                        radioOn -> { radio.toggle(); voice.say("Rádio pausado.") }
-                        media.now.value?.playing == true -> { media.playPause(); voice.say("Música pausada.") }
-                        else -> voice.say("Nada tocando agora.")
-                    }
-                    VoiceIntent.PROXIMA -> if (radioOn) radio.step(true) else media.next()
-                    else -> if (radioOn) radio.step(false) else media.previous()
-                }
-            }
-            // "tocar rádio jovem pan": favoritas primeiro, depois a lista de rádios pela internet.
-            VoiceIntent.TOCAR_RADIO -> {
-                voice.consumeAction()
-                val q = a.query ?: return@LaunchedEffect
-                voiceScope.launch {
-                    val player = RadioPlayer.get(app)
-                    var offline = false
-                    val found = VoiceCommands.bestRadio(q, player.state.value.favorites) ?: try {
-                        val list = RadioBrowser.search(name = q, limit = 20).ifEmpty {
-                            RadioBrowser.search(name = q.removeSuffix(" fm").trim(), limit = 20)
-                        }
-                        VoiceCommands.bestRadio(q, list) ?: list.firstOrNull()
-                    } catch (e: Exception) { offline = true; null }
-                    when {
-                        found != null -> { player.play(found); voice.say("Tocando ${found.name}.") }
-                        offline -> voice.say("Sem internet para procurar a rádio.")
-                        else -> voice.say("Não achei a rádio $q.")
-                    }
-                }
-            }
-            // "tocar péricles no spotify": pela sessão do app, sem tirá-lo do fundo; senão abre o app com a busca.
-            VoiceIntent.TOCAR_MUSICA -> {
-                voice.consumeAction()
-                val q = a.query ?: return@LaunchedEffect
-                val launcher = AppLauncher(app)
-                val pkg = launcher.musicFor(a.app)
-                when {
-                    pkg == null -> voice.say("Nenhum app de música instalado.")
-                    MediaWatcher.get(app).playFromSearchQuietly(pkg, q) -> {}
-                    else -> launcher.playFromSearch(pkg, q, ctx.findActivity())?.let { voice.say(it) }
-                }
-            }
             VoiceIntent.ABRIR -> when (val nav = a.nav) {
-                VoiceNav.MAPA -> {
-                    voice.consumeAction()
-                    openWhenReady { act -> AppLauncher(app).openMap(act)?.let { voice.say(it); Toast.makeText(ctx, it, Toast.LENGTH_LONG).show() } }
-                }
                 // A aba Mídias atende (troca para Música ou Rádio e, se pediu "tocar", toca).
                 VoiceNav.MUSICA, VoiceNav.RADIO -> tab = Tab.MIDIAS
                 null -> voice.consumeAction()
@@ -1447,6 +1375,7 @@ private fun AjustesScreen(ui: UiState, vm: MonitorEngine) {
         StartupSection()
         VoiceSection(ui.moving)
         VoiceChoiceSection()
+        WakeWordSection()
         PlacesSection(ui.moving)
         MapMusicSettings()
     }

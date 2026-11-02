@@ -202,6 +202,11 @@ class Store(context: Context) {
     var refuelByMoney: Boolean
         get() = p.getBoolean("refuelByMoney", false)
         set(v) { p.edit().putBoolean("refuelByMoney", v).apply() }
+    /** Chamar o comando de voz dizendo "Monitor" (reconhecimento offline; o modelo é baixado uma vez). */
+    var wakeWord: Boolean
+        get() = p.getBoolean("wakeWord", false)
+        set(v) { p.edit().putBoolean("wakeWord", v).apply() }
+
     /** Janela flutuante: "MONITOR" (própria, tamanho escolhido) ou "ANDROID" (a do sistema). */
     var floatMode: String
         get() = p.getString("floatMode", "MONITOR") ?: "MONITOR"

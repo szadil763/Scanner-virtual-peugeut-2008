@@ -58,3 +58,11 @@ Mapa pela voz: abre 0,5 s depois, quando a janela da conversa já fechou e o Mon
 ## Controle do que está tocando
 
 "desligar o rádio", "pausar", "para a música" (mas "vai para a música" abre a tela), "próxima", "pula", "música anterior": age no rádio do app se ele estiver tocando (pausa, próxima/anterior entre as favoritas); senão no app de música pela sessão de mídia (APK do multimídia). Testes em `VoiceCommandsTest.mediaControls`.
+
+## Sem tocar na tela: 🎤 da janela flutuante e a palavra "Monitor"
+
+- **🎤 na janela flutuante própria** (`data/FloatingPanel`): pergunta ou pedido com o Monitor atrás do mapa; o título da janela mostra "Ouvindo..." e o que foi entendido; a resposta é falada.
+- **"Monitor"** (Ajustes > Chamar dizendo "Monitor", desligado por padrão): reconhecimento offline Vosk (`com.alphacephei:vosk-android`), só com as palavras "monitor" e "[unk]" (`domain/Wake.kt`, com testes). O modelo pequeno em português (~40 MB, alphacephei.com) é baixado uma vez para `files/vosk-pt` (`data/WakeModel`). Ao ouvir: bipe, solta o microfone e abre o comando de voz normal.
+- **Microfone em segundo plano** (`data/MicService`): o Android só deixa com serviço em primeiro plano do tipo microfone, iniciado com o app na frente (ao abrir o app ou ao mostrar a janela flutuante). Fica ligado com a palavra ligada ou a janela flutuante na tela. Para de escutar a palavra enquanto o comando de voz ouve ou fala e durante ligações (`AudioManager.mode`).
+- **Pedidos sem a tela** (`data/VoiceActions`): rota, mapa, rádio, música, pausar/próxima funcionam com o Monitor atrás; abrir aba e abastecimento trazem o Monitor para a frente. Erros, sem a tela, são falados.
+- APK só com bibliotecas ARM (`abiFilters` arm64-v8a e armeabi-v7a), por causa da biblioteca nativa do Vosk.

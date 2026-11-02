@@ -76,7 +76,13 @@ object FloatingPanel {
         root = view
         params = p
         val engine = MonitorEngine.get(app)
-        job = scope.launch { engine.ui.collect { update(it) } }
+        job = scope.launch {
+            launch { engine.ui.collect { update(it) } }
+            // O título mostra o comando de voz: "Ouvindo..." e o que foi entendido.
+            launch { VoiceAssistant.get(app).state.collect { showVoice(it) } }
+        }
+        // 🎤 da janela com o Monitor atrás: o microfone precisa do serviço iniciado agora (app ainda na frente).
+        MicService.update(app)
     }
 
     /** Depois de mudar tamanho ou números em Ajustes: refaz a janela, se estiver aberta. */
@@ -91,7 +97,20 @@ object FloatingPanel {
         try { ctx.applicationContext.getSystemService(WindowManager::class.java)?.removeView(v) } catch (_: Exception) { }
         root = null
         params = null
+        title = null
         cells.clear()
+        MicService.update(ctx)
+    }
+
+    private var title: TextView? = null
+
+    private fun showVoice(st: VoiceState) {
+        val t = title ?: return
+        t.text = when (st) {
+            is VoiceState.Listening -> if (st.partial.isBlank()) "Ouvindo..." else st.partial
+            else -> "Monitor"
+        }
+        t.setTextColor(if (st is VoiceState.Listening) Color.rgb(56, 189, 248) else Color.rgb(148, 163, 184))
     }
 
     /** Troca de tamanho ou de números: refaz o conteúdo no mesmo lugar. */
@@ -135,8 +154,10 @@ object FloatingPanel {
             text = "Monitor"
             setTextColor(Color.rgb(148, 163, 184))
             setTextSize(TypedValue.COMPLEX_UNIT_SP, size.labelSp)
+            maxLines = 1
+            ellipsize = android.text.TextUtils.TruncateAt.END
             layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
-        })
+        }.also { title = it })
         fun button(label: String, onClick: () -> Unit) = TextView(app).apply {
             text = label
             gravity = Gravity.CENTER
@@ -146,6 +167,8 @@ object FloatingPanel {
             layoutParams = LinearLayout.LayoutParams(dp(app, 56f), dp(app, 56f))
             setOnClickListener { onClick() }
         }
+        // 🎤: comando de voz sem voltar para o Monitor ("tocar rádio", "ir para casa", "qual o consumo").
+        bar.addView(button("🎤") { VoiceAssistant.get(app).listen() })
         bar.addView(button("−") { store.floatSize = FloatRules.stepSize(store.floatSize, false); rebuild(app) })
         bar.addView(button("+") { store.floatSize = FloatRules.stepSize(store.floatSize, true); rebuild(app) })
         bar.addView(button("✕") { hide(app) })

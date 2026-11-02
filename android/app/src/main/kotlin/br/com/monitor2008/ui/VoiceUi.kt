@@ -16,6 +16,9 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.ui.Alignment
 import br.com.monitor2008.data.Store
+import br.com.monitor2008.data.MicService
+import br.com.monitor2008.data.WakeModel
+import br.com.monitor2008.data.WakeModelState
 import br.com.monitor2008.data.SystemSettings
 import br.com.monitor2008.domain.TtsVoices
 import br.com.monitor2008.domain.VoiceCommands
@@ -214,6 +217,60 @@ internal fun VoiceSection(moving: Boolean) {
             null -> "Iniciando a voz do app..."
             false -> "Sem voz em português: instale \"Serviços de fala do Google\" ou outra voz em português"
         })
+    }
+}
+
+/** Ajustes: chamar o comando de voz dizendo "Monitor" (reconhecimento offline, baixado uma vez). */
+@Composable
+internal fun WakeWordSection() {
+    val ctx = LocalContext.current
+    val store = remember { Store(ctx.applicationContext) }
+    val voice = rememberVoice()
+    var on by remember { mutableStateOf(store.wakeWord) }
+    val model by WakeModel.state.collectAsStateWithLifecycle()
+    LaunchedEffect(Unit) { WakeModel.refresh(ctx) }
+    // Depois de baixar, liga a escuta (o app está na frente, então o Android deixa).
+    LaunchedEffect(model, on) { MicService.update(ctx) }
+    val mic = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { ok ->
+        if (!ok) SystemSettings.app(ctx)
+        MicService.update(ctx)
+    }
+    Text("Chamar dizendo \"Monitor\"", fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
+    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        androidx.compose.material3.Switch(on, { v ->
+            on = v
+            store.wakeWord = v
+            if (v) {
+                if (!voice.micAllowed()) mic.launch(Manifest.permission.RECORD_AUDIO)
+                if (!WakeModel.ready(ctx)) WakeModel.download(ctx)
+            }
+            MicService.update(ctx)
+        })
+        Column(Modifier.weight(1f)) {
+            Text("Diga \"Monitor\", espere o bipe e faça o pedido", fontSize = 17.sp)
+            Text("Reconhece só a palavra, no próprio aparelho, sem internet e sem mandar áudio. Para durante ligações.",
+                fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+    }
+    if (on) when (val m = model) {
+        WakeModelState.Missing -> Button({ WakeModel.download(ctx) }, Modifier.height(56.dp)) {
+            Text("Baixar o reconhecimento offline (uns 40 MB)", fontSize = 16.sp)
+        }
+        is WakeModelState.Downloading -> {
+            Text("Baixando o reconhecimento offline... ${(m.progress * 100).toInt()}%", fontSize = 15.sp)
+            androidx.compose.material3.LinearProgressIndicator(progress = { m.progress }, modifier = Modifier.fillMaxWidth().height(10.dp))
+        }
+        WakeModelState.Ready -> Text(
+            if (voice.micAllowed()) "Pronto. Diga \"Monitor\" com o app aberto ou atrás do mapa." else "Falta liberar o microfone.",
+            fontSize = 15.sp, color = if (voice.micAllowed()) OkGreen else Warn,
+        )
+        is WakeModelState.Failed -> {
+            Text(m.message, fontSize = 15.sp, color = Warn)
+            Button({ WakeModel.download(ctx) }, Modifier.height(56.dp)) { Text("Tentar de novo", fontSize = 16.sp) }
+        }
+    }
+    if (on && !voice.micAllowed()) Button({ mic.launch(Manifest.permission.RECORD_AUDIO) }, Modifier.height(56.dp)) {
+        Text("Liberar o microfone", fontSize = 16.sp)
     }
 }
 

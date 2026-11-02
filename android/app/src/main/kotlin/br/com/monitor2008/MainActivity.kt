@@ -19,6 +19,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.core.content.ContextCompat
 import br.com.monitor2008.data.BtPermissions
 import br.com.monitor2008.data.FloatingPanel
+import br.com.monitor2008.data.MicService
+import br.com.monitor2008.data.VoiceActions
 import br.com.monitor2008.data.MediaWatcher
 import br.com.monitor2008.data.ReadingService
 import br.com.monitor2008.data.SessionResume
@@ -86,6 +88,9 @@ class MainActivity : ComponentActivity() {
         super.onResume()
         // De volta ao app: a janela flutuante própria some.
         FloatingPanel.hide(this)
+        VoiceActions.onResumed(this)
+        // Microfone para a palavra "Monitor" (só dá para ligar com o app na frente).
+        MicService.update(this)
         // Ao voltar da tela de "acesso a notificações", o mini player já começa a mostrar a música.
         MediaWatcher.get(application).start()
         // Primeira tela depois de ligar o carro: continua a rádio ou a música que tocava.
@@ -96,6 +101,11 @@ class MainActivity : ComponentActivity() {
         super.onStart()
         // Com o app na tela o Android deixa iniciar o serviço que mantém a leitura em segundo plano.
         if (!vm.ui.value.simulated) ReadingService.update(this, enabled = true)
+    }
+
+    override fun onPause() {
+        super.onPause()
+        VoiceActions.onPaused(this)
     }
 
     override fun onStop() {
