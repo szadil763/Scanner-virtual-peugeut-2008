@@ -68,3 +68,5 @@ Mapa pela voz: abre 0,5 s depois, quando a janela da conversa já fechou e o Mon
 - APK só com bibliotecas ARM (`abiFilters` arm64-v8a e armeabi-v7a), por causa da biblioteca nativa do Vosk.
 
 Ajustes do teste da 0.1.54 (às vezes demorava ou não captava o pedido): aciona pelo resultado parcial "monitor" (sem esperar a pausa); o bipe toca quando o reconhecimento já está pronto (antes tocava cedo e o começo do pedido se perdia); pausas curtas no meio do pedido não encerram a escuta (1,5 s); sem ouvir nada, pergunta "Pode repetir?" e ouve de novo uma vez.
+
+Com o rádio ligado (relato da 0.1.55: difícil pegar o pedido): enquanto ouve o pedido o app pede o áudio "transitório" (o rádio do app e os outros apps PAUSAM, em vez de só abaixar) e devolve ao terminar de responder (voltam a tocar sozinhos). O que tocava antes é guardado (`radioWasPlaying`/`mediaWasPlaying`) para "desligar o rádio" pausar de verdade (`RadioPlayer.pause`, `MediaWatcher.pause`). A escuta da palavra usa microfone próprio (`AudioRecord`, fonte VOICE_RECOGNITION) com redutor de ruído e cancelamento de eco do aparelho, quando ele oferece.

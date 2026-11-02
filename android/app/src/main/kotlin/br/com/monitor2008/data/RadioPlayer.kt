@@ -121,6 +121,9 @@ class RadioPlayer private constructor(private val app: Application) {
         return true
     }
 
+    /** Pausa de verdade (pela voz: o rádio pode já estar abaixado pela escuta e "tocando" ficar falso). */
+    fun pause() { controller?.pause() }
+
     fun toggle() {
         if (_state.value.playing) controller?.pause() else resume()
     }

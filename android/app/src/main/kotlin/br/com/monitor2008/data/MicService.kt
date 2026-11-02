@@ -26,8 +26,11 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import org.vosk.Model
 import org.vosk.Recognizer
-import org.vosk.android.RecognitionListener
-import org.vosk.android.SpeechService
+import android.media.AudioFormat
+import android.media.AudioRecord
+import android.media.MediaRecorder
+import android.media.audiofx.AcousticEchoCanceler
+import android.media.audiofx.NoiseSuppressor
 
 /**
  * Microfone com o Monitor atrás do mapa. O Android só deixa um app usar o microfone em segundo
@@ -41,7 +44,7 @@ import org.vosk.android.SpeechService
 class MicService : Service() {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     private var model: Model? = null
-    private var speech: SpeechService? = null
+    private var wake: WakeListener? = null
     private var looping = false
 
     override fun onCreate() {
@@ -87,40 +90,80 @@ class MicService : Service() {
                 enabled = store.wakeWord, modelReady = WakeModel.ready(this), micAllowed = voice.micAllowed(),
                 assistantBusy = voice.busy, inCall = inCall,
             )
-            if (listen && speech == null) startWake() else if (!listen && speech != null) stopWake()
+            if (listen && wake == null) startWake() else if (!listen && wake != null) stopWake()
             delay(1_000)
         }
     }
 
+    /**
+     * Escuta a palavra com o microfone do próprio app (não o do Vosk), para ligar o redutor de ruído
+     * e o cancelamento de eco do aparelho: com o rádio tocando, o microfone pegava o rádio junto e não
+     * reconhecia "Monitor" (relato da 0.1.55). O cancelamento de eco tira do microfone o som que o
+     * próprio aparelho está tocando, quando o multimídia oferece esse recurso.
+     */
+    @android.annotation.SuppressLint("MissingPermission") // conferida em shouldListen (micAllowed)
     private fun startWake() {
         try {
             val m = model ?: Model(WakeModel.path(this)).also { model = it }
-            val rec = Recognizer(m, 16_000f, WakeRules.GRAMMAR)
-            val s = SpeechService(rec, 16_000f)
-            s.startListening(object : RecognitionListener {
-                // Parcial: aciona assim que reconhece "monitor", sem esperar a pausa depois da palavra.
-                override fun onPartialResult(hypothesis: String?) { if (WakeRules.isWakePartial(hypothesis)) heard() }
-                override fun onResult(hypothesis: String?) { if (WakeRules.isWake(hypothesis)) heard() }
-                override fun onFinalResult(hypothesis: String?) { if (WakeRules.isWake(hypothesis)) heard() }
-                override fun onError(exception: Exception?) { stopWake() }
-                override fun onTimeout() { stopWake() }
-            })
-            speech = s
+            val rec = Recognizer(m, RATE.toFloat(), WakeRules.GRAMMAR)
+            val minBuf = AudioRecord.getMinBufferSize(RATE, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT)
+            val record = AudioRecord(MediaRecorder.AudioSource.VOICE_RECOGNITION, RATE, AudioFormat.CHANNEL_IN_MONO,
+                AudioFormat.ENCODING_PCM_16BIT, maxOf(minBuf, RATE / 5 * 2) * 2)
+            if (record.state != AudioRecord.STATE_INITIALIZED) { record.release(); rec.close(); return }
+            val session = record.audioSessionId
+            val effects = listOfNotNull(
+                if (NoiseSuppressor.isAvailable()) NoiseSuppressor.create(session)?.apply { enabled = true } else null,
+                if (AcousticEchoCanceler.isAvailable()) AcousticEchoCanceler.create(session)?.apply { enabled = true } else null,
+            )
+            record.startRecording()
+            val running = java.util.concurrent.atomic.AtomicBoolean(true)
+            val main = android.os.Handler(android.os.Looper.getMainLooper())
+            val thread = Thread {
+                val buf = ShortArray(RATE / 10) // 100 ms
+                try {
+                    while (running.get()) {
+                        val n = record.read(buf, 0, buf.size)
+                        if (n <= 0) continue
+                        val wake = if (rec.acceptWaveForm(buf, n)) WakeRules.isWake(rec.result) else WakeRules.isWakePartial(rec.partialResult)
+                        if (wake) {
+                            running.set(false)
+                            main.post { heard() }
+                        }
+                    }
+                } catch (_: Exception) {
+                    main.post { stopWake() }
+                }
+            }
+            wake = WakeListener(record, rec, effects, running, thread)
+            thread.start()
         } catch (e: Exception) {
             // Modelo corrompido ou microfone ocupado: tenta de novo no próximo ciclo.
             stopWake()
         }
     }
 
+    private class WakeListener(
+        val record: AudioRecord,
+        val rec: Recognizer,
+        val effects: List<android.media.audiofx.AudioEffect>,
+        val running: java.util.concurrent.atomic.AtomicBoolean,
+        val thread: Thread,
+    )
+
     private fun stopWake() {
-        val s = speech ?: return
-        speech = null
-        try { s.stop(); s.shutdown() } catch (_: Exception) { }
+        val w = wake ?: return
+        wake = null
+        w.running.set(false)
+        try { w.record.stop() } catch (_: Exception) { }
+        try { w.thread.join(500) } catch (_: Exception) { }
+        w.effects.forEach { try { it.release() } catch (_: Exception) { } }
+        try { w.record.release() } catch (_: Exception) { }
+        try { w.rec.close() } catch (_: Exception) { }
     }
 
     /** Ouviu "Monitor": solta o microfone, bipa e abre o comando de voz. */
     private fun heard() {
-        if (speech == null) return // já acionou (parcial e final chegam os dois)
+        if (wake == null) return // já acionou
         stopWake()
         // O bipe toca quando o reconhecimento já está pronto para ouvir (antes ele tocava cedo e o começo do pedido se perdia).
         VoiceAssistant.get(application).listen(beepWhenReady = true)
@@ -144,6 +187,7 @@ class MicService : Service() {
     companion object {
         private const val CHANNEL = "voz"
         private const val NOTIFICATION_ID = 2
+        private const val RATE = 16_000
 
         /**
          * Liga ou desliga conforme a necessidade (palavra ligada ou janela flutuante na tela). Chamar

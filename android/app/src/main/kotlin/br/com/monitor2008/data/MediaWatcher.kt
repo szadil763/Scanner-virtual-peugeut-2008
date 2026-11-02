@@ -190,6 +190,8 @@ class MediaWatcher private constructor(private val app: Application) {
         }
     }
 
+    fun pause() { controller?.transportControls?.pause() }
+
     fun playPause() {
         val c = controller ?: return
         if (c.playbackState?.state == PlaybackState.STATE_PLAYING) c.transportControls.pause() else c.transportControls.play()

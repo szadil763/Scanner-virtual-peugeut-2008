@@ -72,11 +72,13 @@ object VoiceActions {
             VoiceIntent.PAUSAR, VoiceIntent.PROXIMA, VoiceIntent.ANTERIOR -> {
                 val radio = RadioPlayer.get(app)
                 val media = MediaWatcher.get(app)
-                val radioOn = radio.state.value.playing
+                // O que tocava antes da escuta (ela pausa o som para ouvir melhor).
+                val radioOn = voice.radioWasPlaying || radio.state.value.playing
+                val mediaOn = voice.mediaWasPlaying || media.now.value?.playing == true
                 when (cmd.intent) {
                     VoiceIntent.PAUSAR -> when {
-                        radioOn -> { radio.toggle(); voice.say("Rádio pausado.") }
-                        media.now.value?.playing == true -> { media.playPause(); voice.say("Música pausada.") }
+                        radioOn -> { radio.pause(); voice.say("Rádio pausado.") }
+                        mediaOn -> { media.pause(); voice.say("Música pausada.") }
                         else -> voice.say("Nada tocando agora.")
                     }
                     VoiceIntent.PROXIMA -> if (radioOn) radio.step(true) else media.next()

@@ -118,7 +118,12 @@ class VoiceAssistant private constructor(private val app: Application) {
         tts?.stop()
         stopListening()
         beforeListen?.invoke()
-        requestFocus()
+        // O que tocava antes de pausar para ouvir: "desligar o rádio" age nele mesmo já pausado pela escuta.
+        if (retry == 0) {
+            radioWasPlaying = RadioPlayer.get(app).state.value.playing
+            mediaWasPlaying = MediaWatcher.get(app).now.value?.playing == true
+        }
+        requestFocus(pauseOthers = true)
         val r = try { SpeechRecognizer.createSpeechRecognizer(app) } catch (e: Exception) { null }
         if (r == null) { fail("Não foi possível abrir o reconhecimento de voz."); return }
         recognizer = r
@@ -237,6 +242,11 @@ class VoiceAssistant private constructor(private val app: Application) {
     }
 
     @Volatile private var handsFree = false
+    /** Tocava quando o comando de voz começou a ouvir (antes de pausar para ouvir). */
+    @Volatile var radioWasPlaying = false
+        private set
+    @Volatile var mediaWasPlaying = false
+        private set
     @Volatile private var retries = 0
 
     private fun beep() {
@@ -371,10 +381,22 @@ class VoiceAssistant private constructor(private val app: Application) {
         applyRateAndPitch()
     }
 
-    /** Abaixa a música enquanto ouve e fala (o rádio do app e os outros apps de música respeitam). */
-    private fun requestFocus() {
-        if (focus != null || audio == null) return
-        val req = AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN_TRANSIENT_MAY_DUCK)
+    /**
+     * Áudio enquanto ouve e fala. Ouvindo ([pauseOthers]): o rádio e a música PAUSAM, porque com o
+     * som só abaixado o microfone pegava o rádio junto e não entendia o pedido (relato da 0.1.55).
+     * Falando: só abaixam. Ao terminar, voltam a tocar sozinhos.
+     */
+    private var focusPauses = false
+
+    private fun requestFocus(pauseOthers: Boolean = false) {
+        if (audio == null) return
+        if (focus != null) {
+            if (!pauseOthers || focusPauses) return
+            abandonFocus()
+        }
+        focusPauses = pauseOthers
+        val kind = if (pauseOthers) AudioManager.AUDIOFOCUS_GAIN_TRANSIENT else AudioManager.AUDIOFOCUS_GAIN_TRANSIENT_MAY_DUCK
+        val req = AudioFocusRequest.Builder(kind)
             .setAudioAttributes(
                 AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_ASSISTANCE_NAVIGATION_GUIDANCE)
                     .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH).build(),
