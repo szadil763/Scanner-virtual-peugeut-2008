@@ -221,22 +221,27 @@ internal fun VoiceSection(moving: Boolean) {
 @Composable
 internal fun VoiceChoiceSection() {
     val voice = rememberVoice()
-    var options by remember { mutableStateOf(voice.voiceOptions()) }
+    var options by remember { mutableStateOf(emptyList<br.com.monitor2008.domain.TtsVoiceOption>()) }
     var current by remember { mutableStateOf(voice.currentVoice()) }
+    var loading by remember { mutableStateOf(true) }
     var rate by remember { mutableStateOf(voice.rate) }
     var pitch by remember { mutableStateOf(voice.pitch) }
     var showAll by remember { mutableStateOf(false) }
     // O leitor de voz demora a iniciar: tenta ler a lista por alguns segundos.
+    // A lista é lida fora da tela (no celular são centenas de vozes e travava o menu "Mais").
     LaunchedEffect(Unit) {
         repeat(8) {
-            if (options.isNotEmpty()) return@LaunchedEffect
-            delay(1_000)
             options = voice.voiceOptions()
             current = voice.currentVoice()
+            if (options.isNotEmpty()) { loading = false; return@LaunchedEffect }
+            delay(1_000)
         }
+        loading = false
     }
     Text("Voz do app", fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
-    if (options.isEmpty()) {
+    if (options.isEmpty() && loading) {
+        Text("Carregando as vozes...", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 15.sp)
+    } else if (options.isEmpty()) {
         Text("Nenhuma voz em português encontrada. Instale \"Serviços de fala do Google\" e baixe a voz Português (Brasil).",
             color = Warn, fontSize = 15.sp)
         VoiceSettingsButtons()

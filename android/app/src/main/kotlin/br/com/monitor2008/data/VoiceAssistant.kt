@@ -21,7 +21,12 @@ import br.com.monitor2008.domain.VoiceCommand
 import br.com.monitor2008.domain.VoiceCommands
 import br.com.monitor2008.domain.VoiceIntent
 import br.com.monitor2008.domain.VoiceSnapshot
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import java.util.Locale
@@ -223,19 +228,37 @@ class VoiceAssistant private constructor(private val app: Application) {
 
     // ---------- Escolha da voz (Ajustes) ----------
 
-    private fun ptVoices(): List<android.speech.tts.Voice> = try {
-        tts?.voices.orEmpty().filter { it.locale.language == "pt" && (it.locale.country.isEmpty() || it.locale.country == "BR") }
-    } catch (e: Exception) { emptyList() }
+    /**
+     * Vozes em português, lidas UMA vez e fora da tela: no celular o leitor do Google tem centenas
+     * de vozes e pedir a lista na thread da tela travava a aba Ajustes (menu "Mais", 0.1.50).
+     */
+    @Volatile private var cachedPt: List<android.speech.tts.Voice>? = null
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+
+    private fun ptVoices(): List<android.speech.tts.Voice> = cachedPt.orEmpty()
+
+    private suspend fun loadPt(): List<android.speech.tts.Voice> {
+        cachedPt?.let { if (it.isNotEmpty()) return it }
+        val t = tts ?: return emptyList()
+        if (ttsReady != true) return emptyList()
+        val list = withContext(Dispatchers.IO) {
+            try {
+                t.voices.orEmpty().filter { it.locale.language == "pt" && (it.locale.country.isEmpty() || it.locale.country == "BR") }
+            } catch (e: Exception) { emptyList() }
+        }
+        cachedPt = list
+        return list
+    }
 
     private fun info(v: android.speech.tts.Voice) = TtsVoiceInfo(
         v.name, v.quality, v.isNetworkConnectionRequired,
         v.features?.contains(TextToSpeech.Engine.KEY_FEATURE_NOT_INSTALLED) == true,
     )
 
-    /** Vozes em português para a tela de Ajustes (vazia enquanto o leitor inicia). */
-    fun voiceOptions(): List<TtsVoiceOption> {
+    /** Vozes em português para a tela de Ajustes (vazia enquanto o leitor inicia). Lê fora da tela. */
+    suspend fun voiceOptions(): List<TtsVoiceOption> {
         initTts()
-        return TtsVoices.options(ptVoices().map(::info))
+        return TtsVoices.options(loadPt().map(::info))
     }
 
     /** Nome da voz em uso (a escolhida ou a melhor achada). */
@@ -260,19 +283,34 @@ class VoiceAssistant private constructor(private val app: Application) {
         ptVoices().firstOrNull { it.name == name }?.let { try { t.voice = it } catch (_: Exception) { } }
         speak("Motor a noventa graus. Consumo de doze vírgula três quilômetros por litro.")
         // O leitor guarda a voz junto com cada fala pedida: já dá para voltar para a escolhida.
-        applyVoice()
+        applySettings()
     }
 
-    /** Aplica a voz escolhida (ou a melhor), a velocidade e o tom. */
+    /** Aplica a voz escolhida (ou a melhor), a velocidade e o tom. A lista de vozes é lida fora da tela. */
     private fun applyVoice() {
+        applyRateAndPitch()
+        scope.launch {
+            loadPt()
+            applySettings()
+        }
+    }
+
+    private fun applyRateAndPitch() {
+        val t = tts ?: return
+        if (ttsReady != true) return
+        t.setSpeechRate(store.ttsRate)
+        t.setPitch(store.ttsPitch)
+    }
+
+    /** Com a lista já lida: só troca a voz (rápido). */
+    private fun applySettings() {
         val t = tts ?: return
         if (ttsReady != true) return
         val voices = ptVoices()
         val chosen = voices.firstOrNull { it.name == store.ttsVoice }
             ?: TtsVoices.best(voices.map(::info))?.let { b -> voices.firstOrNull { it.name == b.name } }
         try { chosen?.let { t.voice = it } } catch (_: Exception) { }
-        t.setSpeechRate(store.ttsRate)
-        t.setPitch(store.ttsPitch)
+        applyRateAndPitch()
     }
 
     /** Abaixa a música enquanto ouve e fala (o rádio do app e os outros apps de música respeitam). */
