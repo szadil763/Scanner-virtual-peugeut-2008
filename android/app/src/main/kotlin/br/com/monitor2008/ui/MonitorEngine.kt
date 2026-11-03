@@ -42,6 +42,7 @@ import br.com.monitor2008.data.SessionResume
 import br.com.monitor2008.data.MicService
 import br.com.monitor2008.domain.MissedDistance
 import br.com.monitor2008.domain.OdometerReminder
+import br.com.monitor2008.domain.RefuelCompare
 import br.com.monitor2008.domain.TripHealth
 import br.com.monitor2008.domain.Vehicle
 import br.com.monitor2008.domain.Vehicles
@@ -621,7 +622,8 @@ class MonitorEngine private constructor(private val app: Application) {
             conn = conn,
             dtcs = dtcs,
             pendingDtcs = pendingDtcs,
-            health = HealthRules.evaluate(trips, lastSample),
+            // Antes e depois do último abastecimento: linha no gráfico e médias para comparar.
+            health = RefuelCompare.apply(HealthRules.evaluate(trips, lastSample), trips, refuelList.firstOrNull()?.timeMs),
             tripsRecorded = trips.size,
             maint = MaintCatalog.itemsFor(vehicle).map { item ->
                 MaintRow(

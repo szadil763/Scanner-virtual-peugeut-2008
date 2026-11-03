@@ -221,7 +221,38 @@ data class HealthItem(
     val series: List<Double?> = emptyList(),
     val unit: String = "",
     val lines: List<RefLine> = emptyList(),
+    /** Posição no gráfico da primeira viagem depois do último abastecimento (linha vertical); null = fora do gráfico. */
+    val refuelIndex: Int? = null,
+    /** Média do indicador nas viagens do gráfico antes e depois do último abastecimento. */
+    val beforeRefuel: Double? = null,
+    val afterRefuel: Double? = null,
+    val tripsAfterRefuel: Int = 0,
 )
+
+/**
+ * Antes e depois do abastecimento (pedido do dono): marca no gráfico de cada indicador a primeira
+ * viagem depois do último abastecimento e calcula a média de antes e de depois, para comparar.
+ */
+object RefuelCompare {
+    fun apply(items: List<HealthItem>, trips: List<TripHealth>, refuelMs: Long?): List<HealthItem> {
+        if (refuelMs == null) return items
+        val window = trips.takeLast(HealthRules.CHART)
+        val idx = window.indexOfFirst { it.startMs >= refuelMs }
+        // Sem viagem depois, ou todas depois (o abastecimento é mais antigo que o gráfico): nada a marcar.
+        if (idx <= 0) return items
+        return items.map { item ->
+            if (item.series.size != window.size) return@map item
+            val before = item.series.take(idx).filterNotNull()
+            val after = item.series.drop(idx).filterNotNull()
+            item.copy(
+                refuelIndex = idx,
+                beforeRefuel = before.takeIf { it.isNotEmpty() }?.average(),
+                afterRefuel = after.takeIf { it.isNotEmpty() }?.average(),
+                tripsAfterRefuel = after.size,
+            )
+        }
+    }
+}
 
 /**
  * Regras da tela Saúde. Limites fixos valem desde a primeira viagem; os itens que dependem do
@@ -232,7 +263,7 @@ data class HealthItem(
 object HealthRules {
     const val BASELINE = 5
     private const val RECENT = 3
-    private const val CHART = 30
+    const val CHART = 30
 
     fun evaluate(trips: List<TripHealth>, live: Sample?): List<HealthItem> = listOf(
         dtcs(trips, live),

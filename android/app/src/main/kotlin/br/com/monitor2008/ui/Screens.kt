@@ -1068,8 +1068,16 @@ private fun HealthCard(item: HealthItem, modifier: Modifier = Modifier) {
             }
             Text(item.value, fontSize = 24.sp, fontWeight = FontWeight.Bold, color = if (item.status == HealthStatus.OK) Color.Unspecified else color)
             if (item.series.count { it != null } >= 2) {
-                TrendChart(item.series, item.lines, color, Modifier.fillMaxWidth().height(80.dp))
-                Text("Últimas ${item.series.size} viagens · ${item.unit}", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                TrendChart(item.series, item.lines, color, Modifier.fillMaxWidth().height(80.dp), marker = item.refuelIndex)
+                Text("Últimas ${item.series.size} viagens · ${item.unit}" + if (item.refuelIndex != null) " · ⛽ linha = abastecimento" else "",
+                    fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                // Comparativo antes x depois do último abastecimento.
+                if (item.refuelIndex != null && (item.beforeRefuel != null || item.afterRefuel != null)) {
+                    fun fmt(v: Double?) = v?.let { (if (Math.abs(it) >= 100) it.f(0) else it.f(1)) + if (item.unit.isNotBlank() && item.unit != "códigos") " ${item.unit}" else "" } ?: "—"
+                    val after = if (item.tripsAfterRefuel < 3) " (${item.tripsAfterRefuel} viagem(ns): pouco ainda)" else " (${item.tripsAfterRefuel} viagens)"
+                    Text("Antes do abastecimento: ${fmt(item.beforeRefuel)} · Depois: ${fmt(item.afterRefuel)}$after",
+                        fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                }
             }
             Text(item.advice, fontSize = 15.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
@@ -1078,7 +1086,7 @@ private fun HealthCard(item: HealthItem, modifier: Modifier = Modifier) {
 
 /** Um ponto por viagem; linhas tracejadas = limites de atenção (amarelo) e alerta (vermelho). */
 @Composable
-private fun TrendChart(values: List<Double?>, lines: List<RefLine>, color: Color, modifier: Modifier = Modifier) {
+private fun TrendChart(values: List<Double?>, lines: List<RefLine>, color: Color, modifier: Modifier = Modifier, marker: Int? = null) {
     Canvas(modifier) {
         val all = values.filterNotNull() + lines.map { it.value }
         var lo = all.minOrNull() ?: return@Canvas
@@ -1090,6 +1098,12 @@ private fun TrendChart(values: List<Double?>, lines: List<RefLine>, color: Color
         val dash = androidx.compose.ui.graphics.PathEffect.dashPathEffect(floatArrayOf(10f, 8f))
         lines.forEach { l ->
             drawLine(if (l.alert) Bad else Warn, Offset(0f, y(l.value)), Offset(size.width, y(l.value)), 2f, pathEffect = dash)
+        }
+        // Abastecimento: linha vertical entre a última viagem de antes e a primeira de depois.
+        marker?.let { m ->
+            val x = step * (m - 0.5f)
+            drawLine(Color(0xFFCBD5E1), Offset(x, 0f), Offset(x, size.height), 3f,
+                pathEffect = androidx.compose.ui.graphics.PathEffect.dashPathEffect(floatArrayOf(6f, 6f)))
         }
         val path = Path()
         var open = false

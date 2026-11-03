@@ -45,3 +45,7 @@ Causa provável da mistura pobre, pelo padrão (correção total em marcha lenta
 ## Próxima etapa (3)
 
 Previsões por tendência ("no ritmo atual, passa do limite em ~X km"), depois de 2–3 semanas de viagens gravadas.
+
+## Antes e depois do abastecimento
+
+Pedido do dono: cada gráfico da Saúde marca com uma linha vertical tracejada a primeira viagem depois do último abastecimento, e o cartão mostra "Antes do abastecimento: X · Depois: Y (N viagens)" com a média do indicador nas viagens do gráfico de cada lado (`domain/Health.kt`, `RefuelCompare`, com testes). Com menos de 3 viagens depois, avisa que ainda é pouco. O status (OK, ALERTA) continua pelas 3 últimas viagens.
