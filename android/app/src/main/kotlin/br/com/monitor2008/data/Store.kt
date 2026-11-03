@@ -202,6 +202,14 @@ class Store(context: Context) {
     var refuelByMoney: Boolean
         get() = p.getBoolean("refuelByMoney", false)
         set(v) { p.edit().putBoolean("refuelByMoney", v).apply() }
+    /**
+     * Ler o carro sempre, mesmo sem abrir o app: o multimídia liga a leitura em segundo plano ao
+     * ligar, e ela reconecta sozinha quando o motor liga. Padrão: ligado.
+     */
+    var backgroundReading: Boolean
+        get() = p.getBoolean("backgroundReading", true)
+        set(v) { p.edit().putBoolean("backgroundReading", v).apply() }
+
     /** Chamar o comando de voz dizendo "Monitor" (reconhecimento offline; o modelo é baixado uma vez). */
     var wakeWord: Boolean
         get() = p.getBoolean("wakeWord", false)

@@ -498,7 +498,8 @@ private fun PainelScreen(ui: UiState) {
             } else {
                 Metric("Custo do trajeto", "R$ " + (ui.tripLiters * ui.fuelPrice).f(2), "", Modifier.fillMaxWidth(), valueSize = 34.sp)
             }
-            Metric("Ar de admissão", s?.intakeC?.let { Math.round(it).toString() } ?: "--", "°C", Modifier.fillMaxWidth())
+            // Pedido do dono: velocidade média do trajeto no Painel (o ar de admissão segue no Diagnóstico).
+            Metric("Vel. média do trajeto", ui.tripAvgSpeed.f(0), "km/h", Modifier.fillMaxWidth())
         }
     }
     }
@@ -527,6 +528,10 @@ private fun PainelCompact(ui: UiState) {
         }
         Row(horizontalArrangement = gap) {
             Metric("Média trajeto", ui.tripAvgKmPerL.f(), "km/l", Modifier.weight(1f), valueSize = 32.sp)
+            Metric("Vel. média", ui.tripAvgSpeed.f(0), "km/h", Modifier.weight(1f), valueSize = 32.sp)
+        }
+        Row(horizontalArrangement = gap) {
+            Metric("Distância", ui.tripKm.f(1), "km", Modifier.weight(1f), valueSize = 32.sp)
             Metric("Bateria", s?.batteryV.f(1), "V", Modifier.weight(1f), valueSize = 32.sp)
         }
         saudeResumo(ui)?.let { (t, c) -> Text(t, color = c, fontSize = 16.sp, fontWeight = FontWeight.SemiBold) }
@@ -1394,6 +1399,18 @@ private fun StartupSection() {
         onPauseOrDispose { }
     }
     Text("Ao ligar o carro", fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
+    if (Features.mediaControl) {
+        var background by remember { mutableStateOf(store.backgroundReading) }
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Switch(background, { background = it; store.backgroundReading = it })
+            Spacer(Modifier.width(12.dp))
+            Column(Modifier.weight(1f)) {
+                Text("Ler o carro sempre, mesmo sem abrir o app", fontSize = 18.sp)
+                Text("A leitura começa quando o multimídia liga, em segundo plano, e grava a viagem (km, velocidade, consumo) " +
+                    "mesmo que você não abra o Monitor.", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 15.sp)
+            }
+        }
+    }
     if (Features.mediaControl) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Switch(autoOpen, { autoOpen = it; store.autoOpen = it })

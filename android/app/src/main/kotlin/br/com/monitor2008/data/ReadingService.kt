@@ -27,8 +27,31 @@ class ReadingService : Service() {
 
     override fun onBind(intent: Intent?): IBinder? = null
 
+    /** Tela do multimídia ligou (carro ligou, saiu do modo de espera): reconecta já. */
+    private val screenOn = object : android.content.BroadcastReceiver() {
+        override fun onReceive(context: Context, intent: Intent) {
+            MonitorEngine.get(application as Application).wakeUp()
+        }
+    }
+    private var receiverOn = false
+
+    override fun onDestroy() {
+        if (receiverOn) try { unregisterReceiver(screenOn) } catch (_: Exception) { }
+        super.onDestroy()
+    }
+
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         MonitorEngine.get(application as Application) // garante o motor ligado
+        if (!receiverOn) {
+            val filter = android.content.IntentFilter().apply {
+                addAction(Intent.ACTION_SCREEN_ON)
+                addAction(Intent.ACTION_USER_PRESENT)
+            }
+            try {
+                ContextCompat.registerReceiver(this, screenOn, filter, ContextCompat.RECEIVER_NOT_EXPORTED)
+                receiverOn = true
+            } catch (_: Exception) { }
+        }
         createChannel()
         val open = PendingIntent.getActivity(
             this, 0, Intent(this, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP),

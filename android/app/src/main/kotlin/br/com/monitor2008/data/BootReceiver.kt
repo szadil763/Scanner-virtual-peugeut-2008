@@ -15,6 +15,9 @@ import br.com.monitor2008.MainActivity
 class BootReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         val store = Store(context)
+        // Leitura em segundo plano desde que o multimídia liga, mesmo sem abrir o app: assim a viagem é
+        // gravada (velocidade, km, consumo) quando o dono esquece de abrir o Monitor.
+        if (store.backgroundReading && !store.useSimulated) ReadingService.update(context, enabled = true)
         if (!store.autoOpen || !Settings.canDrawOverlays(context)) return
         try {
             context.startActivity(

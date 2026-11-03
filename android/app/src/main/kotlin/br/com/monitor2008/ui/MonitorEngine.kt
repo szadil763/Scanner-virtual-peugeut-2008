@@ -184,6 +184,16 @@ class MonitorEngine private constructor(private val app: Application) {
         SessionResume.startHeartbeat(app, scope)
     }
 
+    /**
+     * O multimídia acordou (tela ligou): se a leitura estava pausada esperando o carro, tenta já, sem
+     * esperar o minuto da pausa. Com o motor girando, a viagem começa a ser gravada na hora.
+     */
+    fun wakeUp() {
+        if (store.useSimulated) return
+        if (conn.state == ConnState.CONNECTED || conn.state == ConnState.CONNECTING) return
+        start()
+    }
+
     /** (Re)inicia a leitura com a fonte escolhida nos Ajustes. */
     fun start() {
         closeTrip()
