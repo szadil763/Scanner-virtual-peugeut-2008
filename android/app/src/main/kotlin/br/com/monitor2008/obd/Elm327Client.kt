@@ -49,20 +49,15 @@ class Elm327Client(
         send("ATH0")   // sem cabeçalhos CAN na resposta
         send("ATS1")   // com espaços entre os bytes
         send("ATSP0")  // protocolo automático
-        send("0100", 8_000) // primeira consulta dispara a busca de protocolo
+        firstSupport = send("0100", 8_000) // primeira consulta dispara a busca de protocolo
         return send("ATDPN").trim()
     }
 
+    /** Resposta do primeiro 0100 (na busca do protocolo): também conta para os PIDs suportados. */
+    private var firstSupport = ""
+
     /** PIDs que o carro declara suportar, consultando as faixas 00, 20, 40 e 60. */
-    fun supportedPids(): Set<Int> {
-        val all = mutableSetOf<Int>()
-        for (base in listOf(0x00, 0x20, 0x40, 0x60)) {
-            val found = ObdParser.supportedFrom(base, send("01" + Pid.hex2(base), 4_000))
-            all += found
-            if ((base + 0x20) !in found) break // o carro não tem a faixa seguinte
-        }
-        return all
-    }
+    fun supportedPids(): Set<Int> = SupportedPids.collect(firstSupport) { send(it, 4_000) }
 
     fun query(pid: Pid): Double? = ObdParser.parse(pid, send(pid.command))
 
@@ -74,4 +69,30 @@ class Elm327Client(
 
     /** Modo 07: falhas pendentes (a central viu o problema, mas ainda não acendeu a luz). Somente leitura. */
     fun readPendingDtcs(): List<String> = ObdParser.dtcs(send("07", 4_000), "47")
+}
+
+/**
+ * No 2008 o motor e o câmbio respondem juntos ao 0100. Às vezes só o câmbio responde a tempo
+ * ("41 00 80 00 00 00", só o PID 01): o app achava que o carro não tinha rotação, temperatura etc.
+ * e parava de ler esses dados (foto do dono, 0.1.59). Agora junta as respostas de várias tentativas
+ * (e a do primeiro 0100) e só desiste de uma faixa depois de perguntar de novo.
+ */
+object SupportedPids {
+    /** Dados básicos que todo motor declara: sem eles, a resposta veio incompleta. */
+    private val ENGINE_BASICS = setOf(0x05, 0x0C)
+
+    fun collect(firstResponse: String, ask: (String) -> String): Set<Int> {
+        val all = mutableSetOf<Int>()
+        all += ObdParser.supportedFrom(0x00, firstResponse)
+        for (base in listOf(0x00, 0x20, 0x40, 0x60)) {
+            if (base != 0x00 && base !in all) break // o carro não tem esta faixa
+            val tries = if (base == 0x00) 3 else 2
+            for (attempt in 0 until tries) {
+                all += ObdParser.supportedFrom(base, ask("01" + Pid.hex2(base)))
+                val complete = if (base == 0x00) all.containsAll(ENGINE_BASICS) else (base + 0x20) in all || attempt > 0
+                if (complete) break
+            }
+        }
+        return all
+    }
 }

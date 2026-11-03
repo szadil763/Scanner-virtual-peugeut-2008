@@ -49,3 +49,5 @@ Anúncios de adaptador citam "percentual de etanol" e "quilometragem". Quem deci
 | 0x2F | Nível de combustível | A × 100 / 255 | **Não declarado** |
 
 Como nenhum respondeu, segue como está: mistura escolhida em Ajustes e km digitado.
+
+Consulta dos suportados (`obd/SupportedPids`): o 2008 tem motor e câmbio respondendo ao 0100; às vezes só o câmbio responde a tempo ("41 00 80 00 00 00", só o PID 01) e o app deixava de ler rotação, temperatura etc. (fotos da 0.1.59). Agora junta o primeiro 0100 (da busca do protocolo) com até 3 tentativas, até aparecerem rotação e temperatura, e pergunta de novo antes de desistir de uma faixa. Testes em `SupportedPidsTest`.
