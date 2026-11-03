@@ -17,6 +17,13 @@ object Features {
      */
     val ownFloatingWindow: Boolean = mediaControl
 
+    /**
+     * Palavra "Monitor" (escuta contínua): PAUSADA a pedido do dono (0.1.61) — o som do carro e
+     * qualquer barulho acionavam. Fica só o botão 🎤 Voz até haver uma solução melhor. O código
+     * continua (MicService, WakeModel); para voltar, trocar para true.
+     */
+    const val wakeWord: Boolean = false
+
     /** APK deste aparelho na página de Releases (a atualização baixa o do mesmo tipo). */
     val apkName: String = UpdateRules.apkName(phone = !mediaControl)
 }

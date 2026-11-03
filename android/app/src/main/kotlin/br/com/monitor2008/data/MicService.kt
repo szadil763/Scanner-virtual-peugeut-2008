@@ -119,7 +119,7 @@ class MicService : Service() {
             // No celular, só dentro do carro: motor girando ou Bluetooth de áudio do multimídia conectado.
             val inCar = WakeRules.inCar(phone = !Features.mediaControl, engineRunning = engineRunning, bluetoothAudio = bluetoothAudio())
             val listen = awake && inCar && !snoozed && WakeRules.shouldListen(
-                enabled = store.wakeWord, modelReady = WakeModel.ready(this), micAllowed = voice.micAllowed(),
+                enabled = Features.wakeWord && store.wakeWord, modelReady = WakeModel.ready(this), micAllowed = voice.micAllowed(),
                 assistantBusy = voice.busy, inCall = inCall,
             )
             if (listen && wake == null) startWake() else if (!listen && wake != null) stopWake()
@@ -253,7 +253,7 @@ class MicService : Service() {
             val app = context.applicationContext as Application
             // App aberto ou motor ligado: desfaz o "desativar".
             if (renew) snoozed = false
-            val needed = (Store(app).wakeWord && WakeModel.ready(app) && !snoozed || FloatingPanel.showing) &&
+            val needed = (Features.wakeWord && Store(app).wakeWord && WakeModel.ready(app) && !snoozed || FloatingPanel.showing) &&
                 VoiceAssistant.get(app).micAllowed()
             val intent = Intent(app, MicService::class.java).putExtra(EXTRA_RENEW, renew)
             try {

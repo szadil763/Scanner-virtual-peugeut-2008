@@ -25,6 +25,8 @@ import br.com.monitor2008.domain.VoiceCommands
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -98,6 +100,29 @@ internal fun rememberVoiceStart(): () -> Unit {
     }
     return {
         if (voice.micAllowed()) start() else mic.launch(Manifest.permission.RECORD_AUDIO)
+    }
+}
+
+/** Botão de voz grande e redondo, no alto do menu da esquerda (todas as abas). */
+@Composable
+internal fun BigVoiceButton(compact: Boolean = false) {
+    val start = rememberVoiceStart()
+    val size = if (compact) 64.dp else 80.dp
+    androidx.compose.material3.Button(
+        start,
+        Modifier.padding(top = 4.dp, bottom = 6.dp).size(size),
+        shape = androidx.compose.foundation.shape.CircleShape,
+        contentPadding = androidx.compose.foundation.layout.PaddingValues(0.dp),
+        colors = androidx.compose.material3.ButtonDefaults.buttonColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant,
+            contentColor = MaterialTheme.colorScheme.primary,
+        ),
+        border = androidx.compose.foundation.BorderStroke(3.dp, MaterialTheme.colorScheme.primary),
+    ) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Text("🎤", fontSize = if (compact) 24.sp else 30.sp)
+            Text("Voz", fontSize = if (compact) 12.sp else 14.sp, fontWeight = FontWeight.Bold)
+        }
     }
 }
 

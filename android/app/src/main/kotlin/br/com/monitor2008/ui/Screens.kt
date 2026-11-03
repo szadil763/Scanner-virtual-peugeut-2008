@@ -180,7 +180,10 @@ fun MonitorApp(vm: MonitorEngine) {
         val mini = maxHeight < 320.dp || (maxWidth < 420.dp && maxHeight < 420.dp)
         val phone = maxWidth < 600.dp || maxHeight < 560.dp
         if (mini) MiniPanel(ui) else if (phone) PhoneLayout(ui, vm, tab) { tab = it } else Row(Modifier.fillMaxSize()) {
-            NavigationRail {
+            NavigationRail(header = {
+                // Botão de voz grande no menu da esquerda, visível em todas as abas (pedido do dono).
+                BigVoiceButton(compact)
+            }) {
                 Tab.values().forEach { t ->
                     NavigationRailItem(
                         selected = tab == t,
@@ -1386,7 +1389,8 @@ private fun AjustesScreen(ui: UiState, vm: MonitorEngine) {
         StartupSection()
         VoiceSection(ui.moving)
         VoiceChoiceSection()
-        WakeWordSection()
+        // Palavra "Monitor" pausada (Features.wakeWord): o som do carro acionava. Só o botão 🎤 Voz.
+        if (Features.wakeWord) WakeWordSection()
         PlacesSection(ui.moving)
         MapMusicSettings()
     }
