@@ -41,6 +41,7 @@ import br.com.monitor2008.domain.TripAccumulator
 import br.com.monitor2008.data.SessionResume
 import br.com.monitor2008.data.MicService
 import br.com.monitor2008.domain.MissedDistance
+import br.com.monitor2008.domain.OdometerReminder
 import br.com.monitor2008.domain.TripHealth
 import br.com.monitor2008.domain.Vehicle
 import br.com.monitor2008.domain.Vehicles
@@ -70,6 +71,8 @@ data class UiState(
     val odometerKm: Double = 0.0,
     /** Hodômetro do carro (km do app + diferença informada); null = ainda não informado. */
     val carKm: Double? = null,
+    /** Lembrete mensal: conferir se o km do app bate com o do painel. */
+    val odoCheckDue: Boolean = false,
     val ethanolFraction: Double = 0.30,
     val calibration: Double = 1.0,
     val volumetricEfficiency: Double = 0.80,
@@ -180,6 +183,8 @@ class MonitorEngine private constructor(private val app: Application) {
     val ui: StateFlow<UiState> = _ui.asStateFlow()
 
     init {
+        // Quem já tinha informado o km antes do lembrete: conta a partir de hoje (sem lembrar logo de cara).
+        if (store.odoOffset != null && store.odoCheckedMs == 0L) store.odoCheckedMs = System.currentTimeMillis()
         start()
         SessionResume.startHeartbeat(app, scope)
     }
@@ -511,6 +516,13 @@ class MonitorEngine private constructor(private val app: Application) {
     fun setCarOdometer(carKm: Double) {
         if (_ui.value.moving || carKm < 0) return
         store.odoOffset = carKm - odometerKm
+        store.odoCheckedMs = System.currentTimeMillis()
+        publish()
+    }
+
+    /** "Está batendo" no lembrete mensal do hodômetro. */
+    fun confirmOdometer() {
+        store.odoCheckedMs = System.currentTimeMillis()
         publish()
     }
 
@@ -593,6 +605,8 @@ class MonitorEngine private constructor(private val app: Application) {
             tripSinceDay = if (store.useSimulated) null else store.tripSinceDay,
             odometerKm = odometerKm,
             carKm = store.odoOffset?.let { odometerKm + it },
+            odoCheckDue = OdometerReminder.due(System.currentTimeMillis(), store.odoCheckedMs, store.odoOffset != null,
+                moving = !store.useSimulated && (lastSample?.speedKmh ?: 0.0) > 0.5),
             ethanolFraction = store.ethanolFraction,
             calibration = store.calibration,
             volumetricEfficiency = store.volumetricEfficiency,

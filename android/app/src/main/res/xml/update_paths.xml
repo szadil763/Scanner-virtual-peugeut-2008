@@ -2,4 +2,6 @@
 <!-- Pasta do APK baixado pela atualização (data/Updater), entregue ao instalador do Android. -->
 <paths>
     <cache-path name="updates" path="updates/" />
+    <!-- Foto do painel para ler o km (data/PanelReader). -->
+    <cache-path name="fotos" path="fotos/" />
 </paths>

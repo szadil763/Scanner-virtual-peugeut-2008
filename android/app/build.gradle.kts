@@ -75,6 +75,8 @@ dependencies {
     // Android Auto (telas de modelo). Ver docs/ANDROID-AUTO.md.
     implementation("androidx.car.app:app:1.4.0")
     // Rádio pela internet (aba Mídias): player e sessão de mídia. Ver docs/MIDIAS.md.
+    // Ler o km do painel numa foto (reconhecimento de texto no aparelho, sem internet).
+    implementation("com.google.mlkit:text-recognition:16.0.0")
     // Palavra "Monitor" para chamar o comando de voz, reconhecida no próprio aparelho, sem internet.
     implementation("com.alphacephei:vosk-android:0.3.47@aar")
     implementation("net.java.dev.jna:jna:5.13.0@aar")

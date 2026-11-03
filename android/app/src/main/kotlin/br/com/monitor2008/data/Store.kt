@@ -210,6 +210,11 @@ class Store(context: Context) {
         get() = p.getBoolean("backgroundReading", true)
         set(v) { p.edit().putBoolean("backgroundReading", v).apply() }
 
+    /** Última vez que o dono conferiu ou informou o km do painel (lembrete mensal). 0 = nunca. */
+    var odoCheckedMs: Long
+        get() = p.getLong("odoCheckedMs", 0L)
+        set(v) { p.edit().putLong("odoCheckedMs", v).apply() }
+
     /** Chamar o comando de voz dizendo "Monitor" (reconhecimento offline; o modelo é baixado uma vez). */
     var wakeWord: Boolean
         get() = p.getBoolean("wakeWord", false)

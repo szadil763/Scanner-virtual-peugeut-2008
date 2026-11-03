@@ -124,7 +124,7 @@ internal val OkGreen = Color(0xFF4ADE80)
 internal val Warn = Color(0xFFFBBF24)
 internal val Bad = Color(0xFFF87171)
 
-private val BR = Locale("pt", "BR")
+internal val BR = Locale("pt", "BR")
 internal fun Double.f(d: Int = 1): String = String.format(BR, "%.${d}f", this)
 internal fun Double?.f(d: Int = 1): String = this?.f(d) ?: "--"
 private fun parse(s: String): Double? = s.trim().replace(',', '.').toDoubleOrNull()
@@ -196,6 +196,7 @@ fun MonitorApp(vm: MonitorEngine) {
             Column(Modifier.fillMaxSize().padding(start = if (compact) 10.dp else 16.dp, top = 10.dp, bottom = 10.dp, end = 32.dp)) {
                 UpdateBanner(ui.moving)
                 ui.missedNotice?.let { MissedBanner(it) { vm.dismissMissedNotice() } }
+                OdoCheckBanner(ui, vm) { tab = Tab.MANUTENCAO }
                 Box(Modifier.fillMaxWidth().weight(1f)) { TabContent(tab, ui, vm, compact, phone = false) }
                 // Mapa, música e mini player em todas as abas (sem o mini player onde o player grande já aparece).
                 Spacer(Modifier.height(8.dp))
@@ -234,6 +235,7 @@ private fun PhoneLayout(ui: UiState, vm: MonitorEngine, tab: Tab, onTab: (Tab) -
         Column(Modifier.fillMaxWidth().weight(1f).padding(horizontal = 12.dp, vertical = 10.dp)) {
             UpdateBanner(ui.moving)
             ui.missedNotice?.let { MissedBanner(it) { vm.dismissMissedNotice() } }
+            OdoCheckBanner(ui, vm) { onTab(Tab.MANUTENCAO) }
             Box(Modifier.fillMaxWidth().weight(1f)) { TabContent(tab, ui, vm, compact = true, phone = true) }
         }
         NavigationBar {
@@ -1121,8 +1123,12 @@ private fun ManutencaoScreen(ui: UiState, vm: MonitorEngine) {
                             color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
-                OutlinedButton({ odoDialog = true }, enabled = !ui.moving, modifier = Modifier.height(56.dp)) {
-                    Text(if (ui.carKm == null) "Informar km" else "Corrigir km", fontSize = 16.sp)
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp), horizontalAlignment = Alignment.End) {
+                    OutlinedButton({ odoDialog = true }, enabled = !ui.moving, modifier = Modifier.height(56.dp)) {
+                        Text(if (ui.carKm == null) "Informar km" else "Corrigir km", fontSize = 16.sp)
+                    }
+                    // Sem digitar: foto do painel, o app lê o km.
+                    OdometerPhotoButton(ui, vm)
                 }
             }
         }
