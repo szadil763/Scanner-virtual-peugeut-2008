@@ -190,6 +190,10 @@ class MonitorEngine private constructor(private val app: Application) {
     /** Onde o carro está (para a distância dos postos); atualizado pela aba Postos. */
     private var here: Pair<Double, Double>? = null
 
+    // Antes de _ui e do init: os dois montam a tela (snapshot), que usa o modo direção. Declarados
+    // depois, ainda eram nulos e o app fechava ao abrir (0.1.64).
+    private val driveTracker = DriveModeTracker()
+    private val alertSpoken = mutableMapOf<String, Long>()
     private val _ui = MutableStateFlow(snapshot())
     val ui: StateFlow<UiState> = _ui.asStateFlow()
 
@@ -238,8 +242,6 @@ class MonitorEngine private constructor(private val app: Application) {
         }
     }
 
-    private val driveTracker = DriveModeTracker()
-    private val alertSpoken = mutableMapOf<String, Long>()
     private fun driveSetting() = DriveModeSetting.values().firstOrNull { it.name == store.driveMode } ?: DriveModeSetting.AUTO
 
     fun setDriveMode(m: DriveModeSetting) { store.driveMode = m.name; driveTracker.reset(); publish() }
