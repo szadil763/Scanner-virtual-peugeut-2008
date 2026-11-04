@@ -5,6 +5,7 @@ package br.com.monitor2008.ui
 import br.com.monitor2008.data.SystemSettings
 import br.com.monitor2008.data.FloatingPanel
 import br.com.monitor2008.domain.FloatItem
+import br.com.monitor2008.domain.DriveModeSetting
 import br.com.monitor2008.domain.FloatRules
 import android.app.Application
 import android.app.Activity
@@ -29,6 +30,7 @@ import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -129,9 +131,18 @@ internal fun Double.f(d: Int = 1): String = String.format(BR, "%.${d}f", this)
 internal fun Double?.f(d: Int = 1): String = this?.f(d) ?: "--"
 private fun parse(s: String): Double? = s.trim().replace(',', '.').toDoubleOrNull()
 
-enum class Tab(val label: String) {
-    PAINEL("Painel"), MIDIAS("Mídias"), CONSUMO("Consumo"), POSTOS("Postos"), SAUDE("Saúde"), MANUTENCAO("Manutenção"), DIAGNOSTICO("Diagnóstico"), AJUSTES("Ajustes")
+enum class Tab(val label: String, val icon: String) {
+    PAINEL("Painel", "⏱"), MIDIAS("Mídias", "🎵"), CONSUMO("Consumo", "⛽"), POSTOS("Postos", "📍"), SAUDE("Saúde", "❤"),
+    MANUTENCAO("Manutenção", "🔧"), DIAGNOSTICO("Diagnóstico", "🔍"), AJUSTES("Ajustes", "⚙")
 }
+
+/**
+ * Modo direção (carro andando): só o que serve na estrada. Ajustes aparece com o carro parado (no
+ * "Sempre simples" é o único jeito de voltar ao completo).
+ */
+private fun visibleTabs(ui: UiState): List<Tab> =
+    if (!ui.driving) Tab.values().toList()
+    else listOf(Tab.PAINEL, Tab.MIDIAS, Tab.SAUDE) + if (ui.moving) emptyList() else listOf(Tab.AJUSTES)
 
 /**
  * Quatro tamanhos, escolhidos pela tela: multimídia (menu lateral); tela dividida com mapas ou
@@ -179,27 +190,43 @@ fun MonitorApp(vm: MonitorEngine) {
         // Janela flutuante: baixa, ou estreita e baixa. Celular em pé é estreito, mas alto.
         val mini = maxHeight < 320.dp || (maxWidth < 420.dp && maxHeight < 420.dp)
         val phone = maxWidth < 600.dp || maxHeight < 560.dp
+        // Modo direção: se a aba aberta sumiu do menu, volta para o Painel.
+        val tabs = visibleTabs(ui)
+        LaunchedEffect(tabs) { if (tab !in tabs) tab = Tab.PAINEL }
         if (mini) MiniPanel(ui) else if (phone) PhoneLayout(ui, vm, tab) { tab = it } else Row(Modifier.fillMaxSize()) {
             NavigationRail(header = {
                 // Botão de voz grande no menu da esquerda, visível em todas as abas (pedido do dono).
                 BigVoiceButton(compact)
             }) {
-                Tab.values().forEach { t ->
+                // Ícone grande e aba escolhida com fundo azul: dá para achar sem ler (análise de uso dirigindo).
+                val itemHeight = when { ui.driving -> 96.dp; compact -> 60.dp; else -> 66.dp }
+                tabs.forEach { t ->
                     NavigationRailItem(
                         selected = tab == t,
                         onClick = { tab = t },
-                        icon = {},
-                        label = { Text(t.label, fontSize = if (compact) 13.sp else 16.sp) },
+                        icon = { Text(t.icon, fontSize = if (ui.driving) 30.sp else if (compact) 20.sp else 22.sp) },
+                        label = {
+                            Text(t.label, fontSize = if (ui.driving) 18.sp else if (compact) 13.sp else 15.sp,
+                                fontWeight = if (tab == t) FontWeight.Bold else FontWeight.Normal)
+                        },
                         alwaysShowLabel = true,
-                        modifier = Modifier.height(if (compact) 58.dp else 64.dp),
+                        colors = androidx.compose.material3.NavigationRailItemDefaults.colors(
+                            indicatorColor = MaterialTheme.colorScheme.primary,
+                            selectedTextColor = MaterialTheme.colorScheme.primary,
+                            unselectedTextColor = MaterialTheme.colorScheme.onSurface,
+                        ),
+                        modifier = Modifier.height(itemHeight),
                     )
                 }
             }
             // Margem maior à direita: a moldura do multimídia cobre a borda direita da tela (fotos da 0.1.15).
             Column(Modifier.fillMaxSize().padding(start = if (compact) 10.dp else 16.dp, top = 10.dp, bottom = 10.dp, end = 32.dp)) {
-                UpdateBanner(ui.moving)
-                ui.missedNotice?.let { MissedBanner(it) { vm.dismissMissedNotice() } }
-                OdoCheckBanner(ui, vm) { tab = Tab.MANUTENCAO }
+                CriticalBanner(ui)
+                if (!ui.driving) {
+                    UpdateBanner(ui.moving)
+                    ui.missedNotice?.let { MissedBanner(it) { vm.dismissMissedNotice() } }
+                    OdoCheckBanner(ui, vm) { tab = Tab.MANUTENCAO }
+                }
                 Box(Modifier.fillMaxWidth().weight(1f)) { TabContent(tab, ui, vm, compact, phone = false) }
                 // Mapa, música e mini player em todas as abas (sem o mini player onde o player grande já aparece).
                 Spacer(Modifier.height(8.dp))
@@ -216,11 +243,11 @@ fun MonitorApp(vm: MonitorEngine) {
 @Composable
 private fun TabContent(tab: Tab, ui: UiState, vm: MonitorEngine, compact: Boolean, phone: Boolean) {
     when (tab) {
-        Tab.PAINEL -> if (compact) PainelCompact(ui) else PainelScreen(ui)
+        Tab.PAINEL -> if (ui.driving) PainelDrive(ui, compact || phone) else if (compact) PainelCompact(ui) else PainelScreen(ui)
         Tab.MIDIAS -> MidiasScreen(ui, compact)
         Tab.CONSUMO -> ConsumoScreen(ui, vm, phone)
         Tab.POSTOS -> PostosScreen(ui, vm)
-        Tab.SAUDE -> SaudeScreen(ui, vm, compact)
+        Tab.SAUDE -> if (ui.driving) SaudeDrive(ui) else SaudeScreen(ui, vm, compact)
         Tab.MANUTENCAO -> ManutencaoScreen(ui, vm)
         Tab.DIAGNOSTICO -> DiagnosticoScreen(ui, vm)
         Tab.AJUSTES -> AjustesScreen(ui, vm)
@@ -236,16 +263,22 @@ private fun PhoneLayout(ui: UiState, vm: MonitorEngine, tab: Tab, onTab: (Tab) -
     var more by remember { mutableStateOf(false) }
     Column(Modifier.fillMaxSize()) {
         Column(Modifier.fillMaxWidth().weight(1f).padding(horizontal = 12.dp, vertical = 10.dp)) {
-            UpdateBanner(ui.moving)
-            ui.missedNotice?.let { MissedBanner(it) { vm.dismissMissedNotice() } }
-            OdoCheckBanner(ui, vm) { onTab(Tab.MANUTENCAO) }
+            CriticalBanner(ui)
+            if (!ui.driving) {
+                UpdateBanner(ui.moving)
+                ui.missedNotice?.let { MissedBanner(it) { vm.dismissMissedNotice() } }
+                OdoCheckBanner(ui, vm) { onTab(Tab.MANUTENCAO) }
+            }
             Box(Modifier.fillMaxWidth().weight(1f)) { TabContent(tab, ui, vm, compact = true, phone = true) }
         }
         NavigationBar {
-            PHONE_TABS.forEach { t ->
+            val tabs = visibleTabs(ui)
+            PHONE_TABS.filter { it in tabs }.forEach { t ->
                 NavigationBarItem(
-                    selected = tab == t, onClick = { onTab(t) }, icon = {},
-                    label = { Text(t.label, fontSize = 14.sp, maxLines = 1) }, alwaysShowLabel = true,
+                    selected = tab == t, onClick = { onTab(t) }, icon = { Text(t.icon, fontSize = 20.sp) },
+                    label = { Text(t.label, fontSize = 13.sp, maxLines = 1, fontWeight = if (tab == t) FontWeight.Bold else FontWeight.Normal) },
+                    alwaysShowLabel = true,
+                    colors = androidx.compose.material3.NavigationBarItemDefaults.colors(indicatorColor = MaterialTheme.colorScheme.primary),
                 )
             }
             val voiceStart = rememberVoiceStart()
@@ -254,12 +287,14 @@ private fun PhoneLayout(ui: UiState, vm: MonitorEngine, tab: Tab, onTab: (Tab) -
                 label = { Text("🎤 Voz", fontSize = 14.sp, maxLines = 1) }, alwaysShowLabel = true,
             )
             val inMore = tab !in PHONE_TABS
-            NavigationBarItem(
+            // Modo direção andando: sem "Mais" (Postos, Manutenção etc. não servem dirigindo).
+            val moreTabs = Tab.values().filter { it !in PHONE_TABS && it in tabs }
+            if (moreTabs.isNotEmpty()) NavigationBarItem(
                 selected = inMore, onClick = { more = true },
                 icon = {
                     Box {
                         DropdownMenu(expanded = more, onDismissRequest = { more = false }) {
-                            Tab.values().filter { it !in PHONE_TABS }.forEach { t ->
+                            moreTabs.forEach { t ->
                                 DropdownMenuItem(
                                     text = { Text(t.label, fontSize = 18.sp) },
                                     onClick = { onTab(t); more = false },
@@ -272,6 +307,62 @@ private fun PhoneLayout(ui: UiState, vm: MonitorEngine, tab: Tab, onTab: (Tab) -
                 label = { Text(if (inMore) tab.label else "Mais", fontSize = 14.sp, maxLines = 1) }, alwaysShowLabel = true,
             )
         }
+    }
+}
+
+/** Alerta grave (motor muito quente, bateria sem carga): faixa vermelha na largura toda, em todas as abas. */
+@Composable
+private fun CriticalBanner(ui: UiState) {
+    ui.critical.forEach { a ->
+        Card(Modifier.fillMaxWidth().padding(bottom = 8.dp), colors = CardDefaults.cardColors(containerColor = Color(0xFFB91C1C))) {
+            Text("⚠ " + a.text, fontSize = 22.sp, fontWeight = FontWeight.Bold, color = Color.White,
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp))
+        }
+    }
+}
+
+/**
+ * Painel no modo direção: 4 números grandes, sem textos explicativos (dá para ler numa olhada).
+ * Velocidade, consumo agora, temperatura do motor e média do trajeto.
+ */
+@Composable
+private fun PainelDrive(ui: UiState, narrow: Boolean) {
+    val s = ui.sample
+    val cv = consumoView(ui)
+    val size = if (narrow) 60.sp else 110.sp
+    val hot = (s?.coolantC ?: 0.0) > 105
+    val gap = Arrangement.spacedBy(if (narrow) 10.dp else 16.dp)
+    Column(Modifier.fillMaxSize(), verticalArrangement = gap) {
+        Row(Modifier.fillMaxWidth().weight(1f), horizontalArrangement = gap) {
+            Metric("Velocidade", s?.speedKmh?.let { Math.round(it).toString() } ?: "—", "km/h", Modifier.weight(1f).fillMaxHeight(), valueSize = size)
+            Metric("Consumo agora", cv.value, cv.unit, Modifier.weight(1f).fillMaxHeight(), valueSize = size, color = cv.color)
+        }
+        Row(Modifier.fillMaxWidth().weight(1f), horizontalArrangement = gap) {
+            Metric("Motor", s?.coolantC?.let { Math.round(it).toString() } ?: "—", "°C", Modifier.weight(1f).fillMaxHeight(),
+                valueSize = size, color = if (hot) Bad else Color.Unspecified)
+            Metric("Média do trajeto", ui.tripAvgKmPerL.f(), "km/l", Modifier.weight(1f).fillMaxHeight(), valueSize = size)
+        }
+    }
+}
+
+/** Saúde no modo direção: só o que está fora do normal, em letra grande; detalhes com o carro parado. */
+@Composable
+private fun SaudeDrive(ui: UiState) {
+    val off = ui.health.filter { it.status == HealthStatus.ALERTA || it.status == HealthStatus.ATENCAO }
+    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        if (off.isEmpty()) {
+            Text("✓ Tudo normal", fontSize = 40.sp, fontWeight = FontWeight.Bold, color = OkGreen)
+        }
+        off.forEach { item ->
+            val color = statusColor(item.status)
+            Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
+                Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Text(item.title, fontSize = 26.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+                    Text(statusLabel(item.status), fontSize = 22.sp, fontWeight = FontWeight.Bold, color = color)
+                }
+            }
+        }
+        Text("Detalhes e gráficos com o carro parado.", fontSize = 18.sp)
     }
 }
 
@@ -569,7 +660,7 @@ private fun MediaBar(compact: Boolean, showPlayer: Boolean) {
     val player: @Composable (Modifier) -> Unit = { mod ->
         Row(mod, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             val n = now
-            if (allowed && n != null) {
+            if (compact && allowed && n != null) {
                 MediaKey("⏮") { media.previous() }
                 MediaKey(if (n.playing) "⏸" else "▶") { media.playPause() }
                 MediaKey("⏭") { media.next() }
@@ -603,6 +694,14 @@ private fun MediaBar(compact: Boolean, showPlayer: Boolean) {
             }
         } else {
             Row(Modifier.padding(10.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                // Música primeiro, à esquerda (mais perto do motorista) e maiores: é o que mais se usa dirigindo.
+                val n = now
+                if (showPlayer && allowed && n != null) {
+                    MediaKey("⏮", 72.dp) { media.previous() }
+                    MediaKey(if (n.playing) "⏸" else "▶", 72.dp) { media.playPause() }
+                    MediaKey("⏭", 72.dp) { media.next() }
+                    Spacer(Modifier.width(6.dp))
+                }
                 buttons()
                 if (showPlayer) {
                     Spacer(Modifier.width(6.dp))
@@ -620,8 +719,10 @@ internal tailrec fun Context.findActivity(): Activity? = when (this) {
 }
 
 @Composable
-internal fun MediaKey(symbol: String, onClick: () -> Unit) {
-    OutlinedButton(onClick, Modifier.size(56.dp), contentPadding = PaddingValues(0.dp)) { Text(symbol, fontSize = 22.sp) }
+internal fun MediaKey(symbol: String, size: androidx.compose.ui.unit.Dp = 56.dp, onClick: () -> Unit) {
+    OutlinedButton(onClick, Modifier.size(size), contentPadding = PaddingValues(0.dp)) {
+        Text(symbol, fontSize = if (size > 60.dp) 28.sp else 22.sp)
+    }
 }
 
 /** Escolha dos apps de mapa e música e liberação do mini player. */
@@ -1394,6 +1495,7 @@ private fun AjustesScreen(ui: UiState, vm: MonitorEngine) {
                     color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 15.sp)
             }
         }
+        DriveSection(ui, vm)
         if (Features.ownFloatingWindow) FloatingSection()
         if (!ui.simulated && ui.conn.message.isNotBlank()) {
             Text(ui.conn.message, color = if (ui.conn.state == ConnState.ERROR) Warn else MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 16.sp)
@@ -1500,6 +1602,38 @@ private fun AutoConnectSection(moving: Boolean) {
         }, Modifier.height(56.dp), enabled = !moving) { Text("Ativar conexão automática", fontSize = 18.sp) }
     }
     message?.let { Text(it, color = Warn, fontSize = 15.sp) }
+}
+
+/** Tela ao dirigir (modo direção) e tema "sol forte". */
+@Composable
+private fun DriveSection(ui: UiState, vm: MonitorEngine) {
+    val ctx = LocalContext.current
+    val store = remember { Store(ctx.applicationContext) }
+    Text("Tela ao dirigir", fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
+    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        DriveModeSetting.values().forEach { m ->
+            FilterChip(selected = ui.driveMode == m, onClick = { vm.setDriveMode(m) },
+                label = { Text(m.label, fontSize = 17.sp) }, modifier = Modifier.height(56.dp))
+        }
+    }
+    Text(
+        when (ui.driveMode) {
+            DriveModeSetting.AUTO -> "Andando (mais de 10 s acima de 20 km/h), a tela fica simples: menu com Painel, Mídias e Saúde, " +
+                "4 números grandes e sem textos. Volta ao completo depois de 1 minuto parado (no semáforo continua simples)."
+            DriveModeSetting.ALWAYS_FULL -> "A tela fica sempre completa, como antes."
+            DriveModeSetting.ALWAYS_SIMPLE -> "A tela fica sempre simples. Ajustes aparece no menu com o carro parado."
+        },
+        color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 15.sp,
+    )
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Switch(UiPrefs.highContrast, { UiPrefs.highContrast = it; store.highContrast = it })
+        Spacer(Modifier.width(12.dp))
+        Column(Modifier.weight(1f)) {
+            Text("Tema sol forte", fontSize = 18.sp)
+            Text("Fundo preto e textos brancos, para ler com o sol batendo na tela.",
+                color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 15.sp)
+        }
+    }
 }
 
 /**

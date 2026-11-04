@@ -43,6 +43,11 @@ import br.com.monitor2008.data.MicService
 import br.com.monitor2008.domain.MissedDistance
 import br.com.monitor2008.domain.OdometerReminder
 import br.com.monitor2008.domain.RefuelCompare
+import br.com.monitor2008.domain.CriticalAlert
+import br.com.monitor2008.domain.CriticalAlerts
+import br.com.monitor2008.domain.DriveModeSetting
+import br.com.monitor2008.domain.DriveModeTracker
+import br.com.monitor2008.data.VoiceAssistant
 import br.com.monitor2008.domain.TripHealth
 import br.com.monitor2008.domain.Vehicle
 import br.com.monitor2008.domain.Vehicles
@@ -74,6 +79,11 @@ data class UiState(
     val carKm: Double? = null,
     /** Lembrete mensal: conferir se o km do app bate com o do painel. */
     val odoCheckDue: Boolean = false,
+    /** Modo direção: tela simples com o carro andando (domain/DriveMode). */
+    val driving: Boolean = false,
+    val driveMode: DriveModeSetting = DriveModeSetting.AUTO,
+    /** Alertas graves (motor muito quente, bateria sem carga): faixa vermelha e aviso falado. */
+    val critical: List<CriticalAlert> = emptyList(),
     val ethanolFraction: Double = 0.30,
     val calibration: Double = 1.0,
     val volumetricEfficiency: Double = 0.80,
@@ -228,6 +238,24 @@ class MonitorEngine private constructor(private val app: Application) {
         }
     }
 
+    private val driveTracker = DriveModeTracker()
+    private val alertSpoken = mutableMapOf<String, Long>()
+    private fun driveSetting() = DriveModeSetting.values().firstOrNull { it.name == store.driveMode } ?: DriveModeSetting.AUTO
+
+    fun setDriveMode(m: DriveModeSetting) { store.driveMode = m.name; driveTracker.reset(); publish() }
+
+    /** Alerta grave falado uma vez a cada 10 minutos por tipo (motor muito quente, bateria sem carga). */
+    private fun speakCritical(s: Sample) {
+        if (store.useSimulated) return
+        val now = System.currentTimeMillis()
+        CriticalAlerts.check(s.coolantC, s.batteryV, s.rpm).forEach { a ->
+            if (CriticalAlerts.shouldSpeak(a.id, now, alertSpoken)) {
+                alertSpoken[a.id] = now
+                VoiceAssistant.get(app).say(a.spoken)
+            }
+        }
+    }
+
     /** Motor girando na amostra anterior: ao ligar o motor, a escuta da palavra "Monitor" volta. */
     private var engineWasRunning = false
 
@@ -235,6 +263,7 @@ class MonitorEngine private constructor(private val app: Application) {
         val running = (s.rpm ?: 0.0) > 300
         if (running && !engineWasRunning) MicService.update(app, renew = true)
         engineWasRunning = running
+        speakCritical(s)
         val dt = if (lastTimeMs == 0L) 0.0 else ((s.timeMs - lastTimeMs) / 1000.0).coerceIn(0.0, 5.0)
         lastTimeMs = s.timeMs
         val speed = s.speedKmh ?: 0.0
@@ -606,6 +635,13 @@ class MonitorEngine private constructor(private val app: Application) {
             tripSinceDay = if (store.useSimulated) null else store.tripSinceDay,
             odometerKm = odometerKm,
             carKm = store.odoOffset?.let { odometerKm + it },
+            driving = driveSetting().let { setting ->
+                if (store.useSimulated) setting == DriveModeSetting.ALWAYS_SIMPLE
+                else driveTracker.update(System.currentTimeMillis(), lastSample?.speedKmh, setting)
+            },
+            driveMode = driveSetting(),
+            critical = if (store.useSimulated || conn.state != ConnState.CONNECTED) emptyList()
+                else lastSample?.let { CriticalAlerts.check(it.coolantC, it.batteryV, it.rpm) }.orEmpty(),
             odoCheckDue = OdometerReminder.due(System.currentTimeMillis(), store.odoCheckedMs, store.odoOffset != null,
                 moving = !store.useSimulated && (lastSample?.speedKmh ?: 0.0) > 0.5),
             ethanolFraction = store.ethanolFraction,

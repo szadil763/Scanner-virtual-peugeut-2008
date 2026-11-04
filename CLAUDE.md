@@ -60,6 +60,8 @@ Também: hodômetro real (o dono informa o km do painel uma vez; `Store.odoOffse
 
 **Atualização pelo app** (`docs/ATUALIZACAO.md`, `data/Updater`, `ui/UpdateScreens.kt`): botão em Ajustes e aviso no alto das abas; canais Teste (release `latest`) e Estável (release `estavel`, publicada pelo workflow manual `publish-stable.yml` depois de testar no carro). O Android sempre pede o toque em Instalar.
 
+**Modo direção** (`domain/DriveMode.kt` com testes, análise de uso dirigindo): com o carro andando (mais de 10 s acima de 20 km/h; sai depois de 1 min parado, então o semáforo não troca a tela) o menu mostra só Painel, Mídias e Saúde (Ajustes volta com o carro parado), o Painel vira 4 números grandes (`PainelDrive`), a Saúde mostra só o que está fora do normal (`SaudeDrive`) e somem os avisos de atualização/hodômetro. Ajustes > Tela ao dirigir: Automático, Sempre completo, Sempre simples; tema "sol forte" (`UiPrefs.highContrast`). Menu com ícones e aba escolhida com fundo azul; botões de música de 72 dp à esquerda no rodapé. **Alertas graves** (`CriticalAlerts`: motor ≥ 110 °C, bateria < 12,6 V com o motor ligado): faixa vermelha em todas as abas e aviso falado a cada 10 min.
+
 **Celular**: o app escolhe o layout pela tela: multimídia (menu lateral), tela dividida (compacto), celular (largura < 600 dp ou altura < 560 dp: abas embaixo com "Mais", telas em uma coluna, sem a barra de mapa/música) e janela flutuante.
 
 **Dois APKs** (`productFlavors` `multimidia` e `celular`, `data/Features`): o do celular não tem o acesso a notificações, porque o Play Protect bloqueia no celular apps de fora da loja que pedem esse acesso. Ícone próprio (mostrador, `res/drawable/ic_launcher_foreground.xml`).

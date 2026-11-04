@@ -210,6 +210,16 @@ class Store(context: Context) {
         get() = p.getBoolean("backgroundReading", true)
         set(v) { p.edit().putBoolean("backgroundReading", v).apply() }
 
+    /** Tela ao dirigir: AUTO, ALWAYS_FULL ou ALWAYS_SIMPLE (domain/DriveMode). */
+    var driveMode: String
+        get() = p.getString("driveMode", "AUTO") ?: "AUTO"
+        set(v) { p.edit().putString("driveMode", v).apply() }
+
+    /** Tema "sol forte": textos brancos e fundo preto, para ler com o sol batendo na tela. */
+    var highContrast: Boolean
+        get() = p.getBoolean("highContrast", false)
+        set(v) { p.edit().putBoolean("highContrast", v).apply() }
+
     /** Última vez que o dono conferiu ou informou o km do painel (lembrete mensal). 0 = nunca. */
     var odoCheckedMs: Long
         get() = p.getLong("odoCheckedMs", 0L)

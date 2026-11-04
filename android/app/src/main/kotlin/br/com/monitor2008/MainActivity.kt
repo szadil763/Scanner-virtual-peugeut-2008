@@ -26,6 +26,7 @@ import br.com.monitor2008.data.ReadingService
 import br.com.monitor2008.data.SessionResume
 import br.com.monitor2008.ui.MonitorApp
 import br.com.monitor2008.ui.MonitorEngine
+import br.com.monitor2008.ui.UiPrefs
 
 class MainActivity : ComponentActivity() {
 
@@ -54,9 +55,19 @@ class MainActivity : ComponentActivity() {
         }
         if (missing.isNotEmpty()) askPermissions.launch(missing.toTypedArray())
 
+        UiPrefs.highContrast = br.com.monitor2008.data.Store(this).highContrast
         setContent {
             MaterialTheme(
-                colorScheme = darkColorScheme(
+                // Tema "sol forte" (Ajustes): fundo preto, textos brancos e azul mais claro, para ler com sol na tela.
+                colorScheme = if (UiPrefs.highContrast) darkColorScheme(
+                    primary = Color(0xFF7DD3FC),
+                    background = Color.Black,
+                    surface = Color.Black,
+                    surfaceVariant = Color(0xFF0F172A),
+                    onSurfaceVariant = Color.White,
+                    onBackground = Color.White,
+                    onSurface = Color.White,
+                ) else darkColorScheme(
                     primary = Color(0xFF38BDF8),
                     background = Color(0xFF0B0F14),
                     surface = Color(0xFF0B0F14),
