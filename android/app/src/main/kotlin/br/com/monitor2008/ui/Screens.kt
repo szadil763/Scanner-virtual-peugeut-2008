@@ -137,12 +137,11 @@ enum class Tab(val label: String, val icon: String) {
 }
 
 /**
- * Modo direção (carro andando): só o que serve na estrada. Ajustes aparece com o carro parado (no
- * "Sempre simples" é o único jeito de voltar ao completo).
+ * Abas do menu: todas, sempre, com ícone, em qualquer velocidade. A versão 0.1.64 escondia as
+ * abas com o carro andando (modo direção); o dono pediu para tirar isso e manter o resto.
  */
-private fun visibleTabs(ui: UiState): List<Tab> =
-    if (!ui.driving) Tab.values().toList()
-    else listOf(Tab.PAINEL, Tab.MIDIAS, Tab.SAUDE) + if (ui.moving) emptyList() else listOf(Tab.AJUSTES)
+@Suppress("UNUSED_PARAMETER")
+private fun visibleTabs(ui: UiState): List<Tab> = Tab.values().toList()
 
 /**
  * Quatro tamanhos, escolhidos pela tela: multimídia (menu lateral); tela dividida com mapas ou
@@ -199,14 +198,14 @@ fun MonitorApp(vm: MonitorEngine) {
                 BigVoiceButton(compact)
             }) {
                 // Ícone grande e aba escolhida com fundo azul: dá para achar sem ler (análise de uso dirigindo).
-                val itemHeight = when { ui.driving -> 96.dp; compact -> 60.dp; else -> 66.dp }
+                val itemHeight = if (compact) 60.dp else 66.dp
                 tabs.forEach { t ->
                     NavigationRailItem(
                         selected = tab == t,
                         onClick = { tab = t },
-                        icon = { Text(t.icon, fontSize = if (ui.driving) 30.sp else if (compact) 20.sp else 22.sp) },
+                        icon = { Text(t.icon, fontSize = if (compact) 20.sp else 22.sp) },
                         label = {
-                            Text(t.label, fontSize = if (ui.driving) 18.sp else if (compact) 13.sp else 15.sp,
+                            Text(t.label, fontSize = if (compact) 13.sp else 15.sp,
                                 fontWeight = if (tab == t) FontWeight.Bold else FontWeight.Normal)
                         },
                         alwaysShowLabel = true,
@@ -1618,10 +1617,10 @@ private fun DriveSection(ui: UiState, vm: MonitorEngine) {
     }
     Text(
         when (ui.driveMode) {
-            DriveModeSetting.AUTO -> "Andando (mais de 10 s acima de 20 km/h), a tela fica simples: menu com Painel, Mídias e Saúde, " +
-                "4 números grandes e sem textos. Volta ao completo depois de 1 minuto parado (no semáforo continua simples)."
+            DriveModeSetting.AUTO -> "Andando (mais de 10 s acima de 20 km/h), o Painel mostra 4 números grandes e a Saúde só o que está " +
+                "fora do normal. O menu continua com todas as abas. Volta ao completo depois de 1 minuto parado (no semáforo continua simples)."
             DriveModeSetting.ALWAYS_FULL -> "A tela fica sempre completa, como antes."
-            DriveModeSetting.ALWAYS_SIMPLE -> "A tela fica sempre simples. Ajustes aparece no menu com o carro parado."
+            DriveModeSetting.ALWAYS_SIMPLE -> "O Painel e a Saúde ficam sempre simples. O menu continua com todas as abas."
         },
         color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 15.sp,
     )
