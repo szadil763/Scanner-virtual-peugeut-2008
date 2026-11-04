@@ -1,5 +1,6 @@
 package br.com.monitor2008.data
 
+import br.com.monitor2008.domain.ReconnectRules
 import android.annotation.SuppressLint
 import android.bluetooth.BluetoothAdapter
 import android.bluetooth.BluetoothDevice
@@ -66,19 +67,35 @@ class BluetoothObdSource(
     }
 
     override fun samples(): Flow<Sample> = flow {
+        // Esperas que vão espaçando (domain/ReconnectRules): não insistir a noite toda no adaptador.
+        var failures = 0
+        var offTimes = 0
+        var muteTimes = 0
         while (currentCoroutineContext().isActive) {
             _info.value = ConnectionInfo(ConnState.CONNECTING, "Procurando o adaptador...")
             val c = connect()
             if (c == null) { // connect() já deixou a mensagem de erro em _info
-                delay(RETRY_MS)
+                delay(ReconnectRules.afterFailure(failures++))
                 continue
             }
+            failures = 0
 
             var engineOff = false
             try {
                 logging = true
                 seen.clear()
                 val protocol = synchronized(lock) { c.initialize() }
+                // Conectou mas não respondeu nada: adaptador travado (só volta tirando e pondo na tomada).
+                if (ReconnectRules.mute(c.initResponses)) {
+                    muteTimes++
+                    log("O adaptador conectou, mas não respondeu a nenhum comando (tentativa $muteTimes).")
+                    if (muteTimes >= 2) {
+                        _info.value = ConnectionInfo(ConnState.ERROR,
+                            "O adaptador conectou, mas não responde (travou). Tire o adaptador da tomada OBD, espere 5 segundos e coloque de novo.")
+                    }
+                    throw IOException("adaptador sem resposta")
+                }
+                muteTimes = 0
                 // Sem resposta de rotação = ignição desligada: não vale insistir agora.
                 val rpm0 = synchronized(lock) { c.query(Pid.RPM) }
                 if (rpm0 == null) {
@@ -111,6 +128,7 @@ class BluetoothObdSource(
 
                         val rpm = values[Pid.RPM]
                         if (rpm != null && rpm > 0) {
+                            offTimes = 0
                             stoppedSince = 0L
                         } else {
                             val now = System.currentTimeMillis()
@@ -121,7 +139,10 @@ class BluetoothObdSource(
                 }
             } catch (e: IOException) {
                 log("ERRO: ${e.message}")
-                _info.value = ConnectionInfo(ConnState.ERROR, "Conexão perdida: ${e.message ?: "sem resposta"}. Tentando de novo...")
+                // Adaptador travado: mantém o aviso de tirar e pôr na tomada.
+                if (muteTimes < 2) {
+                    _info.value = ConnectionInfo(ConnState.ERROR, "Conexão perdida: ${e.message ?: "sem resposta"}. Tentando de novo...")
+                }
             } finally {
                 logging = false
                 close()
@@ -129,7 +150,9 @@ class BluetoothObdSource(
 
             if (engineOff) {
                 _info.value = ConnectionInfo(ConnState.IDLE, "Carro desligado: leitura pausada. Volta sozinha quando ligar.")
-                delay(PAUSE_MS)
+                delay(ReconnectRules.afterEngineOff(offTimes++))
+            } else if (_info.value.state == ConnState.ERROR && muteTimes >= 2) {
+                delay(ReconnectRules.afterFailure(muteTimes))
             } else {
                 delay(RETRY_MS)
             }
@@ -320,7 +343,9 @@ class BluetoothObdSource(
         if (addr != null && BluetoothAdapter.checkBluetoothAddress(addr) && matches(store.bleName)) {
             _info.value = ConnectionInfo(ConnState.CONNECTING, "Conectando no adaptador ${store.bleName}...")
             log("BLE: conectando direto em ${store.bleName} ($addr)")
-            openWithRetry(adapter.getRemoteDevice(addr))?.let { return it }
+            // Uma tentativa só: se o adaptador não estiver anunciando, a busca abaixo acha mais rápido
+            // (antes eram 3 tentativas de 10 s antes de começar a procurar).
+            openWithRetry(adapter.getRemoteDevice(addr), tries = 1)?.let { return it }
         }
 
         _info.value = ConnectionInfo(ConnState.CONNECTING, "Procurando o adaptador BLE...")
@@ -336,10 +361,10 @@ class BluetoothObdSource(
         }
     }
 
-    private fun openWithRetry(device: BluetoothDevice): BleLink? {
-        repeat(3) { attempt ->
+    private fun openWithRetry(device: BluetoothDevice, tries: Int = 3): BleLink? {
+        repeat(tries) { attempt ->
             BleLink.open(context, device, ::log)?.let { return it }
-            if (attempt < 2) Thread.sleep(1_500)
+            if (attempt < tries - 1) Thread.sleep(1_500)
         }
         return null
     }

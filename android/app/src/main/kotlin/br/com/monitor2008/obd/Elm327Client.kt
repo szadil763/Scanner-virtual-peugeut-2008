@@ -43,15 +43,21 @@ class Elm327Client(
 
     /** Configura o adaptador e deixa o ELM327 procurar o protocolo do carro. Devolve o protocolo (ATDPN). */
     fun initialize(): String {
-        send("ATZ", 3_000)
-        send("ATE0")   // sem eco
-        send("ATL0")   // sem line feed
-        send("ATH0")   // sem cabeçalhos CAN na resposta
-        send("ATS1")   // com espaços entre os bytes
-        send("ATSP0")  // protocolo automático
+        initResponses = listOf(
+            send("ATZ", 3_000),
+            send("ATE0"),   // sem eco
+            send("ATL0"),   // sem line feed
+            send("ATH0"),   // sem cabeçalhos CAN na resposta
+            send("ATS1"),   // com espaços entre os bytes
+            send("ATSP0"),  // protocolo automático
+        )
         firstSupport = send("0100", 8_000) // primeira consulta dispara a busca de protocolo
         return send("ATDPN").trim()
     }
+
+    /** Respostas da configuração (ATZ...ATSP0): todas vazias = adaptador conectado mas travado. */
+    var initResponses: List<String> = emptyList()
+        private set
 
     /** Resposta do primeiro 0100 (na busca do protocolo): também conta para os PIDs suportados. */
     private var firstSupport = ""

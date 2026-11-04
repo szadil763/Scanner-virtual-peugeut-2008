@@ -100,6 +100,8 @@ class MainActivity : ComponentActivity() {
         // De volta ao app: a janela flutuante própria some.
         FloatingPanel.hide(this)
         VoiceActions.onResumed(this)
+        // App aberto: se a leitura estava esperando (carro desligado), tenta já, sem esperar a pausa.
+        vm.wakeUp()
         // Microfone para a palavra "Monitor" (só dá para ligar com o app na frente).
         MicService.update(this, renew = true)
         // Ao voltar da tela de "acesso a notificações", o mini player já começa a mostrar a música.

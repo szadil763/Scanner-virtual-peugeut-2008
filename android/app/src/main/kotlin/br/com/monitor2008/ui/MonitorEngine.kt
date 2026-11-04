@@ -582,7 +582,11 @@ class MonitorEngine private constructor(private val app: Application) {
                 !adapter.isEnabled -> PairedList(problem = "Bluetooth desligado. Ligue o Bluetooth e toque em Atualizar.")
                 else -> try {
                     val names = adapter.bondedDevices.mapNotNull { it.name ?: it.address }.distinct().sorted()
-                    PairedList(names, if (names.isEmpty()) "Nenhum aparelho pareado ainda." else "")
+                    PairedList(names, if (names.isEmpty()) {
+                        // Adaptador BLE (como o OBDBLE) não é pareado: a lista vazia é normal com ele (relato da 0.1.66).
+                        if (conn.state == ConnState.CONNECTED) "" else
+                            "Nenhum aparelho clássico pareado. Normal para adaptador BLE (como o OBDBLE): ele conecta sem parear."
+                    } else "")
                 } catch (e: SecurityException) {
                     PairedList(problem = "O app ainda não tem permissão para usar o Bluetooth.", needsPermission = true)
                 }

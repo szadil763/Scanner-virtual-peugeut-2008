@@ -13,6 +13,8 @@ class AdapterPresenceService : CompanionDeviceService() {
     @Deprecated("No Android 13+ o sistema repassa para esta versão.")
     override fun onDeviceAppeared(address: String) {
         ReadingService.update(this, enabled = true)
+        // O adaptador apareceu: tenta conectar já, sem esperar a pausa longa de carro desligado.
+        br.com.monitor2008.ui.MonitorEngine.get(application).wakeUp()
     }
 
     @Deprecated("No Android 13+ o sistema repassa para esta versão.")
