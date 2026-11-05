@@ -277,6 +277,14 @@ class BluetoothObdSource(
                     "Bluetooth do aparelho para o app usar o OBDBLE. Tentando de novo...",
             )
         }
+        // A busca BLE não viu NENHUM aparelho (nem vizinhos): o rádio não está recebendo anúncios.
+        if (lastBleSeen == 0) {
+            return fail(
+                "O Bluetooth deste aparelho não está vendo nenhum aparelho BLE, nem vizinhos. Tire o adaptador da tomada OBD, " +
+                    "espere 10 segundos e coloque de volta com a ignição ligada. Se continuar, atualize o sistema do multimídia " +
+                    "(Informações > Verifique se há atualizações). Tentando de novo...",
+            )
+        }
         return fail(
             "Adaptador não encontrado. Ligue a ignição. Se o Monitor estiver aberto em outro aparelho (celular), " +
                 "feche lá: o adaptador aceita uma conexão por vez. Tentando de novo...",
@@ -338,6 +346,9 @@ class BluetoothObdSource(
      * procura pelo nome. Cada conexão tenta 3 vezes, porque o chip do multimídia costuma falhar a
      * primeira (status 133) quando já tem áudio Bluetooth ativo.
      */
+    /** Quantos aparelhos a última busca BLE viu (0 = o rádio não recebeu nenhum anúncio). */
+    private var lastBleSeen = -1
+
     private fun connectBle(adapter: BluetoothAdapter, scanMs: Long): BleLink? {
         val addr = store.bleAddress
         if (addr != null && BluetoothAdapter.checkBluetoothAddress(addr) && matches(store.bleName)) {
@@ -352,6 +363,7 @@ class BluetoothObdSource(
         val seen = mutableSetOf<String>()
         val device = BleLink.find(adapter, ::matches, scanMs = scanMs, seen = seen)
         if (device == null) {
+            lastBleSeen = synchronized(seen) { seen.size }
             log("BLE: a busca não achou o adaptador. Aparelhos BLE vistos: ${synchronized(seen) { seen.joinToString(", ") }.ifBlank { "nenhum" }}")
             return null
         }

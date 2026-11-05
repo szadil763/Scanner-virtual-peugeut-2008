@@ -117,8 +117,10 @@ class BleLink private constructor(private val gatt: BluetoothGatt) {
             val latch = CountDownLatch(1)
             val callback = object : ScanCallback() {
                 override fun onScanResult(callbackType: Int, result: ScanResult) {
-                    val name = result.device.name ?: result.scanRecord?.deviceName ?: return
-                    seen?.let { synchronized(it) { it.add(name) } }
+                    val name = result.device.name ?: result.scanRecord?.deviceName
+                    // Registra também os sem nome (pelo endereço): mostra no registro se o rádio está vendo algo.
+                    seen?.let { synchronized(it) { it.add(name ?: result.device.address) } }
+                    if (name == null) return
                     if (found == null && matches(name)) {
                         found = result.device
                         latch.countDown()
