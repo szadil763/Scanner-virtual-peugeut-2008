@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Teste do painel</title>
+<style>
+  :root { --bg:#fff; --fg:#111; --ok:#0a7d2c; }
+  @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --bg:#000; --fg:#fff; --ok:#3ddc6b; } }
+  :root[data-theme="dark"] { --bg:#000; --fg:#fff; --ok:#3ddc6b; }
+  body { margin:0; background:var(--bg); color:var(--fg); font-family:system-ui,sans-serif; padding:16px; }
+  h1 { font-size:28px; margin:0 0 12px; }
+  .big { font-size:96px; font-weight:700; line-height:1; }
+  .ok { color:var(--ok); font-size:32px; font-weight:700; }
+  .info { font-size:22px; margin-top:16px; word-break:break-all; }
+</style>
+</head>
+<body>
+  <h1>Teste do painel Monitor 2008</h1>
+  <div class="ok" id="status">Página carregada</div>
+  <div class="big" id="clock">--:--:--</div>
+  <div class="info">Contador de atualizações: <span id="ticks">0</span></div>
+  <div class="info">Endereço desta página: <span id="addr"></span></div>
+  <div class="info">Navegador: <span id="ua"></span></div>
+<script>
+  // Teste mínimo: a página atualiza sozinha a cada segundo, sem internet.
+  // Se o relógio andar e o contador subir, o navegador do multimídia está
+  // exibindo a página servida pelo celular na rede local.
+  var ticks = 0;
+  function tick() {
+    ticks++;
+    document.getElementById('clock').textContent = new Date().toLocaleTimeString('pt-BR');
+    document.getElementById('ticks').textContent = ticks;
+  }
+  document.getElementById('addr').textContent = location.href;
+  document.getElementById('ua').textContent = navigator.userAgent;
+  tick();
+  setInterval(tick, 1000);
+</script>
+</body>
+</html>
