@@ -27,5 +27,16 @@
                 <action android:name="android.service.notification.NotificationListenerService" />
             </intent-filter>
         </service>
+
+        <!-- TESTE do servidor no multimídia (ver data/TestServerActivity). Remover depois do teste. -->
+        <activity
+            android:name=".data.TestServerActivity"
+            android:exported="true"
+            android:label="Teste servidor">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
     </application>
 </manifest>
