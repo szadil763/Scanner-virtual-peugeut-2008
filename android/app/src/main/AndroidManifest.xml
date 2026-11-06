@@ -146,7 +146,9 @@
             android:exported="true">
             <intent-filter>
                 <action android:name="androidx.car.app.CarAppService" />
+                <!-- Teste: o Android Auto no celular só lista o app com uma categoria aceita; IOT sozinha não aparece. -->
                 <category android:name="androidx.car.app.category.IOT" />
+                <category android:name="androidx.car.app.category.POI" />
             </intent-filter>
         </service>
 
