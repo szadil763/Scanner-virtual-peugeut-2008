@@ -213,6 +213,7 @@ class VoiceAssistant private constructor(private val app: Application) {
 
     /** Fala depois do que já está falando (resultado de uma busca, por exemplo). */
     fun say(text: String) {
+        if (PainelLink.vozNoPainel()) { PainelLink.enviarFala(text); return }
         if (ttsReady != true) { speak(text); return }
         requestFocus()
         tts?.speak(text, TextToSpeech.QUEUE_ADD, null, "monitor-voz-2")
@@ -220,6 +221,7 @@ class VoiceAssistant private constructor(private val app: Application) {
 
     /** Fala um texto (também usado pelo teste em Ajustes). */
     fun speak(text: String) {
+        if (PainelLink.vozNoPainel()) { PainelLink.enviarFala(text); return }
         initTts()
         when (ttsReady) {
             true -> {

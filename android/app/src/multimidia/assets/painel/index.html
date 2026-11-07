@@ -543,6 +543,15 @@
     clearTimeout(vozTimer);
     vozTimer = setTimeout(function () { b.disabled = false; }, 8000);
   }
+  var ultimaFala = null;
+  function falarResposta(d) {
+    if (d.falaId === undefined) return;
+    if (ultimaFala === null) { ultimaFala = d.falaId; return; }
+    if (d.falaId !== ultimaFala) {
+      ultimaFala = d.falaId;
+      if (d.fala && window.monitorVoz) monitorVoz.falar(d.fala);
+    }
+  }
   function buscarMusica() {
     if (!parado) return;
     var t = el('busca-txt').value.trim();
@@ -640,6 +649,7 @@
     paintConsumo(d);
     paintDiag(d.diagnostico);
     paintAjustes(d.ajustes);
+    falarResposta(d);
     var m = d.midia || {};
     paintMidia(m);
     paintTocador(m.musica || null);

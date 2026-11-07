@@ -2,6 +2,9 @@ package br.com.monitor2008.data
 
 import android.app.Activity
 import android.os.Bundle
+import android.speech.tts.TextToSpeech
+import android.webkit.JavascriptInterface
+import java.util.Locale
 import android.view.ViewGroup
 import android.webkit.WebSettings
 import android.webkit.WebView
@@ -36,6 +39,15 @@ class PainelServerActivity : Activity() {
     @Volatile private var latestAtMs = 0L
     @Volatile private var capa: ByteArray? = null
     private var web: WebView? = null
+    private var tts: TextToSpeech? = null
+
+    /** Ponte para o painel falar a resposta de voz pelo texto-para-voz deste aparelho. */
+    inner class VozBridge {
+        @JavascriptInterface
+        fun falar(texto: String) {
+            tts?.speak(texto, TextToSpeech.QUEUE_FLUSH, null, "painel-voz")
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -43,9 +55,13 @@ class PainelServerActivity : Activity() {
             textSize = 18f
             setPadding(24, 12, 24, 12)
         }
+        tts = TextToSpeech(this) { status ->
+            if (status == TextToSpeech.SUCCESS) tts?.language = Locale("pt", "BR")
+        }
         val view = WebView(this).apply {
             settings.javaScriptEnabled = true
             settings.cacheMode = WebSettings.LOAD_NO_CACHE
+            addJavascriptInterface(VozBridge(), "monitorVoz")
         }
         web = view
         setContentView(LinearLayout(this).apply {
@@ -79,6 +95,7 @@ class PainelServerActivity : Activity() {
         running = false
         try { server?.close() } catch (_: Exception) { }
         web?.destroy()
+        tts?.shutdown()
         super.onDestroy()
     }
 

@@ -47,6 +47,19 @@ object PainelLink {
     /** Chave (app|título|artista) da capa já enviada ao multimídia e se um envio está em curso. */
     @Volatile private var capaSent: String? = null
     @Volatile private var capaSending = false
+    /** Pedido feito pelo multimídia: a resposta vai para o painel, que fala pelo som do carro. */
+    @Volatile private var vozPainelAte = 0L
+    @Volatile private var falaId = 0
+    @Volatile private var falaTexto = ""
+
+    /** Vale enquanto o pedido de voz veio do multimídia (até 60 s depois do botão). */
+    fun vozNoPainel(): Boolean = System.currentTimeMillis() < vozPainelAte
+
+    /** Resposta de voz que o multimídia deve falar (a próxima leitura do painel a entrega). */
+    fun enviarFala(texto: String) {
+        falaTexto = texto
+        falaId++
+    }
 
     /**
      * Envia os números para o multimídia. Usa o endereço achado pela busca, ou o digitado em
@@ -188,6 +201,8 @@ object PainelLink {
             put("manutencao", manutencao(ui))
             put("consumo", consumo(ui))
             put("diagnostico", diagnostico(app, ui))
+            put("falaId", falaId)
+            put("fala", falaTexto)
             put("ajustes", JSONObject().apply {
                 put("sol", Store(app).highContrast)
                 put("direcao", Store(app).driveMode)
@@ -406,7 +421,10 @@ object PainelLink {
             "musica.buscar" -> if (Features.mediaControl) buscar(app, cmd.optString("texto"))
             "manutencao.feito" -> feitoManutencao(app, cmd.optString("id"))
             "diag.lerFalhas" -> MonitorEngine.get(app).readDtcs()
-            "voz.ouvir" -> VoiceAssistant.get(app).listen(beepWhenReady = true)
+            "voz.ouvir" -> {
+                vozPainelAte = System.currentTimeMillis() + 60_000
+                VoiceAssistant.get(app).listen(beepWhenReady = true)
+            }
             "ajuste.sol" -> MonitorEngine.get(app).setHighContrast(cmd.optBoolean("valor", false))
             "ajuste.direcao" -> DriveModeSetting.values().firstOrNull { it.name == cmd.optString("valor") }
                 ?.let { MonitorEngine.get(app).setDriveMode(it) }
