@@ -621,7 +621,7 @@ class MonitorEngine private constructor(private val app: Application) {
 
     private fun publish() {
         _ui.value = snapshot()
-        PainelLink.maybeSend(store.painelAddress, _ui.value)
+        PainelLink.maybeSend(app, store.painelAddress, _ui.value)
     }
 
     private fun snapshot(): UiState {

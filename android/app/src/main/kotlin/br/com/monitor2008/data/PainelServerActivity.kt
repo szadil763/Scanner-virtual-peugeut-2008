@@ -14,6 +14,9 @@ import java.net.Inet4Address
 import java.net.NetworkInterface
 import java.net.ServerSocket
 import java.net.Socket
+import org.json.JSONArray
+import org.json.JSONObject
+import java.util.concurrent.ConcurrentLinkedQueue
 import java.util.Collections
 import kotlin.concurrent.thread
 
@@ -96,6 +99,22 @@ class PainelServerActivity : Activity() {
                     method == "POST" && path == "/estado" -> {
                         latestJson = String(body, Charsets.UTF_8)
                         latestAtMs = System.currentTimeMillis()
+                        // Resposta: os comandos que os botões pediram desde o último envio.
+                        val cmds = JSONArray()
+                        while (true) {
+                            val c = pending.poll() ?: break
+                            cmds.put(c)
+                        }
+                        val json = JSONObject().put("comandos", cmds).toString()
+                        send(out, 200, "application/json; charset=utf-8", json.toByteArray(Charsets.UTF_8))
+                    }
+                    method == "POST" && path == "/comando" -> {
+                        val acao = try { JSONObject(String(body, Charsets.UTF_8)).optString("acao") } catch (_: Exception) { "" }
+                        if (acao in COMANDOS) {
+                            pending.add(acao)
+                            // Fila curta: se o celular não estiver ligado, não acumula comandos antigos.
+                            while (pending.size > 5) pending.poll()
+                        }
                         send(out, 204, "text/plain; charset=utf-8", ByteArray(0))
                     }
                     method == "GET" && path == "/estado" -> {
@@ -169,6 +188,13 @@ class PainelServerActivity : Activity() {
         const val PORT = 8080
         private const val MAX_HEAD = 16_384
         private const val MAX_BODY = 65_536
+
+        /** Botões do painel que o celular executa (ver PainelLink.execute). */
+        private val COMANDOS = setOf(
+            "musica.playpause", "musica.next", "musica.prev",
+            "radio.playpause", "radio.next", "radio.prev",
+        )
+        private val pending = ConcurrentLinkedQueue<String>()
 
         /** Endereços IPv4 deste aparelho, sem o loopback (ex.: 10.12.38.252). */
         fun addresses(): List<String> = try {
