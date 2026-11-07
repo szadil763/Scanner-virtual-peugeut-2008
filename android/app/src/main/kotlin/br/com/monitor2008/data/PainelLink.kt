@@ -203,6 +203,16 @@ object PainelLink {
                 put("status", h.status.name)
                 put("valor", h.value)
                 put("conselho", h.advice)
+                put("unidade", h.unit)
+                // Gráfico: um ponto por viagem (null = sem dado naquela viagem).
+                put("serie", JSONArray().apply { h.series.forEach { put(it?.let { v -> r2(v) } ?: JSONObject.NULL) } })
+                put("linhas", JSONArray().apply {
+                    h.lines.forEach { l -> put(JSONObject().apply { put("valor", r2(l.value)); put("alerta", l.alert) }) }
+                })
+                put("abastecimento", h.refuelIndex ?: JSONObject.NULL)
+                put("antes", h.beforeRefuel?.let { r2(it) } ?: JSONObject.NULL)
+                put("depois", h.afterRefuel?.let { r2(it) } ?: JSONObject.NULL)
+                put("viagensDepois", h.tripsAfterRefuel)
             })
         }
     }

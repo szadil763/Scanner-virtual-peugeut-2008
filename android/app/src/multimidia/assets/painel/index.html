@@ -256,6 +256,47 @@
     d.appendChild(t); d.appendChild(v); d.appendChild(x);
     return d;
   }
+  function desenhaGrafico(c, h) {
+    var w = c.clientWidth, hh = c.clientHeight;
+    if (c.width !== w) c.width = w;
+    if (c.height !== hh) c.height = hh;
+    var g = c.getContext('2d');
+    g.clearRect(0, 0, w, hh);
+    var vals = (h.serie || []).filter(function (v) { return v !== null; });
+    var todos = vals.concat((h.linhas || []).map(function (l) { return l.valor; }));
+    if (todos.length === 0) return;
+    var lo = Math.min.apply(null, todos), hi = Math.max.apply(null, todos);
+    var pad = Math.max((hi - lo) * 0.1, 0.5);
+    lo -= pad; hi += pad;
+    var n = (h.serie || []).length;
+    var x = function (i) { return n > 1 ? i / (n - 1) * (w - 8) + 4 : w / 2; };
+    var y = function (v) { return hh - 4 - (v - lo) / (hi - lo) * (hh - 8); };
+    // Linhas de referência (limites do indicador)
+    (h.linhas || []).forEach(function (l) {
+      g.setLineDash([8, 6]);
+      g.strokeStyle = l.alerta ? '#ff5555' : '#ffcc33';
+      g.lineWidth = 2;
+      g.beginPath(); g.moveTo(0, y(l.valor)); g.lineTo(w, y(l.valor)); g.stroke();
+    });
+    g.setLineDash([]);
+    // Linha vertical do abastecimento
+    if (h.abastecimento !== null && h.abastecimento !== undefined && n > 1) {
+      g.strokeStyle = '#3ddc6b';
+      g.lineWidth = 2;
+      g.beginPath(); g.moveTo(x(h.abastecimento), 0); g.lineTo(x(h.abastecimento), hh); g.stroke();
+    }
+    // Pontos por viagem, com quebra onde não há dado
+    g.strokeStyle = '#38bdf8';
+    g.lineWidth = 3;
+    g.beginPath();
+    var aberto = false;
+    (h.serie || []).forEach(function (v, i) {
+      if (v === null) { aberto = false; return; }
+      if (aberto) g.lineTo(x(i), y(v)); else g.moveTo(x(i), y(v));
+      aberto = true;
+    });
+    g.stroke();
+  }
   function paintSaude(lista) {
     var chave = JSON.stringify(lista);
     if (chave === ultimoSaude) return;
@@ -267,7 +308,28 @@
       return;
     }
     lista.forEach(function (h) {
-      box.appendChild(linha((h.status || '').toLowerCase(), h.titulo, (rotuloSaude[h.status] || '') + (h.valor ? ' · ' + h.valor : ''), h.conselho));
+      var det = h.conselho || '';
+      var d = linha((h.status || '').toLowerCase(), h.titulo, (rotuloSaude[h.status] || '') + (h.valor ? ' · ' + h.valor : ''), det);
+      if (h.serie && h.serie.length > 1) {
+        var c = document.createElement('canvas');
+        c.style.width = '100%';
+        c.style.height = '140px';
+        c.style.background = '#0b0f14';
+        c.style.borderRadius = '10px';
+        c.style.marginTop = '8px';
+        d.appendChild(c);
+        // Depois de inserir no DOM, o canvas já tem tamanho para desenhar.
+        setTimeout(function () { desenhaGrafico(c, h); }, 0);
+      }
+      if (h.antes !== null && h.antes !== undefined) {
+        var t = document.createElement('div');
+        t.className = 'd';
+        t.textContent = 'Antes do abastecimento: ' + Number(h.antes).toFixed(1) +
+          ' · Depois: ' + (h.depois !== null && h.depois !== undefined ? Number(h.depois).toFixed(1) : '--') +
+          ' (' + h.viagensDepois + (h.viagensDepois === 1 ? ' viagem' : ' viagens') + ')';
+        d.appendChild(t);
+      }
+      box.appendChild(d);
     });
   }
   function paintPostos(lista) {
