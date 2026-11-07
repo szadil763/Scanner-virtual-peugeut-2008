@@ -406,6 +406,7 @@ object PainelLink {
             "musica.buscar" -> if (Features.mediaControl) buscar(app, cmd.optString("texto"))
             "manutencao.feito" -> feitoManutencao(app, cmd.optString("id"))
             "diag.lerFalhas" -> MonitorEngine.get(app).readDtcs()
+            "voz.ouvir" -> VoiceAssistant.get(app).listen(beepWhenReady = true)
             "ajuste.sol" -> MonitorEngine.get(app).setHighContrast(cmd.optBoolean("valor", false))
             "ajuste.direcao" -> DriveModeSetting.values().firstOrNull { it.name == cmd.optString("valor") }
                 ?.let { MonitorEngine.get(app).setDriveMode(it) }

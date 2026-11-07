@@ -8,7 +8,9 @@
   :root { --bg:#000; --fg:#fff; --dim:#a8b0b8; --ok:#3ddc6b; --warn:#ffcc33; --bad:#ff5555; --btn:#1b2430; --sel:#1f5fa8; }
   * { box-sizing:border-box; }
   body { margin:0; background:var(--bg); color:var(--fg); font-family:system-ui,sans-serif; height:100vh; overflow:hidden; }
-  #status { font-size:20px; padding:6px 16px; color:var(--dim); flex:0 0 auto; }
+  #status { font-size:20px; padding:6px 110px 6px 16px; color:var(--dim); flex:0 0 auto; }
+  #voz { position:fixed; top:4px; right:10px; z-index:5; font-size:30px; min-width:92px; min-height:64px; background:#1d5c33; color:var(--fg); border:3px solid #3ddc6b; border-radius:14px; }
+  #voz:disabled { background:#222; border-color:#444; color:#777; }
   #status.on { color:var(--ok); }
   .layout { display:flex; height:100vh; min-height:0; }
   .menu { flex:0 0 190px; display:flex; flex-direction:column; gap:6px; padding:8px; overflow-y:auto; border-right:2px solid #1a2330; }
@@ -82,6 +84,7 @@
 </style>
 </head>
 <body>
+<button id="voz" onclick="ouvirVoz()">🎤</button>
 <div class="layout">
 <nav class="menu">
   <button class="aba sel" id="ab-painel" onclick="aba('painel')"><b>1</b>Painel</button>
@@ -529,6 +532,16 @@
     ['AUTO', 'ALWAYS_FULL', 'ALWAYS_SIMPLE'].forEach(function (v) {
       el('aj-d-' + v).className = 'opc' + (direcao === v ? ' sel' : '');
     });
+  }
+  var vozTimer = null;
+  function ouvirVoz() {
+    var b = el('voz');
+    b.disabled = true;
+    el('status').textContent = 'Ouvindo no celular… fale agora';
+    fetch('/comando', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ acao: 'voz.ouvir' }) })
+      .catch(function () { el('status').textContent = 'Sem resposta do multimídia'; });
+    clearTimeout(vozTimer);
+    vozTimer = setTimeout(function () { b.disabled = false; }, 8000);
   }
   function buscarMusica() {
     if (!parado) return;
