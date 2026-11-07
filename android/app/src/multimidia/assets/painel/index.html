@@ -5,11 +5,16 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Painel</title>
 <style>
-  :root { --bg:#000; --fg:#fff; --dim:#a8b0b8; --ok:#3ddc6b; --warn:#ffcc33; --bad:#ff5555; --btn:#1b2430; }
+  :root { --bg:#000; --fg:#fff; --dim:#a8b0b8; --ok:#3ddc6b; --warn:#ffcc33; --bad:#ff5555; --btn:#1b2430; --sel:#1f5fa8; }
   * { box-sizing:border-box; }
   body { margin:0; background:var(--bg); color:var(--fg); font-family:system-ui,sans-serif; height:100vh; overflow:hidden; display:flex; flex-direction:column; }
-  #status { font-size:20px; padding:8px 16px; color:var(--dim); flex:0 0 auto; }
+  #status { font-size:20px; padding:6px 16px; color:var(--dim); flex:0 0 auto; }
   #status.on { color:var(--ok); }
+  .abas { flex:0 0 auto; display:grid; grid-template-columns:repeat(3,1fr); gap:8px; padding:0 10px 8px; }
+  .aba { font-size:24px; min-height:56px; background:var(--btn); color:var(--fg); border:2px solid #3a4a5c; border-radius:12px; }
+  .aba.sel { background:var(--sel); border-color:#5b9be0; }
+  .tela { flex:1 1 auto; min-height:0; display:none; }
+  .tela.sel { display:flex; flex-direction:column; }
   .grid { flex:1 1 auto; display:grid; grid-template-columns:repeat(3,1fr); grid-template-rows:1fr 1fr; gap:8px; padding:0 10px 8px; min-height:0; }
   .card { border:3px solid #333; border-radius:14px; padding:6px; display:flex; flex-direction:column; justify-content:center; align-items:center; min-height:0; }
   .card.warn { border-color:var(--warn); }
@@ -19,56 +24,131 @@
   .card.warn .val { color:var(--warn); }
   .card.bad .val { color:var(--bad); }
   .unit { font-size:22px; color:var(--dim); }
+  .lista { flex:1 1 auto; overflow-y:auto; display:flex; flex-direction:column; gap:8px; padding:0 10px 8px; min-height:0; }
+  .item { border:3px solid #333; border-radius:14px; padding:8px 12px; }
+  .item .t { font-size:24px; font-weight:700; }
+  .item .v { font-size:22px; }
+  .item .d { font-size:18px; color:var(--dim); }
+  .item.ok { border-color:var(--ok); }
+  .item.warn, .item.atencao { border-color:var(--warn); }
+  .item.alerta, .item.suspeita { border-color:var(--bad); }
+  .item.boa { border-color:var(--ok); }
   .midia { flex:0 0 auto; display:grid; grid-template-columns:1fr 1fr; gap:10px; padding:0 10px 10px; }
   .faixa { border:3px solid #333; border-radius:14px; padding:6px 10px; }
   .faixa .tit { font-size:20px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; min-height:26px; }
   .faixa .sub { font-size:17px; color:var(--dim); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; min-height:22px; }
   .botoes { display:grid; grid-template-columns:1fr 1.4fr 1fr; gap:8px; margin-top:4px; }
-  button { font-size:26px; min-height:56px; background:var(--btn); color:var(--fg); border:2px solid #3a4a5c; border-radius:12px; }
-  button:active { background:#2d3a4b; }
+  button.c { font-size:26px; min-height:56px; background:var(--btn); color:var(--fg); border:2px solid #3a4a5c; border-radius:12px; }
+  button.c:active { background:#2d3a4b; }
 </style>
 </head>
 <body>
 <div id="status">Aguardando o celular…</div>
-<div class="grid">
-  <div class="card" id="c-speed"><div class="lbl">Velocidade</div><div class="val" id="speed">--</div><div class="unit">km/h</div></div>
-  <div class="card" id="c-rpm"><div class="lbl">Rotação</div><div class="val" id="rpm">--</div><div class="unit">rpm</div></div>
-  <div class="card" id="c-cool"><div class="lbl">Motor</div><div class="val" id="cool">--</div><div class="unit">°C</div></div>
-  <div class="card" id="c-kml"><div class="lbl" id="kml-lbl">Consumo agora</div><div class="val" id="kml">--</div><div class="unit" id="kml-unit">km/l</div></div>
-  <div class="card" id="c-avg"><div class="lbl">Média da viagem</div><div class="val" id="avg">--</div><div class="unit">km/l</div></div>
-  <div class="card" id="c-bat"><div class="lbl">Bateria</div><div class="val" id="bat">--</div><div class="unit">V</div></div>
+<div class="abas">
+  <button class="aba sel" id="ab-painel" onclick="aba('painel')">Painel</button>
+  <button class="aba" id="ab-saude" onclick="aba('saude')">Saúde</button>
+  <button class="aba" id="ab-postos" onclick="aba('postos')">Postos</button>
 </div>
+
+<div class="tela sel" id="t-painel">
+  <div class="grid">
+    <div class="card" id="c-speed"><div class="lbl">Velocidade</div><div class="val" id="speed">--</div><div class="unit">km/h</div></div>
+    <div class="card" id="c-rpm"><div class="lbl">Rotação</div><div class="val" id="rpm">--</div><div class="unit">rpm</div></div>
+    <div class="card" id="c-cool"><div class="lbl">Motor</div><div class="val" id="cool">--</div><div class="unit">°C</div></div>
+    <div class="card" id="c-kml"><div class="lbl" id="kml-lbl">Consumo agora</div><div class="val" id="kml">--</div><div class="unit" id="kml-unit">km/l</div></div>
+    <div class="card" id="c-avg"><div class="lbl">Média da viagem</div><div class="val" id="avg">--</div><div class="unit">km/l</div></div>
+    <div class="card" id="c-bat"><div class="lbl">Bateria</div><div class="val" id="bat">--</div><div class="unit">V</div></div>
+  </div>
+</div>
+
+<div class="tela" id="t-saude"><div class="lista" id="saude-lista"></div></div>
+<div class="tela" id="t-postos"><div class="lista" id="postos-lista"></div></div>
+
 <div class="midia">
   <div class="faixa">
     <div class="tit" id="m-tit">Música: nada tocando</div>
     <div class="sub" id="m-sub">&nbsp;</div>
     <div class="botoes">
-      <button onclick="cmd('musica.prev')">⏮</button>
-      <button id="m-play" onclick="cmd('musica.playpause')">▶</button>
-      <button onclick="cmd('musica.next')">⏭</button>
+      <button class="c" onclick="cmd('musica.prev')">⏮</button>
+      <button class="c" id="m-play" onclick="cmd('musica.playpause')">▶</button>
+      <button class="c" onclick="cmd('musica.next')">⏭</button>
     </div>
   </div>
   <div class="faixa">
     <div class="tit" id="r-tit">Rádio: nenhuma tocando</div>
     <div class="sub" id="r-sub">&nbsp;</div>
     <div class="botoes">
-      <button onclick="cmd('radio.prev')">⏮</button>
-      <button id="r-play" onclick="cmd('radio.playpause')">▶</button>
-      <button onclick="cmd('radio.next')">⏭</button>
+      <button class="c" onclick="cmd('radio.prev')">⏮</button>
+      <button class="c" id="r-play" onclick="cmd('radio.playpause')">▶</button>
+      <button class="c" onclick="cmd('radio.next')">⏭</button>
     </div>
   </div>
 </div>
+
 <script>
   function el(id) { return document.getElementById(id); }
   function num(v, d) {
     return (v === null || v === undefined || isNaN(v)) ? '--' : Number(v).toFixed(d);
+  }
+  var abaAtual = 'painel';
+  function aba(nome) {
+    abaAtual = nome;
+    ['painel', 'saude', 'postos'].forEach(function (n) {
+      el('t-' + n).classList.toggle('sel', n === nome);
+      el('ab-' + n).classList.toggle('sel', n === nome);
+    });
+  }
+  var ultimoSaude = '', ultimoPostos = '';
+  var rotuloSaude = { OK: 'OK', ATENCAO: 'Atenção', ALERTA: 'Alerta', APRENDENDO: 'Aprendendo' };
+  var rotuloNota = { BOA: 'Boa', NORMAL: 'Normal', SUSPEITA: 'Suspeita', POUCOS_DADOS: 'Poucos dados' };
+  function linha(classe, titulo, valor, detalhe) {
+    var d = document.createElement('div');
+    d.className = 'item ' + classe;
+    var t = document.createElement('div'); t.className = 't'; t.textContent = titulo;
+    var v = document.createElement('div'); v.className = 'v'; v.textContent = valor;
+    var x = document.createElement('div'); x.className = 'd'; x.textContent = detalhe || '';
+    d.appendChild(t); d.appendChild(v); d.appendChild(x);
+    return d;
+  }
+  function paintSaude(lista) {
+    var chave = JSON.stringify(lista);
+    if (chave === ultimoSaude) return;
+    ultimoSaude = chave;
+    var box = el('saude-lista');
+    box.textContent = '';
+    if (!lista || lista.length === 0) {
+      box.appendChild(linha('', 'Sem dados ainda', '', 'A Saúde aparece depois das primeiras viagens.'));
+      return;
+    }
+    lista.forEach(function (h) {
+      box.appendChild(linha((h.status || '').toLowerCase(), h.titulo, (rotuloSaude[h.status] || '') + (h.valor ? ' · ' + h.valor : ''), h.conselho));
+    });
+  }
+  function paintPostos(lista) {
+    var chave = JSON.stringify(lista);
+    if (chave === ultimoPostos) return;
+    ultimoPostos = chave;
+    var box = el('postos-lista');
+    box.textContent = '';
+    if (!lista || lista.length === 0) {
+      box.appendChild(linha('', 'Nenhum posto com abastecimento ainda', '', 'Os postos aparecem depois do primeiro abastecimento com local.'));
+      return;
+    }
+    lista.forEach(function (p) {
+      var det = [];
+      if (p.preco !== null && p.preco !== undefined) det.push('R$ ' + Number(p.preco).toFixed(2) + '/L');
+      if (p.distanciaKm !== null && p.distanciaKm !== undefined) det.push(Number(p.distanciaKm).toFixed(1) + ' km');
+      det.push(p.visitas + (p.visitas === 1 ? ' visita' : ' visitas'));
+      var titulo = p.nome;
+      var valor = rotuloNota[p.nota] || '';
+      box.appendChild(linha((p.nota || '').toLowerCase(), titulo, valor, det.join(' · ') + (p.resumo ? '\n' + p.resumo : '')));
+    });
   }
   function paint(d) {
     el('speed').textContent = num(d.speed, 0);
     el('rpm').textContent = num(d.rpm, 0);
     el('cool').textContent = num(d.coolant, 0);
     if (d.parado) {
-      // Igual ao celular: parado, o consumo é em litros por hora.
       el('kml-lbl').textContent = 'Consumo parado';
       el('kml').textContent = num(d.lph, 1);
       el('kml-unit').textContent = 'L/h';
@@ -77,13 +157,14 @@
       el('kml').textContent = num(d.kmL, 1);
       el('kml-unit').textContent = 'km/l';
     }
-    // Média da viagem: km/l, ou a conta a partir de L/100 km se o km/l não vier.
     var avg = d.tripAvgKmL;
     if ((avg === null || avg === undefined) && d.tripAvgL100 > 0) avg = 100 / d.tripAvgL100;
     el('avg').textContent = num(avg, 1);
     el('bat').textContent = num(d.battery, 1);
     el('c-cool').className = 'card' + (d.coolant >= 110 ? ' bad' : d.coolant >= 100 ? ' warn' : '');
     el('c-bat').className = 'card' + (d.rpm > 400 && d.battery !== null && d.battery < 12.6 ? ' bad' : '');
+    paintSaude(d.saude || []);
+    paintPostos(d.postos || []);
     paintMidia(d.midia || {});
   }
   function paintMidia(m) {

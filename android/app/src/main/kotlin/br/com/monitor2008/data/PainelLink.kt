@@ -4,6 +4,7 @@ import android.app.Application
 import android.os.Handler
 import android.os.Looper
 import br.com.monitor2008.ui.UiState
+import org.json.JSONArray
 import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
@@ -55,6 +56,36 @@ object PainelLink {
             put("tripKm", num(ui.tripKm))
             put("tripMin", ui.tripMinutes)
             put("midia", midia(app))
+            put("saude", saude(ui))
+            put("postos", postos(ui))
+        }
+    }
+
+    /** Indicadores da Saúde (só leitura no multimídia). */
+    private fun saude(ui: UiState): JSONArray = JSONArray().apply {
+        ui.health.forEach { h ->
+            put(JSONObject().apply {
+                put("titulo", h.title)
+                put("status", h.status.name)
+                put("valor", h.value)
+                put("conselho", h.advice)
+            })
+        }
+    }
+
+    /** Postos com nota de qualidade, os bons e mais perto primeiro (só leitura no multimídia). */
+    private fun postos(ui: UiState): JSONArray = JSONArray().apply {
+        ui.stationRatings.forEach { r ->
+            put(JSONObject().apply {
+                put("nome", r.station.name)
+                put("endereco", r.station.address)
+                put("nota", r.grade.name)
+                put("tanques", r.tanks)
+                put("visitas", r.visits)
+                put("preco", num(r.lastPrice))
+                put("distanciaKm", num(r.distanceKm))
+                put("resumo", r.summary)
+            })
         }
     }
 
