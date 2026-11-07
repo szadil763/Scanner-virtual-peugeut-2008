@@ -9,6 +9,11 @@ import br.com.monitor2008.domain.DtcInfo
 import br.com.monitor2008.domain.MaintCatalog
 import br.com.monitor2008.domain.RefuelMath
 import br.com.monitor2008.ui.MonitorEngine
+import br.com.monitor2008.ui.StationDraft
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 import br.com.monitor2008.ui.UiState
 import org.json.JSONArray
 import org.json.JSONObject
@@ -38,6 +43,7 @@ object PainelLink {
         Thread(r, "painel-busca").apply { isDaemon = true }
     }
     private val main by lazy { Handler(Looper.getMainLooper()) }
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     @Volatile private var lastSentMs = 0L
     /** Endereço achado pela busca (ou o último que funcionou). */
     @Volatile private var discovered: String? = null
@@ -389,7 +395,16 @@ object PainelLink {
                 ?.let { RefuelMath.litersFromAmount(it, preco) }
         }
         if (litros == null) return
-        MonitorEngine.get(app).registerRefuel(litros, preco, o.optBoolean("cheio", true), o.optBoolean("etanol", false))
+        val cheio = o.optBoolean("cheio", true)
+        val etanol = o.optBoolean("etanol", false)
+        // Posto pelo GPS do celular (como na tela de abastecimento). Sem GPS, registra sem posto.
+        scope.launch {
+            val fix = PlaceFinder.current(app, timeoutMs = 10_000)
+            val place = fix?.let {
+                StationDraft(it.latitude, it.longitude, "", PlaceFinder.address(app, it.latitude, it.longitude) ?: "")
+            }
+            MonitorEngine.get(app).registerRefuel(litros, preco, cheio, etanol, place)
+        }
     }
 
     /** Marca um item de manutenção como feito hoje (o celular recusa com o carro andando). */
