@@ -42,7 +42,10 @@ object PainelLink {
             put("coolant", num(s?.coolantC))
             put("battery", num(s?.batteryV))
             put("kmL", num(ui.kmPerL))
+            put("lph", num(ui.litersPerHour))
+            put("parado", !ui.moving)
             put("tripAvgKmL", num(ui.tripAvgKmPerL))
+            put("tripAvgL100", num(ui.tripAvgL100))
             put("tripKm", num(ui.tripKm))
             put("tripMin", ui.tripMinutes)
         }

@@ -26,7 +26,7 @@
   <div class="card" id="c-speed"><div class="lbl">Velocidade</div><div class="val" id="speed">--</div><div class="unit">km/h</div></div>
   <div class="card" id="c-rpm"><div class="lbl">Rotação</div><div class="val" id="rpm">--</div><div class="unit">rpm</div></div>
   <div class="card" id="c-cool"><div class="lbl">Motor</div><div class="val" id="cool">--</div><div class="unit">°C</div></div>
-  <div class="card" id="c-kml"><div class="lbl">Consumo agora</div><div class="val" id="kml">--</div><div class="unit">km/l</div></div>
+  <div class="card" id="c-kml"><div class="lbl" id="kml-lbl">Consumo agora</div><div class="val" id="kml">--</div><div class="unit" id="kml-unit">km/l</div></div>
   <div class="card" id="c-avg"><div class="lbl">Média da viagem</div><div class="val" id="avg">--</div><div class="unit">km/l</div></div>
   <div class="card" id="c-bat"><div class="lbl">Bateria</div><div class="val" id="bat">--</div><div class="unit">V</div></div>
 </div>
@@ -39,8 +39,20 @@
     el('speed').textContent = num(d.speed, 0);
     el('rpm').textContent = num(d.rpm, 0);
     el('cool').textContent = num(d.coolant, 0);
-    el('kml').textContent = num(d.kmL, 1);
-    el('avg').textContent = num(d.tripAvgKmL, 1);
+    if (d.parado) {
+      // Igual ao celular: parado, o consumo é em litros por hora.
+      el('kml-lbl').textContent = 'Consumo parado';
+      el('kml').textContent = num(d.lph, 1);
+      el('kml-unit').textContent = 'L/h';
+    } else {
+      el('kml-lbl').textContent = 'Consumo agora';
+      el('kml').textContent = num(d.kmL, 1);
+      el('kml-unit').textContent = 'km/l';
+    }
+    // Média da viagem: km/l, ou a conta a partir de L/100 km se o km/l não vier.
+    var avg = d.tripAvgKmL;
+    if ((avg === null || avg === undefined) && d.tripAvgL100 > 0) avg = 100 / d.tripAvgL100;
+    el('avg').textContent = num(avg, 1);
     el('bat').textContent = num(d.battery, 1);
     el('c-cool').className = 'card' + (d.coolant >= 110 ? ' bad' : d.coolant >= 100 ? ' warn' : '');
     el('c-bat').className = 'card' + (d.rpm > 400 && d.battery !== null && d.battery < 12.6 ? ' bad' : '');
