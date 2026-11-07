@@ -453,6 +453,8 @@ object PainelLink {
         return JSONObject().apply {
             put("musica", musica)
             put("radio", radio)
+            // Sem acesso às notificações (APK do celular), o app não vê nem controla a música.
+            put("musicaDisponivel", Features.mediaControl)
         }
     }
 

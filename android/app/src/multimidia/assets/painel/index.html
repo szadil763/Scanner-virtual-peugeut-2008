@@ -761,9 +761,17 @@
     paintMidia(m);
     paintTocador(m.musica || null);
   }
+  var SEM_MUSICA = 'Música: o APK do celular não tem acesso às notificações';
   function paintMidia(m) {
     var mu = m.musica;
-    if (mu) {
+    if (m.musicaDisponivel === false) {
+      el('m-tit').textContent = SEM_MUSICA;
+      el('m-sub').textContent = 'Use a rádio do app ou instale o APK do multimídia no celular.';
+      el('tc-tit').textContent = SEM_MUSICA;
+      el('tc-art').textContent = 'Ative o acesso às notificações no celular, ou use o APK do multimídia nele.';
+      el('m-play').textContent = '▶';
+      el('tc-play').textContent = '▶';
+    } else if (mu) {
       el('m-tit').textContent = mu.titulo || 'Música: sem título';
       el('m-sub').textContent = [mu.artista, mu.app].filter(Boolean).join(' · ') || ' ';
       el('m-play').textContent = mu.tocando ? '⏸' : '▶';
