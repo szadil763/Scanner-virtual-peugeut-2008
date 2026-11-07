@@ -1,6 +1,8 @@
 package br.com.monitor2008.data
 
 import android.content.Intent
+import android.os.Handler
+import android.os.Looper
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
@@ -19,6 +21,21 @@ import com.google.common.util.concurrent.ListenableFuture
 class RadioService : MediaSessionService() {
     private var session: MediaSession? = null
 
+    companion object {
+        @Volatile private var ativo: ExoPlayer? = null
+        private val main = Handler(Looper.getMainLooper())
+
+        /**
+         * Enquanto o microfone ouve, o rádio do app baixa para 3% (sem pausar), para a música não
+         * ser captada. Volta ao normal quando a escuta e a resposta terminam.
+         */
+        fun abaixar(on: Boolean) {
+            main.post {
+                try { ativo?.volume = if (on) 0.03f else 1f } catch (_: Exception) { }
+            }
+        }
+    }
+
     override fun onCreate() {
         super.onCreate()
         val player = ExoPlayer.Builder(this)
@@ -29,6 +46,7 @@ class RadioService : MediaSessionService() {
             .setHandleAudioBecomingNoisy(true)
             .setWakeMode(C.WAKE_MODE_NETWORK)
             .build()
+        ativo = player
         session = MediaSession.Builder(this, player).setCallback(callback).build()
     }
 
@@ -60,6 +78,7 @@ class RadioService : MediaSessionService() {
     }
 
     override fun onDestroy() {
+        ativo = null
         session?.run {
             player.release()
             release()

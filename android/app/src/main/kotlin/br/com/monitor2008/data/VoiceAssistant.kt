@@ -124,7 +124,9 @@ class VoiceAssistant private constructor(private val app: Application) {
             radioWasPlaying = RadioPlayer.get(app).state.value.playing
             mediaWasPlaying = MediaWatcher.get(app).now.value?.playing == true
         }
-        requestFocus(pauseOthers = true)
+        // Rádio do app baixa para 3%; os outros apps de música abaixam (sem pausar), para ouvir o pedido.
+        RadioService.abaixar(true)
+        requestFocus(pauseOthers = false)
         val r = try { SpeechRecognizer.createSpeechRecognizer(app) } catch (e: Exception) { null }
         if (r == null) { fail("Não foi possível abrir o reconhecimento de voz."); return }
         recognizer = r
@@ -411,6 +413,7 @@ class VoiceAssistant private constructor(private val app: Application) {
     }
 
     private fun abandonFocus() {
+        RadioService.abaixar(false)
         val f = focus ?: return
         focus = null
         try { audio?.abandonAudioFocusRequest(f) } catch (_: Exception) { }
