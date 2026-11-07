@@ -21,6 +21,7 @@ import br.com.monitor2008.domain.VoiceCommand
 import br.com.monitor2008.domain.VoiceCommands
 import br.com.monitor2008.domain.VoiceIntent
 import br.com.monitor2008.domain.VoiceSnapshot
+import br.com.monitor2008.domain.VoiceRefuel
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
