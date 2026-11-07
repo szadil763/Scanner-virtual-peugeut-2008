@@ -184,6 +184,7 @@ object PainelLink {
             put("saude", saude(ui))
             put("postos", postos(ui))
             put("manutencao", manutencao(ui))
+            put("consumo", consumo(ui))
         }
     }
 
@@ -197,6 +198,30 @@ object PainelLink {
                 put("conselho", h.advice)
             })
         }
+    }
+
+    private fun r1(d: Double): Double = Math.round(d * 10) / 10.0
+    private fun r2(d: Double): Double = Math.round(d * 100) / 100.0
+
+    /** Dados da tela Consumo: gráficos, viagem e últimos abastecimentos (só leitura no multimídia). */
+    private fun consumo(ui: UiState): JSONObject = JSONObject().apply {
+        put("historico", JSONArray().apply { ui.history.takeLast(120).forEach { put(r2(it)) } })
+        put("velocidades", JSONArray().apply { ui.speedHistory.takeLast(240).forEach { put(r1(it)) } })
+        put("custo", r2(ui.tripLiters * ui.fuelPrice))
+        put("litrosViagem", r2(ui.tripLiters))
+        put("velMedia", r1(ui.tripAvgSpeed))
+        put("abastecimentos", JSONArray().apply {
+            ui.refuels.take(5).forEach { r ->
+                put(JSONObject().apply {
+                    put("dia", r.epochDay)
+                    put("litros", r2(r.liters))
+                    put("preco", r2(r.pricePerLiter))
+                    put("cheio", r.full)
+                    put("etanol", r.ethanol)
+                    put("kmL", num(r.realKmPerL))
+                })
+            }
+        })
     }
 
     /** Itens de manutenção com o estado de cada um (só leitura no multimídia; marcar como feito é comando). */

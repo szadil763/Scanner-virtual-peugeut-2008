@@ -10,8 +10,8 @@
   body { margin:0; background:var(--bg); color:var(--fg); font-family:system-ui,sans-serif; height:100vh; overflow:hidden; display:flex; flex-direction:column; }
   #status { font-size:20px; padding:6px 16px; color:var(--dim); flex:0 0 auto; }
   #status.on { color:var(--ok); }
-  .abas { flex:0 0 auto; display:grid; grid-template-columns:repeat(6,1fr); gap:6px; padding:0 8px 8px; }
-  .aba { font-size:18px; min-height:56px; background:var(--btn); color:var(--fg); border:2px solid #3a4a5c; border-radius:12px; }
+  .abas { flex:0 0 auto; display:grid; grid-template-columns:repeat(7,1fr); gap:6px; padding:0 8px 8px; }
+  .aba { font-size:17px; min-height:56px; background:var(--btn); color:var(--fg); border:2px solid #3a4a5c; border-radius:12px; }
   .aba.sel { background:var(--sel); border-color:#5b9be0; }
   .tela { flex:1 1 auto; min-height:0; display:none; }
   .tela.sel { display:flex; flex-direction:column; }
@@ -41,6 +41,12 @@
   .enviar { font-size:26px; min-height:72px; background:#1d5c33; color:var(--fg); border:3px solid #3ddc6b; border-radius:14px; }
   .enviar:disabled { background:#222; border-color:#444; color:#777; }
   .aviso { font-size:20px; color:var(--dim); min-height:26px; }
+  .consumo { flex:1 1 auto; overflow-y:auto; display:flex; flex-direction:column; gap:10px; padding:0 10px 8px; min-height:0; }
+  .grafs { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+  .gf canvas { width:100%; height:200px; display:block; background:#0b0f14; border-radius:12px; border:2px solid #222; }
+  .metricas { display:grid; grid-template-columns:repeat(4,1fr); gap:10px; }
+  .metricas .card { min-height:120px; }
+  .v2 { font-size:40px; font-weight:700; }
   .feito { font-size:22px; min-height:60px; margin-top:8px; width:100%; background:var(--btn); color:var(--fg); border:3px solid #3a4a5c; border-radius:12px; }
   .feito.conf { background:#5a4a10; border-color:var(--warn); }
   .feito:disabled { background:#222; border-color:#444; color:#777; }
@@ -77,6 +83,7 @@
   <button class="aba" id="ab-postos" onclick="aba('postos')">Postos</button>
   <button class="aba" id="ab-abastecer" onclick="aba('abastecer')">Abastecer</button>
   <button class="aba" id="ab-manutencao" onclick="aba('manutencao')">Manutenção</button>
+  <button class="aba" id="ab-consumo" onclick="aba('consumo')">Consumo</button>
 </div>
 
 <div class="tela sel" id="t-painel">
@@ -114,6 +121,22 @@
 <div class="tela" id="t-saude"><div class="lista" id="saude-lista"></div></div>
 <div class="tela" id="t-postos"><div class="lista" id="postos-lista"></div></div>
 <div class="tela" id="t-manutencao"><div class="lista" id="manut-lista"></div></div>
+<div class="tela" id="t-consumo">
+  <div class="consumo">
+    <div class="grafs">
+      <div class="gf"><div class="lbl">Consumo (km/l)</div><canvas id="cv-km"></canvas></div>
+      <div class="gf"><div class="lbl">Velocidade (km/h)</div><canvas id="cv-vel"></canvas></div>
+    </div>
+    <div class="metricas">
+      <div class="card"><div class="lbl">Média do trajeto</div><div class="v2" id="c-media">--</div><div class="unit">km/l</div></div>
+      <div class="card"><div class="lbl">Distância</div><div class="v2" id="c-dist">--</div><div class="unit">km</div></div>
+      <div class="card"><div class="lbl">Custo do trajeto</div><div class="v2" id="c-custo">--</div><div class="unit">R$</div></div>
+      <div class="card"><div class="lbl">Vel. média</div><div class="v2" id="c-vmed">--</div><div class="unit">km/h</div></div>
+    </div>
+    <div class="lbl">Últimos abastecimentos</div>
+    <div class="lista" id="abast-lista" style="padding:0"></div>
+  </div>
+</div>
 
 <div class="tela" id="t-abastecer">
   <div class="form">
@@ -177,7 +200,7 @@
   var abaAtual = 'painel';
   function aba(nome) {
     abaAtual = nome;
-    ['painel', 'tocador', 'saude', 'postos', 'abastecer', 'manutencao'].forEach(function (n) {
+    ['painel', 'tocador', 'saude', 'postos', 'abastecer', 'manutencao', 'consumo'].forEach(function (n) {
       el('t-' + n).classList.toggle('sel', n === nome);
       el('ab-' + n).classList.toggle('sel', n === nome);
     });
@@ -309,6 +332,55 @@
       box.appendChild(d);
     });
   }
+  var ultimoAbast = '';
+  function desenhaLinha(id, vals, max, cor) {
+    var c = el(id);
+    if (!c) return;
+    var w = c.clientWidth, h = c.clientHeight;
+    if (c.width !== w) c.width = w;
+    if (c.height !== h) c.height = h;
+    var g = c.getContext('2d');
+    g.clearRect(0, 0, w, h);
+    if (!vals || vals.length < 2) return;
+    var mx = max || Math.max.apply(null, vals) || 1;
+    g.strokeStyle = cor;
+    g.lineWidth = 3;
+    g.beginPath();
+    vals.forEach(function (v, i) {
+      var x = i / (vals.length - 1) * w;
+      var y = h - Math.min(v, mx) / mx * (h - 8) - 4;
+      if (i === 0) g.moveTo(x, y); else g.lineTo(x, y);
+    });
+    g.stroke();
+  }
+  function dataDia(dia) {
+    return new Date(dia * 86400000).toLocaleDateString('pt-BR', { timeZone: 'UTC' });
+  }
+  function paintConsumo(d) {
+    var c = d.consumo;
+    if (!c) return;
+    desenhaLinha('cv-km', c.historico, 0, '#3ddc6b');
+    desenhaLinha('cv-vel', c.velocidades, 140, '#38bdf8');
+    el('c-media').textContent = num(d.tripAvgKmL, 1);
+    el('c-dist').textContent = num(d.tripKm, 1);
+    el('c-custo').textContent = num(c.custo, 2);
+    el('c-vmed').textContent = num(c.velMedia, 0);
+    var chave = JSON.stringify(c.abastecimentos);
+    if (chave === ultimoAbast) return;
+    ultimoAbast = chave;
+    var box = el('abast-lista');
+    box.textContent = '';
+    if (!c.abastecimentos || c.abastecimentos.length === 0) {
+      box.appendChild(linha('', 'Nenhum abastecimento ainda', '', ''));
+      return;
+    }
+    c.abastecimentos.forEach(function (a) {
+      var tipo = (a.cheio ? 'cheio' : 'parcial') + ' · ' + (a.etanol ? 'etanol' : 'gasolina');
+      var det = 'R$ ' + Number(a.preco).toFixed(2) + '/L · ' + tipo +
+        (a.kmL !== null && a.kmL !== undefined ? ' · ' + Number(a.kmL).toFixed(1) + ' km/l real' : '');
+      box.appendChild(linha('', dataDia(a.dia) + ' · ' + Number(a.litros).toFixed(1) + ' L', '', det));
+    });
+  }
   function buscarMusica() {
     if (!parado) return;
     var t = el('busca-txt').value.trim();
@@ -403,6 +475,7 @@
     paintSaude(d.saude || []);
     paintPostos(d.postos || []);
     paintManut(d.manutencao || []);
+    paintConsumo(d);
     var m = d.midia || {};
     paintMidia(m);
     paintTocador(m.musica || null);
