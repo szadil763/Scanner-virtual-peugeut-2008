@@ -10,17 +10,8 @@
   body { margin:0; background:var(--bg); color:var(--fg); font-family:system-ui,sans-serif; height:100vh; overflow:hidden; display:flex; flex-direction:column; }
   #status { font-size:20px; padding:6px 16px; color:var(--dim); flex:0 0 auto; }
   #status.on { color:var(--ok); }
-  .abas { flex:0 0 auto; display:grid; grid-template-columns:repeat(4,1fr); gap:8px; padding:0 10px 8px; }
-  .aba { font-size:22px; min-height:56px; background:var(--btn); color:var(--fg); border:2px solid #3a4a5c; border-radius:12px; }
-  .form { flex:1 1 auto; overflow-y:auto; padding:0 10px 8px; display:flex; flex-direction:column; gap:10px; min-height:0; }
-  .linha { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
-  .campo { font-size:20px; color:var(--dim); }
-  .campo input { width:100%; font-size:34px; min-height:64px; margin-top:4px; background:#000; color:var(--fg); border:3px solid #3a4a5c; border-radius:12px; padding:0 12px; }
-  .op { font-size:22px; min-height:64px; background:var(--btn); color:var(--fg); border:3px solid #3a4a5c; border-radius:12px; }
-  .op.sel { background:var(--sel); border-color:#5b9be0; }
-  .enviar { font-size:26px; min-height:72px; background:#1d5c33; color:var(--fg); border:3px solid #3ddc6b; border-radius:14px; }
-  .enviar:disabled { background:#222; border-color:#444; color:#777; }
-  .aviso { font-size:20px; color:var(--dim); min-height:26px; }
+  .abas { flex:0 0 auto; display:grid; grid-template-columns:repeat(5,1fr); gap:6px; padding:0 8px 8px; }
+  .aba { font-size:19px; min-height:56px; background:var(--btn); color:var(--fg); border:2px solid #3a4a5c; border-radius:12px; }
   .aba.sel { background:var(--sel); border-color:#5b9be0; }
   .tela { flex:1 1 auto; min-height:0; display:none; }
   .tela.sel { display:flex; flex-direction:column; }
@@ -37,11 +28,34 @@
   .item { border:3px solid #333; border-radius:14px; padding:8px 12px; }
   .item .t { font-size:24px; font-weight:700; }
   .item .v { font-size:22px; }
-  .item .d { font-size:18px; color:var(--dim); }
-  .item.ok { border-color:var(--ok); }
+  .item .d { font-size:18px; color:var(--dim); white-space:pre-line; }
+  .item.ok, .item.boa { border-color:var(--ok); }
   .item.warn, .item.atencao { border-color:var(--warn); }
   .item.alerta, .item.suspeita { border-color:var(--bad); }
-  .item.boa { border-color:var(--ok); }
+  .form { flex:1 1 auto; overflow-y:auto; padding:0 10px 8px; display:flex; flex-direction:column; gap:10px; min-height:0; }
+  .linha { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+  .campo { font-size:20px; color:var(--dim); }
+  .campo input { width:100%; font-size:34px; min-height:64px; margin-top:4px; background:#000; color:var(--fg); border:3px solid #3a4a5c; border-radius:12px; padding:0 12px; }
+  .op { font-size:22px; min-height:64px; background:var(--btn); color:var(--fg); border:3px solid #3a4a5c; border-radius:12px; }
+  .op.sel { background:var(--sel); border-color:#5b9be0; }
+  .enviar { font-size:26px; min-height:72px; background:#1d5c33; color:var(--fg); border:3px solid #3ddc6b; border-radius:14px; }
+  .enviar:disabled { background:#222; border-color:#444; color:#777; }
+  .aviso { font-size:20px; color:var(--dim); min-height:26px; }
+  /* Tocador */
+  .tocador { flex:1 1 auto; overflow-y:auto; display:flex; flex-direction:column; align-items:center; gap:10px; padding:0 12px 8px; min-height:0; }
+  .capa { width:min(38vh,300px); height:min(38vh,300px); border-radius:16px; background:#111; border:3px solid #333; object-fit:cover; }
+  .capa.vazia { display:flex; align-items:center; justify-content:center; color:var(--dim); font-size:22px; }
+  .tit2 { font-size:30px; font-weight:700; text-align:center; max-width:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .art2 { font-size:22px; color:var(--dim); text-align:center; }
+  .barra { width:100%; max-width:640px; height:12px; background:#222; border-radius:6px; overflow:hidden; }
+  .barra div { height:100%; width:0; background:var(--ok); }
+  .tempo { font-size:18px; color:var(--dim); }
+  .ctrl { display:grid; grid-template-columns:1fr 1.4fr 1fr; gap:12px; width:100%; max-width:640px; }
+  .ctrl button { font-size:34px; min-height:80px; background:var(--btn); color:var(--fg); border:3px solid #3a4a5c; border-radius:14px; }
+  .busca { display:grid; grid-template-columns:1fr auto; gap:10px; width:100%; max-width:640px; }
+  .busca input { font-size:26px; min-height:64px; background:#000; color:var(--fg); border:3px solid #3a4a5c; border-radius:12px; padding:0 12px; }
+  .busca button { font-size:22px; min-height:64px; padding:0 18px; background:#1d5c33; color:var(--fg); border:3px solid #3ddc6b; border-radius:12px; }
+  .busca button:disabled { background:#222; border-color:#444; color:#777; }
   .midia { flex:0 0 auto; display:grid; grid-template-columns:1fr 1fr; gap:10px; padding:0 10px 10px; }
   .faixa { border:3px solid #333; border-radius:14px; padding:6px 10px; }
   .faixa .tit { font-size:20px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; min-height:26px; }
@@ -55,6 +69,7 @@
 <div id="status">Aguardando o celular…</div>
 <div class="abas">
   <button class="aba sel" id="ab-painel" onclick="aba('painel')">Painel</button>
+  <button class="aba" id="ab-tocador" onclick="aba('tocador')">Tocador</button>
   <button class="aba" id="ab-saude" onclick="aba('saude')">Saúde</button>
   <button class="aba" id="ab-postos" onclick="aba('postos')">Postos</button>
   <button class="aba" id="ab-abastecer" onclick="aba('abastecer')">Abastecer</button>
@@ -68,6 +83,27 @@
     <div class="card" id="c-kml"><div class="lbl" id="kml-lbl">Consumo agora</div><div class="val" id="kml">--</div><div class="unit" id="kml-unit">km/l</div></div>
     <div class="card" id="c-avg"><div class="lbl">Média da viagem</div><div class="val" id="avg">--</div><div class="unit">km/l</div></div>
     <div class="card" id="c-bat"><div class="lbl">Bateria</div><div class="val" id="bat">--</div><div class="unit">V</div></div>
+  </div>
+</div>
+
+<div class="tela" id="t-tocador">
+  <div class="tocador">
+    <img class="capa" id="capa" alt="" style="display:none">
+    <div class="capa vazia" id="capa-vazia">Sem capa</div>
+    <div class="tit2" id="tc-tit">Nada tocando</div>
+    <div class="art2" id="tc-art">&nbsp;</div>
+    <div class="barra"><div id="tc-barra"></div></div>
+    <div class="tempo" id="tc-tempo">&nbsp;</div>
+    <div class="ctrl">
+      <button onclick="cmd('musica.prev')">⏮</button>
+      <button id="tc-play" onclick="cmd('musica.playpause')">▶</button>
+      <button onclick="cmd('musica.next')">⏭</button>
+    </div>
+    <div class="busca">
+      <input type="text" id="busca-txt" placeholder="Buscar música ou cantor" maxlength="100">
+      <button id="busca-btn" onclick="buscarMusica()">Buscar e tocar</button>
+    </div>
+    <div class="aviso" id="busca-aviso">Pesquisa só com o carro parado.</div>
   </div>
 </div>
 
@@ -128,10 +164,15 @@
   function num(v, d) {
     return (v === null || v === undefined || isNaN(v)) ? '--' : Number(v).toFixed(d);
   }
+  function tempo(ms) {
+    if (!ms || ms < 0) return '';
+    var s = Math.floor(ms / 1000), m = Math.floor(s / 60);
+    return m + ':' + ('0' + (s % 60)).slice(-2);
+  }
   var abaAtual = 'painel';
   function aba(nome) {
     abaAtual = nome;
-    ['painel', 'saude', 'postos', 'abastecer'].forEach(function (n) {
+    ['painel', 'tocador', 'saude', 'postos', 'abastecer'].forEach(function (n) {
       el('t-' + n).classList.toggle('sel', n === nome);
       el('ab-' + n).classList.toggle('sel', n === nome);
     });
@@ -177,14 +218,113 @@
       if (p.preco !== null && p.preco !== undefined) det.push('R$ ' + Number(p.preco).toFixed(2) + '/L');
       if (p.distanciaKm !== null && p.distanciaKm !== undefined) det.push(Number(p.distanciaKm).toFixed(1) + ' km');
       det.push(p.visitas + (p.visitas === 1 ? ' visita' : ' visitas'));
-      var titulo = p.nome;
-      var valor = rotuloNota[p.nota] || '';
-      box.appendChild(linha((p.nota || '').toLowerCase(), titulo, valor, det.join(' · ') + (p.resumo ? '\n' + p.resumo : '')));
+      box.appendChild(linha((p.nota || '').toLowerCase(), p.nome, rotuloNota[p.nota] || '', det.join(' · ') + (p.resumo ? '\n' + p.resumo : '')));
     });
+  }
+  var chaveCapa = null;
+  function paintTocador(mu) {
+    if (mu) {
+      el('tc-tit').textContent = mu.titulo || 'Sem título';
+      el('tc-art').textContent = [mu.artista, mu.app].filter(Boolean).join(' · ') || ' ';
+      el('tc-play').textContent = mu.tocando ? '⏸' : '▶';
+      var pct = mu.durMs > 0 ? Math.min(100, mu.posMs / mu.durMs * 100) : 0;
+      el('tc-barra').style.width = pct + '%';
+      el('tc-tempo').textContent = mu.durMs > 0 ? tempo(mu.posMs) + ' / ' + tempo(mu.durMs) : tempo(mu.posMs);
+      if (mu.capa && mu.chave !== chaveCapa) {
+        chaveCapa = mu.chave;
+        var img = el('capa');
+        img.onload = function () { img.style.display = ''; el('capa-vazia').style.display = 'none'; };
+        img.onerror = function () { img.style.display = 'none'; el('capa-vazia').style.display = ''; };
+        img.src = '/capa?k=' + encodeURIComponent(mu.chave);
+      } else if (!mu.capa && chaveCapa !== null) {
+        chaveCapa = null;
+        el('capa').style.display = 'none';
+        el('capa-vazia').style.display = '';
+      }
+    } else {
+      el('tc-tit').textContent = 'Nada tocando';
+      el('tc-art').textContent = ' ';
+      el('tc-play').textContent = '▶';
+      el('tc-barra').style.width = '0%';
+      el('tc-tempo').textContent = ' ';
+      el('capa').style.display = 'none';
+      el('capa-vazia').style.display = '';
+      chaveCapa = null;
+    }
+  }
+  function buscarMusica() {
+    if (!parado) return;
+    var t = el('busca-txt').value.trim();
+    if (!t) { el('busca-aviso').textContent = 'Digite o nome da música ou do cantor.'; return; }
+    fetch('/comando', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ acao: 'musica.buscar', texto: t }) })
+      .then(function () { el('busca-aviso').textContent = 'Buscando "' + t + '" no app de música do celular.'; })
+      .catch(function () { el('busca-aviso').textContent = 'Sem resposta do multimídia.'; });
+  }
+  var escolha = { modo: 'valor', comb: 'gasolina', tanque: 'cheio' };
+  var parado = true;
+  var confirmando = false, confirmaTimer = null;
+  function escolhe(grupo, valor) {
+    escolha[grupo] = valor;
+    if (grupo === 'modo') {
+      el('op-valor').classList.toggle('sel', valor === 'valor');
+      el('op-litros').classList.toggle('sel', valor === 'litros');
+      el('lbl-quant').textContent = valor === 'valor' ? 'R$' : 'litros';
+    } else if (grupo === 'comb') {
+      el('op-gas').classList.toggle('sel', valor === 'gasolina');
+      el('op-etanol').classList.toggle('sel', valor === 'etanol');
+    } else {
+      el('op-cheio').classList.toggle('sel', valor === 'cheio');
+      el('op-parcial').classList.toggle('sel', valor === 'parcial');
+    }
+    atualizaPrevia();
+  }
+  function atualizaPrevia() {
+    var q = parseFloat(el('ab-quant').value), p = parseFloat(el('ab-preco').value);
+    var txt = ' ';
+    if (q > 0 && p > 0) {
+      txt = escolha.modo === 'valor' ? '≈ ' + (q / p).toFixed(2) + ' litros' : '≈ R$ ' + (q * p).toFixed(2) + ' pagos';
+    }
+    el('ab-previa').textContent = txt;
+  }
+  function refreshParado() {
+    el('ab-enviar').disabled = !parado;
+    el('busca-btn').disabled = !parado;
+    el('busca-aviso').textContent = parado ? 'Pesquisa só com o carro parado.' : 'Com o carro andando, a pesquisa fica bloqueada.';
+    if (parado) {
+      el('ab-aviso').textContent = confirmando ? 'Toque de novo para confirmar.' : 'Só com o carro parado. Depois de tocar, toque de novo para confirmar.';
+    } else {
+      el('ab-aviso').textContent = 'Com o carro andando, o abastecimento fica bloqueado.';
+    }
+    el('ab-enviar').textContent = confirmando ? 'Confirmar abastecimento' : 'Registrar no celular';
+  }
+  function enviarAbastecimento() {
+    if (!parado) return;
+    if (!confirmando) {
+      var q = parseFloat(el('ab-quant').value), p = parseFloat(el('ab-preco').value);
+      if (!(q > 0) || !(p > 0)) { el('ab-aviso').textContent = 'Preencha a quantidade e o preço.'; return; }
+      confirmando = true;
+      refreshParado();
+      clearTimeout(confirmaTimer);
+      confirmaTimer = setTimeout(function () { confirmando = false; refreshParado(); }, 6000);
+      return;
+    }
+    clearTimeout(confirmaTimer);
+    confirmando = false;
+    var q2 = parseFloat(el('ab-quant').value), p2 = parseFloat(el('ab-preco').value);
+    var corpo = { acao: 'abastecer', preco: p2, cheio: escolha.tanque === 'cheio', etanol: escolha.comb === 'etanol' };
+    if (escolha.modo === 'valor') corpo.valor = q2; else corpo.litros = q2;
+    fetch('/comando', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(corpo) })
+      .then(function () {
+        el('ab-quant').value = '';
+        atualizaPrevia();
+        el('ab-aviso').textContent = 'Enviado. Confira no celular (Consumo/Postos).';
+      })
+      .catch(function () { el('ab-aviso').textContent = 'Sem resposta do multimídia. Nada foi registrado.'; });
+    refreshParado();
   }
   function paint(d) {
     parado = !(d.speed > 0.5);
-    refreshEnviar();
+    refreshParado();
     el('speed').textContent = num(d.speed, 0);
     el('rpm').textContent = num(d.rpm, 0);
     el('cool').textContent = num(d.coolant, 0);
@@ -205,7 +345,9 @@
     el('c-bat').className = 'card' + (d.rpm > 400 && d.battery !== null && d.battery < 12.6 ? ' bad' : '');
     paintSaude(d.saude || []);
     paintPostos(d.postos || []);
-    paintMidia(d.midia || {});
+    var m = d.midia || {};
+    paintMidia(m);
+    paintTocador(m.musica || null);
   }
   function paintMidia(m) {
     var mu = m.musica;
@@ -228,64 +370,6 @@
       el('r-sub').textContent = ' ';
       el('r-play').textContent = '▶';
     }
-  }
-  var escolha = { modo: 'valor', comb: 'gasolina', tanque: 'cheio' };
-  var parado = true;
-  var confirmando = false, confirmaTimer = null;
-  function escolhe(grupo, valor) {
-    escolha[grupo] = valor;
-    if (grupo === 'modo') {
-      el('op-valor').classList.toggle('sel', valor === 'valor');
-      el('op-litros').classList.toggle('sel', valor === 'litros');
-      el('lbl-quant').textContent = valor === 'valor' ? 'R$' : 'litros';
-    } else if (grupo === 'comb') {
-      el('op-gas').classList.toggle('sel', valor === 'gasolina');
-      el('op-etanol').classList.toggle('sel', valor === 'etanol');
-    } else {
-      el('op-cheio').classList.toggle('sel', valor === 'cheio');
-      el('op-parcial').classList.toggle('sel', valor === 'parcial');
-    }
-    atualizaPrevia();
-  }
-  function atualizaPrevia() {
-    var q = parseFloat(el('ab-quant').value), p = parseFloat(el('ab-preco').value);
-    var txt = '\u00a0';
-    if (q > 0 && p > 0) {
-      txt = escolha.modo === 'valor' ? '≈ ' + (q / p).toFixed(2) + ' litros' : '≈ R$ ' + (q * p).toFixed(2) + ' pagos';
-    }
-    el('ab-previa').textContent = txt;
-  }
-  function refreshEnviar() {
-    el('ab-enviar').disabled = !parado;
-    el('ab-aviso').textContent = parado
-      ? (confirmando ? 'Toque de novo para confirmar.' : 'Só com o carro parado. Depois de tocar, toque de novo para confirmar.')
-      : 'Com o carro andando, o abastecimento fica bloqueado.';
-    el('ab-enviar').textContent = confirmando ? 'Confirmar abastecimento' : 'Registrar no celular';
-  }
-  function enviarAbastecimento() {
-    if (!parado) return;
-    if (!confirmando) {
-      var q = parseFloat(el('ab-quant').value), p = parseFloat(el('ab-preco').value);
-      if (!(q > 0) || !(p > 0)) { el('ab-aviso').textContent = 'Preencha a quantidade e o preço.'; return; }
-      confirmando = true;
-      refreshEnviar();
-      clearTimeout(confirmaTimer);
-      confirmaTimer = setTimeout(function () { confirmando = false; refreshEnviar(); }, 6000);
-      return;
-    }
-    clearTimeout(confirmaTimer);
-    confirmando = false;
-    var q2 = parseFloat(el('ab-quant').value), p2 = parseFloat(el('ab-preco').value);
-    var corpo = { acao: 'abastecer', preco: p2, cheio: escolha.tanque === 'cheio', etanol: escolha.comb === 'etanol' };
-    if (escolha.modo === 'valor') corpo.valor = q2; else corpo.litros = q2;
-    fetch('/comando', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(corpo) })
-      .then(function () {
-        el('ab-quant').value = '';
-        atualizaPrevia();
-        el('ab-aviso').textContent = 'Enviado. Confira no celular (Consumo/Postos).';
-      })
-      .catch(function () { el('ab-aviso').textContent = 'Sem resposta do multimídia. Nada foi registrado.'; });
-    refreshEnviar();
   }
   function cmd(acao) {
     fetch('/comando', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ acao: acao }) })

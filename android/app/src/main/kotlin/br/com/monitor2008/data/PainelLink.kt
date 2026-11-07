@@ -3,11 +3,13 @@ package br.com.monitor2008.data
 import android.app.Application
 import android.os.Handler
 import android.os.Looper
+import android.graphics.Bitmap
 import br.com.monitor2008.domain.RefuelMath
 import br.com.monitor2008.ui.MonitorEngine
 import br.com.monitor2008.ui.UiState
 import org.json.JSONArray
 import org.json.JSONObject
+import java.io.ByteArrayOutputStream
 import java.net.HttpURLConnection
 import java.net.Inet4Address
 import java.net.NetworkInterface
@@ -39,6 +41,9 @@ object PainelLink {
     private var failCount = 0
     @Volatile private var lastScanMs = 0L
     private val scanning = AtomicBoolean(false)
+    /** Chave (app|título|artista) da capa já enviada ao multimídia e se um envio está em curso. */
+    @Volatile private var capaSent: String? = null
+    @Volatile private var capaSending = false
 
     /**
      * Envia os números para o multimídia. Usa o endereço achado pela busca, ou o digitado em
@@ -55,6 +60,19 @@ object PainelLink {
         }
         val body = toJson(app, ui).toString().toByteArray(Charsets.UTF_8)
         pool.execute { post(app, target, body) }
+        val np = if (Features.mediaControl) MediaWatcher.get(app).now.value else null
+        val art = np?.art
+        val chave = np?.let { chaveDaMusica(it) }
+        if (art != null && chave != null && chave != capaSent && !capaSending) {
+            capaSending = true
+            pool.execute {
+                try {
+                    if (postCapa(target, art)) capaSent = chave
+                } finally {
+                    capaSending = false
+                }
+            }
+        }
     }
 
     /** "10.12.38.252" ou "10.12.38.252:8080" viram "10.12.38.252:8080"; vazio vira null. */
@@ -123,6 +141,29 @@ object PainelLink {
     private fun isCellular(name: String): Boolean =
         listOf("rmnet", "ccmni", "v4-", "tun", "dummy").any { name.startsWith(it) }
 
+    private fun chaveDaMusica(n: NowPlaying): String = "${n.pkg}|${n.title}|${n.artist}"
+
+    /** Capa reduzida (300 px, JPEG) para o painel. Devolve true se o multimídia recebeu. */
+    private fun postCapa(target: String, art: Bitmap): Boolean = try {
+        val pequena = Bitmap.createScaledBitmap(art, 300, 300, true)
+        val out = ByteArrayOutputStream()
+        pequena.compress(Bitmap.CompressFormat.JPEG, 80, out)
+        val bytes = out.toByteArray()
+        val c = URL("http://$target/capa").openConnection() as HttpURLConnection
+        c.requestMethod = "POST"
+        c.connectTimeout = 1500
+        c.readTimeout = 1500
+        c.doOutput = true
+        c.setFixedLengthStreamingMode(bytes.size)
+        c.setRequestProperty("Content-Type", "image/jpeg")
+        c.outputStream.use { it.write(bytes) }
+        val ok = c.responseCode == 204
+        c.disconnect()
+        ok
+    } catch (_: Exception) {
+        false
+    }
+
     fun toJson(app: Application, ui: UiState): JSONObject {
         val s = ui.sample
         return JSONObject().apply {
@@ -181,6 +222,10 @@ object PainelLink {
                     put("titulo", n.title ?: "")
                     put("artista", n.artist ?: "")
                     put("tocando", n.playing)
+                    put("posMs", n.positionNow())
+                    put("durMs", n.durationMs)
+                    put("chave", chaveDaMusica(n))
+                    put("capa", n.art != null)
                 }
             } ?: JSONObject.NULL
         } else JSONObject.NULL
@@ -252,6 +297,16 @@ object PainelLink {
         MonitorEngine.get(app).registerRefuel(litros, preco, o.optBoolean("cheio", true), o.optBoolean("etanol", false))
     }
 
+    /** Busca de música ou cantor no app que está tocando (ou no app de música padrão). */
+    private fun buscar(app: Application, texto: String) {
+        val q = texto.trim().take(100)
+        if (q.isEmpty()) return
+        val media = MediaWatcher.get(app)
+        val launcher = AppLauncher(app)
+        val pkg = media.now.value?.pkg ?: launcher.musicFor(null) ?: return
+        if (!media.playFromSearchQuietly(pkg, q)) launcher.playFromSearch(pkg, q, null)
+    }
+
     /** Comandos vindos dos botões do painel. Música só com o acesso às notificações (multimídia). */
     private fun execute(app: Application, cmd: JSONObject) {
         when (cmd.optString("acao")) {
@@ -262,6 +317,7 @@ object PainelLink {
             "radio.playpause" -> RadioPlayer.get(app).let { r ->
                 if (r.state.value.playing) r.pause() else r.resume()
             }
+            "musica.buscar" -> if (Features.mediaControl) buscar(app, cmd.optString("texto"))
             "radio.next" -> RadioPlayer.get(app).step(true)
             "radio.prev" -> RadioPlayer.get(app).step(false)
         }

@@ -34,6 +34,7 @@ class PainelServerActivity : Activity() {
     @Volatile private var running = false
     @Volatile private var latestJson: String? = null
     @Volatile private var latestAtMs = 0L
+    @Volatile private var capa: ByteArray? = null
     private var web: WebView? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -109,6 +110,15 @@ class PainelServerActivity : Activity() {
                         }
                         val json = JSONObject().put("comandos", cmds).toString()
                         send(out, 200, "application/json; charset=utf-8", json.toByteArray(Charsets.UTF_8))
+                    }
+                    method == "POST" && path == "/capa" -> {
+                        if (body.isNotEmpty()) capa = body
+                        send(out, 204, "text/plain; charset=utf-8", ByteArray(0))
+                    }
+                    method == "GET" && path == "/capa" -> {
+                        val img = capa
+                        if (img != null) send(out, 200, "image/jpeg", img)
+                        else send(out, 404, "text/plain; charset=utf-8", ByteArray(0))
                     }
                     method == "POST" && path == "/comando" -> {
                         val obj = try { JSONObject(String(body, Charsets.UTF_8)) } catch (_: Exception) { null }
@@ -191,13 +201,13 @@ class PainelServerActivity : Activity() {
     companion object {
         const val PORT = 8080
         private const val MAX_HEAD = 16_384
-        private const val MAX_BODY = 65_536
+        private const val MAX_BODY = 300_000
 
         /** Botões do painel que o celular executa (ver PainelLink.execute). */
         private val COMANDOS = setOf(
             "musica.playpause", "musica.next", "musica.prev",
             "radio.playpause", "radio.next", "radio.prev",
-            "abastecer",
+            "abastecer", "musica.buscar",
         )
         private const val VALIDADE_MS = 20_000L
         /** Fila de comandos (instante, JSON) esperando o próximo envio do celular. */
@@ -207,6 +217,7 @@ class PainelServerActivity : Activity() {
         private fun comandoValido(o: JSONObject): Boolean {
             val acao = o.optString("acao")
             if (acao !in COMANDOS) return false
+            if (acao == "musica.buscar") return o.optString("texto").isNotBlank() && o.optString("texto").length <= 100
             if (acao != "abastecer") return true
             val preco = o.optDouble("preco", Double.NaN)
             val litros = o.optDouble("litros", Double.NaN)
