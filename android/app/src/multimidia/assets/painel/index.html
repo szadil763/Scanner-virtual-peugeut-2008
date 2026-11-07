@@ -10,8 +10,8 @@
   body { margin:0; background:var(--bg); color:var(--fg); font-family:system-ui,sans-serif; height:100vh; overflow:hidden; display:flex; flex-direction:column; }
   #status { font-size:20px; padding:6px 16px; color:var(--dim); flex:0 0 auto; }
   #status.on { color:var(--ok); }
-  .abas { flex:0 0 auto; display:grid; grid-template-columns:repeat(7,1fr); gap:6px; padding:0 8px 8px; }
-  .aba { font-size:17px; min-height:56px; background:var(--btn); color:var(--fg); border:2px solid #3a4a5c; border-radius:12px; }
+  .abas { flex:0 0 auto; display:grid; grid-template-columns:repeat(8,1fr); gap:6px; padding:0 8px 8px; }
+  .aba { font-size:16px; min-height:56px; background:var(--btn); color:var(--fg); border:2px solid #3a4a5c; border-radius:12px; }
   .aba.sel { background:var(--sel); border-color:#5b9be0; }
   .tela { flex:1 1 auto; min-height:0; display:none; }
   .tela.sel { display:flex; flex-direction:column; }
@@ -84,6 +84,7 @@
   <button class="aba" id="ab-abastecer" onclick="aba('abastecer')">Abastecer</button>
   <button class="aba" id="ab-manutencao" onclick="aba('manutencao')">Manutenção</button>
   <button class="aba" id="ab-consumo" onclick="aba('consumo')">Consumo</button>
+  <button class="aba" id="ab-diag" onclick="aba('diag')">Diagnóstico</button>
 </div>
 
 <div class="tela sel" id="t-painel">
@@ -121,6 +122,17 @@
 <div class="tela" id="t-saude"><div class="lista" id="saude-lista"></div></div>
 <div class="tela" id="t-postos"><div class="lista" id="postos-lista"></div></div>
 <div class="tela" id="t-manutencao"><div class="lista" id="manut-lista"></div></div>
+<div class="tela" id="t-diag">
+  <div class="consumo">
+    <div class="item" id="dg-estado"><div class="t" id="dg-t">Conexão</div><div class="v" id="dg-v">--</div><div class="d" id="dg-d"></div></div>
+    <div class="lbl">Falhas armazenadas na central</div>
+    <button class="feito" style="margin-top:0" onclick="lerFalhas()">Ler falhas agora (só consulta, não apaga)</button>
+    <div class="lista" id="dg-falhas" style="padding:0"></div>
+    <div class="lbl">Registro do adaptador (últimas linhas)</div>
+    <pre id="dg-registro" style="margin:0;background:#0b0f14;border:2px solid #222;border-radius:12px;padding:10px;font-size:14px;color:#cfd8e3;max-height:260px;overflow:auto;white-space:pre-wrap"></pre>
+  </div>
+</div>
+
 <div class="tela" id="t-consumo">
   <div class="consumo">
     <div class="grafs">
@@ -200,7 +212,7 @@
   var abaAtual = 'painel';
   function aba(nome) {
     abaAtual = nome;
-    ['painel', 'tocador', 'saude', 'postos', 'abastecer', 'manutencao', 'consumo'].forEach(function (n) {
+    ['painel', 'tocador', 'saude', 'postos', 'abastecer', 'manutencao', 'consumo', 'diag'].forEach(function (n) {
       el('t-' + n).classList.toggle('sel', n === nome);
       el('ab-' + n).classList.toggle('sel', n === nome);
     });
@@ -381,6 +393,37 @@
       box.appendChild(linha('', dataDia(a.dia) + ' · ' + Number(a.litros).toFixed(1) + ' L', '', det));
     });
   }
+  var ultimoDiag = '';
+  var rotuloEstadoConexao = { CONNECTED: 'Conectado', CONNECTING: 'Conectando...', ERROR: 'Com erro', IDLE: 'Parado' };
+  function lerFalhas() {
+    fetch('/comando', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ acao: 'diag.lerFalhas' }) })
+      .catch(function () { el('status').textContent = 'Sem resposta do multimídia'; });
+  }
+  function paintDiag(g) {
+    if (!g) return;
+    var chave = JSON.stringify(g);
+    if (chave === ultimoDiag) return;
+    ultimoDiag = chave;
+    el('dg-v').textContent = rotuloEstadoConexao[g.estado] || g.estado;
+    el('dg-estado').className = 'item ' + (g.estado === 'CONNECTED' ? 'ok' : g.estado === 'ERROR' ? 'alerta' : '');
+    el('dg-d').textContent = [g.carro, g.protocolo, g.mensagem].filter(Boolean).join(' · ') + (g.simulado ? ' · DADOS SIMULADOS' : '');
+    var box = el('dg-falhas');
+    box.textContent = '';
+    if (!g.falhasLidas) {
+      box.appendChild(linha('', 'Falhas ainda não lidas', '', 'Toque em "Ler falhas agora" com a ignição ligada.'));
+    } else if (!g.falhas || g.falhas.length === 0) {
+      box.appendChild(linha('ok', 'Nenhuma falha armazenada', '', ''));
+    } else {
+      g.falhas.forEach(function (f) { box.appendChild(linha('alerta', f.codigo, f.descricao, f.dica)); });
+    }
+    if (g.pendentes && g.pendentes.length) {
+      box.appendChild(linha('warn', 'Pendentes', g.pendentes.join(', '), 'Falhas que apareceram e ainda não se confirmaram.'));
+    }
+    var reg = el('dg-registro');
+    var perto = reg.scrollTop + reg.clientHeight >= reg.scrollHeight - 30;
+    reg.textContent = (g.registro || []).join('\n');
+    if (perto) reg.scrollTop = reg.scrollHeight;
+  }
   function buscarMusica() {
     if (!parado) return;
     var t = el('busca-txt').value.trim();
@@ -476,6 +519,7 @@
     paintPostos(d.postos || []);
     paintManut(d.manutencao || []);
     paintConsumo(d);
+    paintDiag(d.diagnostico);
     var m = d.midia || {};
     paintMidia(m);
     paintTocador(m.musica || null);

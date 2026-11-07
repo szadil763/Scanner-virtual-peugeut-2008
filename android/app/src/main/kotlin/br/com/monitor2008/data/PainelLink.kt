@@ -4,6 +4,7 @@ import android.app.Application
 import android.os.Handler
 import android.os.Looper
 import android.graphics.Bitmap
+import br.com.monitor2008.domain.DtcInfo
 import br.com.monitor2008.domain.MaintCatalog
 import br.com.monitor2008.domain.RefuelMath
 import br.com.monitor2008.ui.MonitorEngine
@@ -185,6 +186,7 @@ object PainelLink {
             put("postos", postos(ui))
             put("manutencao", manutencao(ui))
             put("consumo", consumo(ui))
+            put("diagnostico", diagnostico(app, ui))
         }
     }
 
@@ -202,6 +204,27 @@ object PainelLink {
 
     private fun r1(d: Double): Double = Math.round(d * 10) / 10.0
     private fun r2(d: Double): Double = Math.round(d * 100) / 100.0
+
+    /** Diagnóstico: conexão, falhas (só leitura), e o registro do adaptador para conferir. */
+    private fun diagnostico(app: Application, ui: UiState): JSONObject = JSONObject().apply {
+        put("estado", ui.conn.state.name)
+        put("mensagem", ui.conn.message)
+        put("protocolo", ui.conn.protocol)
+        put("carro", ui.vehicle?.name ?: "")
+        put("simulado", ui.simulated)
+        put("falhasLidas", ui.dtcs != null)
+        put("falhas", JSONArray().apply {
+            (ui.dtcs ?: emptyList()).forEach { c ->
+                put(JSONObject().apply {
+                    put("codigo", c)
+                    put("descricao", DtcInfo.describe(c))
+                    put("dica", DtcInfo.hint(c) ?: "")
+                })
+            }
+        })
+        put("pendentes", JSONArray(ui.pendingDtcs ?: emptyList<String>()))
+        put("registro", JSONArray(MonitorEngine.get(app).diagnosticLog().takeLast(60)))
+    }
 
     /** Dados da tela Consumo: gráficos, viagem e últimos abastecimentos (só leitura no multimídia). */
     private fun consumo(ui: UiState): JSONObject = JSONObject().apply {
@@ -367,6 +390,7 @@ object PainelLink {
             }
             "musica.buscar" -> if (Features.mediaControl) buscar(app, cmd.optString("texto"))
             "manutencao.feito" -> feitoManutencao(app, cmd.optString("id"))
+            "diag.lerFalhas" -> MonitorEngine.get(app).readDtcs()
             "radio.next" -> RadioPlayer.get(app).step(true)
             "radio.prev" -> RadioPlayer.get(app).step(false)
         }
