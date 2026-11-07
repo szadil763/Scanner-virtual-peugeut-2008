@@ -28,11 +28,11 @@
             </intent-filter>
         </service>
 
-        <!-- TESTE do servidor no multimídia (ver data/TestServerActivity). Remover depois do teste. -->
+        <!-- Painel no multimídia: recebe os números do celular e mostra a tela (ver data/PainelServerActivity). -->
         <activity
-            android:name=".data.TestServerActivity"
+            android:name=".data.PainelServerActivity"
             android:exported="true"
-            android:label="Teste servidor">
+            android:label="Painel Monitor 2008">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />

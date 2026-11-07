@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Painel</title>
+<style>
+  :root { --bg:#000; --fg:#fff; --dim:#a8b0b8; --ok:#3ddc6b; --warn:#ffcc33; --bad:#ff5555; }
+  body { margin:0; background:var(--bg); color:var(--fg); font-family:system-ui,sans-serif; height:100vh; overflow:hidden; }
+  #status { font-size:20px; padding:10px 16px; color:var(--dim); }
+  #status.on { color:var(--ok); }
+  .grid { display:grid; grid-template-columns:repeat(3,1fr); gap:10px; padding:0 12px 12px; height:calc(100vh - 56px); box-sizing:border-box; }
+  .card { border:3px solid #333; border-radius:14px; padding:8px; display:flex; flex-direction:column; justify-content:center; align-items:center; }
+  .card.warn { border-color:var(--warn); }
+  .card.bad { border-color:var(--bad); }
+  .lbl { font-size:22px; color:var(--dim); }
+  .val { font-size:14vw; font-weight:700; line-height:1.05; }
+  .card.warn .val { color:var(--warn); }
+  .card.bad .val { color:var(--bad); }
+  .unit { font-size:24px; color:var(--dim); }
+</style>
+</head>
+<body>
+<div id="status">Aguardando o celular…</div>
+<div class="grid">
+  <div class="card" id="c-speed"><div class="lbl">Velocidade</div><div class="val" id="speed">--</div><div class="unit">km/h</div></div>
+  <div class="card" id="c-rpm"><div class="lbl">Rotação</div><div class="val" id="rpm">--</div><div class="unit">rpm</div></div>
+  <div class="card" id="c-cool"><div class="lbl">Motor</div><div class="val" id="cool">--</div><div class="unit">°C</div></div>
+  <div class="card" id="c-kml"><div class="lbl">Consumo agora</div><div class="val" id="kml">--</div><div class="unit">km/l</div></div>
+  <div class="card" id="c-avg"><div class="lbl">Média da viagem</div><div class="val" id="avg">--</div><div class="unit">km/l</div></div>
+  <div class="card" id="c-bat"><div class="lbl">Bateria</div><div class="val" id="bat">--</div><div class="unit">V</div></div>
+</div>
+<script>
+  function el(id) { return document.getElementById(id); }
+  function num(v, d) {
+    return (v === null || v === undefined || isNaN(v)) ? '--' : Number(v).toFixed(d);
+  }
+  function paint(d) {
+    el('speed').textContent = num(d.speed, 0);
+    el('rpm').textContent = num(d.rpm, 0);
+    el('cool').textContent = num(d.coolant, 0);
+    el('kml').textContent = num(d.kmL, 1);
+    el('avg').textContent = num(d.tripAvgKmL, 1);
+    el('bat').textContent = num(d.battery, 1);
+    el('c-cool').className = 'card' + (d.coolant >= 110 ? ' bad' : d.coolant >= 100 ? ' warn' : '');
+    el('c-bat').className = 'card' + (d.rpm > 400 && d.battery !== null && d.battery < 12.6 ? ' bad' : '');
+  }
+  function poll() {
+    var st = el('status');
+    fetch('/estado?t=' + Date.now(), { cache: 'no-store' })
+      .then(function (r) { return r.json(); })
+      .then(function (s) {
+        if (s.dados && s.idadeMs >= 0 && s.idadeMs < 4000) {
+          if (s.dados.ok === false) {
+            st.textContent = 'Celular sem conexão com o carro';
+            st.className = '';
+          } else {
+            st.textContent = 'Conectado ao celular';
+            st.className = 'on';
+          }
+          paint(s.dados);
+        } else {
+          st.textContent = 'Sem dados do celular. Abra o Monitor no celular.';
+          st.className = '';
+        }
+      })
+      .catch(function () {
+        st.textContent = 'Sem resposta do multimídia';
+        st.className = '';
+      })
+      .then(function () { setTimeout(poll, 700); });
+  }
+  poll();
+</script>
+</body>
+</html>

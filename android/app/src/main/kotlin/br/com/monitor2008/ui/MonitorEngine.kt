@@ -1,5 +1,7 @@
 package br.com.monitor2008.ui
 
+import br.com.monitor2008.data.PainelLink
+
 import android.annotation.SuppressLint
 import android.app.Application
 import android.bluetooth.BluetoothManager
@@ -617,7 +619,10 @@ class MonitorEngine private constructor(private val app: Application) {
 
     // ---------- estado exposto ----------
 
-    private fun publish() { _ui.value = snapshot() }
+    private fun publish() {
+        _ui.value = snapshot()
+        PainelLink.maybeSend(store.painelAddress, _ui.value)
+    }
 
     private fun snapshot(): UiState {
         val today = LocalDate.now().toEpochDay()

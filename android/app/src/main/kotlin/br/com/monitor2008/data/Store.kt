@@ -210,6 +210,11 @@ class Store(context: Context) {
         get() = p.getBoolean("backgroundReading", true)
         set(v) { p.edit().putBoolean("backgroundReading", v).apply() }
 
+    /** Endereço do painel no multimídia (ex.: 10.12.38.252:8080). Vazio = não envia. */
+    var painelAddress: String
+        get() = p.getString("painelAddress", "") ?: ""
+        set(v) { p.edit().putString("painelAddress", v.trim()).apply() }
+
     /** Tela ao dirigir: AUTO, ALWAYS_FULL ou ALWAYS_SIMPLE (domain/DriveMode). */
     var driveMode: String
         get() = p.getString("driveMode", "AUTO") ?: "AUTO"
