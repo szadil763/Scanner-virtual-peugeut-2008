@@ -3,6 +3,8 @@ package br.com.monitor2008.data
 import android.app.Application
 import android.os.Handler
 import android.os.Looper
+import br.com.monitor2008.domain.RefuelMath
+import br.com.monitor2008.ui.MonitorEngine
 import br.com.monitor2008.ui.UiState
 import org.json.JSONArray
 import org.json.JSONObject
@@ -217,8 +219,8 @@ object PainelLink {
                 val arr = JSONObject(txt).optJSONArray("comandos")
                 if (arr != null) {
                     for (i in 0 until arr.length()) {
-                        val acao = arr.optString(i)
-                        main.post { execute(app, acao) }
+                        val cmd = arr.optJSONObject(i) ?: continue
+                        main.post { execute(app, cmd) }
                     }
                 }
             }
@@ -233,9 +235,27 @@ object PainelLink {
         }
     }
 
+    /**
+     * Abastecimento pelo painel: mesmo caminho da tela do celular (registerRefuel), que já não
+     * registra com o carro andando. Sem posto (o GPS fica no celular): o posto entra depois.
+     */
+    private fun abastecer(app: Application, o: JSONObject) {
+        val preco = o.optDouble("preco", Double.NaN)
+        if (!preco.isFinite() || preco <= 0) return
+        val litros: Double? = if (o.has("litros")) {
+            o.optDouble("litros", Double.NaN).takeIf { it.isFinite() && it > 0 }
+        } else {
+            o.optDouble("valor", Double.NaN).takeIf { it.isFinite() && it > 0 }
+                ?.let { RefuelMath.litersFromAmount(it, preco) }
+        }
+        if (litros == null) return
+        MonitorEngine.get(app).registerRefuel(litros, preco, o.optBoolean("cheio", true), o.optBoolean("etanol", false))
+    }
+
     /** Comandos vindos dos botões do painel. Música só com o acesso às notificações (multimídia). */
-    private fun execute(app: Application, acao: String) {
-        when (acao) {
+    private fun execute(app: Application, cmd: JSONObject) {
+        when (cmd.optString("acao")) {
+            "abastecer" -> abastecer(app, cmd)
             "musica.playpause" -> if (Features.mediaControl) MediaWatcher.get(app).playPause()
             "musica.next" -> if (Features.mediaControl) MediaWatcher.get(app).next()
             "musica.prev" -> if (Features.mediaControl) MediaWatcher.get(app).previous()

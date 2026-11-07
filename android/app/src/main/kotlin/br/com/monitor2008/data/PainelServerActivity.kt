@@ -101,18 +101,20 @@ class PainelServerActivity : Activity() {
                         latestAtMs = System.currentTimeMillis()
                         // Resposta: os comandos que os botões pediram desde o último envio.
                         val cmds = JSONArray()
+                        val agora = System.currentTimeMillis()
                         while (true) {
-                            val c = pending.poll() ?: break
-                            cmds.put(c)
+                            val item = pending.poll() ?: break
+                            // Comando velho (celular estava desligado) não vale: abastecimento não entra depois.
+                            if (agora - item.first <= VALIDADE_MS) cmds.put(JSONObject(item.second))
                         }
                         val json = JSONObject().put("comandos", cmds).toString()
                         send(out, 200, "application/json; charset=utf-8", json.toByteArray(Charsets.UTF_8))
                     }
                     method == "POST" && path == "/comando" -> {
-                        val acao = try { JSONObject(String(body, Charsets.UTF_8)).optString("acao") } catch (_: Exception) { "" }
-                        if (acao in COMANDOS) {
-                            pending.add(acao)
-                            // Fila curta: se o celular não estiver ligado, não acumula comandos antigos.
+                        val obj = try { JSONObject(String(body, Charsets.UTF_8)) } catch (_: Exception) { null }
+                        if (obj != null && comandoValido(obj)) {
+                            pending.add(System.currentTimeMillis() to obj.toString())
+                            // Fila curta: se o celular não estiver ligado, não acumula comandos.
                             while (pending.size > 5) pending.poll()
                         }
                         send(out, 204, "text/plain; charset=utf-8", ByteArray(0))
@@ -195,8 +197,24 @@ class PainelServerActivity : Activity() {
         private val COMANDOS = setOf(
             "musica.playpause", "musica.next", "musica.prev",
             "radio.playpause", "radio.next", "radio.prev",
+            "abastecer",
         )
-        private val pending = ConcurrentLinkedQueue<String>()
+        private const val VALIDADE_MS = 20_000L
+        /** Fila de comandos (instante, JSON) esperando o próximo envio do celular. */
+        private val pending = ConcurrentLinkedQueue<Pair<Long, String>>()
+
+        /** Confere o pedido antes de guardar: ação conhecida e, no abastecimento, valores plausíveis. */
+        private fun comandoValido(o: JSONObject): Boolean {
+            val acao = o.optString("acao")
+            if (acao !in COMANDOS) return false
+            if (acao != "abastecer") return true
+            val preco = o.optDouble("preco", Double.NaN)
+            val litros = o.optDouble("litros", Double.NaN)
+            val valor = o.optDouble("valor", Double.NaN)
+            val precoOk = preco.isFinite() && preco in 1.0..30.0
+            val quantidadeOk = (litros.isFinite() && litros in 0.5..200.0) || (valor.isFinite() && valor in 1.0..2000.0)
+            return precoOk && quantidadeOk
+        }
 
         /** Endereços IPv4 deste aparelho, sem o loopback (ex.: 10.12.38.252). */
         fun addresses(): List<String> = try {
