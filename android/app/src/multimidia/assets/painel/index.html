@@ -4,6 +4,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Painel</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <style>
   :root { --bg:#000; --fg:#fff; --dim:#a8b0b8; --ok:#3ddc6b; --warn:#ffcc33; --bad:#ff5555; --btn:#1b2430; --sel:#1f5fa8; }
   * { box-sizing:border-box; }
@@ -158,11 +160,13 @@
 
 <div class="tela" id="t-mapa">
   <div class="form">
-    <div class="aviso" style="font-size:22px">O mapa abre no celular (Google Maps ou Waze). A rota aparece na tela do celular.</div>
+    <div id="mapa-div" style="height:330px;border-radius:14px;border:2px solid #222;flex:0 0 auto"></div>
+    <div class="aviso" style="font-size:20px">Mapa: sua posição (azul), o destino e a rota. A navegação com as instruções fica no celular (Google Maps ou Waze).</div>
     <button class="enviar" style="min-height:80px" onclick="mapaAbrir()">Abrir o mapa no celular</button>
     <div class="lbl">Para onde?</div>
     <input type="text" id="mapa-dest" maxlength="150" placeholder="Endereço ou lugar salvo (ex.: Casa)" style="font-size:28px;min-height:64px;background:#000;color:var(--fg);border:3px solid #3a4a5c;border-radius:12px;padding:0 12px">
     <button class="enviar" id="mapa-ir" style="min-height:72px" onclick="mapaRota()">Traçar a rota no celular</button>
+    <button class="feito" style="margin-top:0" onclick="mapaLimpar()">Limpar o destino</button>
     <div class="aviso" id="mapa-aviso">Digitar o destino só com o carro parado.</div>
   </div>
 </div>
@@ -263,6 +267,7 @@
   var abaAtual = 'painel';
   function aba(nome) {
     abaAtual = nome;
+    if (nome === 'mapa' && mapaObj) setTimeout(function () { mapaObj.invalidateSize(); }, 150);
     ['painel', 'tocador', 'saude', 'postos', 'abastecer', 'manutencao', 'consumo', 'diag', 'ajustes', 'mapa'].forEach(function (n) {
       el('t-' + n).classList.toggle('sel', n === nome);
       el('ab-' + n).classList.toggle('sel', n === nome);
@@ -612,6 +617,29 @@
     el('pend').style.display = 'none';
     fetch('/comando', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ acao: 'pendente.cancelar' }) });
   }
+  var mapaObj = null, camadas = null, ultimoMapa = '';
+  function paintMapa(m) {
+    if (typeof L === 'undefined') { el('mapa-aviso').textContent = 'Mapa indisponível: o multimídia precisa de internet.'; return; }
+    if (!mapaObj) {
+      mapaObj = L.map('mapa-div').setView([-23.55, -46.63], 15);
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '© OpenStreetMap' }).addTo(mapaObj);
+      camadas = L.layerGroup().addTo(mapaObj);
+    }
+    var chave = JSON.stringify(m);
+    if (chave === ultimoMapa) return;
+    ultimoMapa = chave;
+    camadas.clearLayers();
+    var pts = [];
+    if (m.eu) { L.circleMarker([m.eu[0], m.eu[1]], { radius: 9, color: '#5b9be0', fillColor: '#5b9be0', fillOpacity: 1 }).addTo(camadas); pts.push([m.eu[0], m.eu[1]]); }
+    if (m.destino) { L.marker([m.destino.lat, m.destino.lon]).bindPopup(m.destino.nome).addTo(camadas); pts.push([m.destino.lat, m.destino.lon]); }
+    if (m.rota && m.rota.length > 1) { L.polyline(m.rota, { color: '#3ddc6b', weight: 6 }).addTo(camadas); }
+    if (pts.length === 1) mapaObj.setView(pts[0], 16);
+    else if (pts.length > 1) mapaObj.fitBounds(pts, { padding: [30, 30] });
+  }
+  function mapaLimpar() {
+    fetch('/comando', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ acao: 'mapa.limpar' }) });
+    el('mapa-aviso').textContent = 'Destino limpo.';
+  }
   function mapaAbrir() {
     fetch('/comando', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ acao: 'mapa.abrir' }) })
       .then(function () { el('mapa-aviso').textContent = 'Abrindo o mapa no celular.'; })
@@ -724,6 +752,7 @@
     paintConsumo(d);
     paintDiag(d.diagnostico);
     paintAjustes(d.ajustes);
+    paintMapa(d.mapa || {});
     falarResposta(d);
     pendenteAtualId = d.pendenteId;
     if (d.aviso) el('abast-info').textContent = d.aviso;

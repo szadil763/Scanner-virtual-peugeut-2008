@@ -239,7 +239,7 @@ class PainelServerActivity : Activity() {
         private val COMANDOS = setOf(
             "musica.playpause", "musica.next", "musica.prev",
             "radio.playpause", "radio.next", "radio.prev",
-            "abastecer", "musica.buscar", "manutencao.feito", "diag.lerFalhas", "ajuste.sol", "ajuste.direcao", "voz.ouvir", "pendente.cancelar", "mapa.abrir", "mapa.rota",
+            "abastecer", "musica.buscar", "manutencao.feito", "diag.lerFalhas", "ajuste.sol", "ajuste.direcao", "voz.ouvir", "pendente.cancelar", "mapa.abrir", "mapa.rota", "mapa.limpar",
         )
         private const val VALIDADE_MS = 20_000L
         /** Fila de comandos (instante, JSON) esperando o próximo envio do celular. */
@@ -249,7 +249,7 @@ class PainelServerActivity : Activity() {
         private fun comandoValido(o: JSONObject): Boolean {
             val acao = o.optString("acao")
             if (acao !in COMANDOS) return false
-            if (acao == "diag.lerFalhas" || acao == "pendente.cancelar" || acao == "mapa.abrir") return true
+            if (acao == "diag.lerFalhas" || acao == "pendente.cancelar" || acao == "mapa.abrir" || acao == "mapa.limpar") return true
             if (acao == "mapa.rota") return o.optString("texto").isNotBlank() && o.optString("texto").length <= 150
             if (acao == "ajuste.sol" || acao == "voz.ouvir") return true
             if (acao == "ajuste.direcao") return o.optString("valor") in setOf("AUTO", "ALWAYS_FULL", "ALWAYS_SIMPLE")

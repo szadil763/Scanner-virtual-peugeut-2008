@@ -1,6 +1,7 @@
 package br.com.monitor2008.data
 
 import android.app.Application
+import android.location.Geocoder
 import android.os.Handler
 import android.os.Looper
 import android.graphics.Bitmap
@@ -28,6 +29,7 @@ import java.util.Collections
 import java.util.concurrent.Future
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicReference
+import java.util.Locale
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 
@@ -65,6 +67,77 @@ object PainelLink {
     @Volatile private var pendenteId = 0
     /** Resultado do último abastecimento pelo painel (posto identificado ou o motivo de não ter achado). */
     @Volatile private var avisoAbastecimento = ""
+    /** Mapa no painel: posição do celular, destino e rota (OpenStreetMap no multimídia). */
+    @Volatile private var meuLugar: Pair<Double, Double>? = null
+    @Volatile private var meuLugarMs = 0L
+    @Volatile private var destino: JSONObject? = null
+    @Volatile private var rota: JSONArray? = null
+
+    /** Marca o destino (geocodificado pelo celular) e busca a rota a partir da posição atual. */
+    fun marcarDestino(app: Application, nome: String) {
+        scope.launch(Dispatchers.IO) {
+            val achado = try {
+                Geocoder(app, Locale("pt", "BR")).getFromLocationName(nome, 1)?.firstOrNull()
+            } catch (_: Exception) { null }
+            if (achado == null) {
+                destino = null
+                rota = null
+                enviarFala("Não achei o endereço $nome no mapa.")
+                return@launch
+            }
+            destino = JSONObject().apply {
+                put("nome", nome)
+                put("lat", achado.latitude)
+                put("lon", achado.longitude)
+            }
+            rota = null
+            meuLugar?.let { rota = buscarRota(it, achado.latitude to achado.longitude) }
+        }
+    }
+
+    fun limparMapa() {
+        destino = null
+        rota = null
+    }
+
+    /** Rota de carro entre dois pontos (OSRM), reduzida para o desenho no multimídia. */
+    private fun buscarRota(a: Pair<Double, Double>, b: Pair<Double, Double>): JSONArray? = try {
+        val c = URL("https://router.project-osrm.org/route/v1/driving/${a.second},${a.first};${b.second},${b.first}?overview=full&geometries=geojson")
+            .openConnection() as HttpURLConnection
+        c.connectTimeout = 5000
+        c.readTimeout = 5000
+        val txt = c.inputStream.bufferedReader(Charsets.UTF_8).use { it.readText() }
+        c.disconnect()
+        val coords = JSONObject(txt).getJSONArray("routes").getJSONObject(0).getJSONObject("geometry").getJSONArray("coordinates")
+        val passo = maxOf(1, coords.length() / 200)
+        JSONArray().apply {
+            var i = 0
+            while (i < coords.length()) {
+                val p = coords.getJSONArray(i)
+                put(JSONArray().put(p.getDouble(1)).put(p.getDouble(0)))
+                i += passo
+            }
+        }
+    } catch (_: Exception) {
+        null
+    }
+
+    /** Posição do celular para o mapa, atualizada a cada 15 s (se a localização estiver liberada). */
+    private fun atualizarLugar(app: Application) {
+        val agora = System.currentTimeMillis()
+        if (agora - meuLugarMs < 15_000) return
+        meuLugarMs = agora
+        scope.launch(Dispatchers.IO) {
+            PlaceFinder.current(app, timeoutMs = 3_000)?.let { meuLugar = it.latitude to it.longitude }
+        }
+    }
+
+    private fun mapaJson(): JSONObject = JSONObject().apply {
+        val eu = meuLugar
+        if (eu != null) put("eu", JSONArray().put(eu.first).put(eu.second)) else put("eu", JSONObject.NULL)
+        put("destino", destino ?: JSONObject.NULL)
+        put("rota", rota ?: JSONObject.NULL)
+    }
 
     /** Pedido de voz do abastecimento: guarda para o painel confirmar (não abre tela no celular). */
     fun pedirAbastecimento(r: VoiceRefuel) {
@@ -110,6 +183,7 @@ object PainelLink {
             scheduleScan()
             return
         }
+        atualizarLugar(app)
         val body = toJson(app, ui).toString().toByteArray(Charsets.UTF_8)
         pool.execute { post(app, target, body) }
         val np = if (Features.mediaControl) MediaWatcher.get(app).now.value else null
@@ -241,6 +315,7 @@ object PainelLink {
             put("pendente", if (pendente != null && System.currentTimeMillis() < pendenteAteMs) pendente!! else JSONObject.NULL)
             put("pendenteId", pendenteId)
             put("aviso", avisoAbastecimento)
+            put("mapa", mapaJson())
             put("fala", falaTexto)
             put("ajustes", JSONObject().apply {
                 put("sol", Store(app).highContrast)
@@ -484,8 +559,10 @@ object PainelLink {
             "mapa.abrir" -> AppLauncher(app).openMap(null)?.let { enviarFala(it) }
             "mapa.rota" -> cmd.optString("texto").trim().takeIf { it.isNotEmpty() }?.let { q ->
                 val endereco = VoiceCommands.placeFor(q, Store(app).places()) ?: q
+                marcarDestino(app, endereco)
                 AppLauncher(app).routeTo(endereco, null)?.let { enviarFala(it) }
             }
+            "mapa.limpar" -> limparMapa()
             "voz.ouvir" -> {
                 vozPainelAte = System.currentTimeMillis() + 60_000
                 VoiceAssistant.get(app).listen(beepWhenReady = true)
