@@ -154,7 +154,12 @@ class PainelServerActivity : Activity() {
                     }
                     method == "POST" && path == "/comando" -> {
                         val obj = try { JSONObject(String(body, Charsets.UTF_8)) } catch (_: Exception) { null }
-                        if (obj != null && comandoValido(obj)) {
+                        val acaoLocal = obj?.optString("acao") ?: ""
+                        if (obj != null && (acaoLocal.startsWith("musica.") || acaoLocal.startsWith("radio."))) {
+                            // Música e rádio: tocam aqui, no multimídia (não passam pelo celular).
+                            val texto = obj.optString("texto")
+                            runOnUiThread { PainelLink.executarMidia(application, acaoLocal, texto) }
+                        } else if (obj != null && comandoValido(obj)) {
                             pending.add(System.currentTimeMillis() to obj.toString())
                             // Fila curta: se o celular não estiver ligado, não acumula comandos.
                             while (pending.size > 5) pending.poll()
@@ -166,6 +171,8 @@ class PainelServerActivity : Activity() {
                         val json = "{\"idadeMs\":$age,\"dados\":${latestJson ?: "null"},\"vozMultimidia\":\"$ttsStatus\"}"
                         send(out, 200, "application/json; charset=utf-8", json.toByteArray(Charsets.UTF_8))
                     }
+                    method == "GET" && path == "/midia" ->
+                        send(out, 200, "application/json; charset=utf-8", midiaLocal().toByteArray(Charsets.UTF_8))
                     method == "GET" && path == "/ping" ->
                         send(out, 200, "text/plain; charset=utf-8", "monitor2008".toByteArray(Charsets.UTF_8))
                     method == "GET" && (path == "/" || path == "/painel") ->
@@ -178,6 +185,48 @@ class PainelServerActivity : Activity() {
                 // Cliente cortou a conexão: nada a fazer.
             }
         }
+    }
+
+    private var capaLocalKey: String? = null
+
+    /** Música e rádio deste aparelho (o multimídia tem o próprio acesso às notificações). */
+    private fun midiaLocal(): String {
+        val np = if (Features.mediaControl) MediaWatcher.get(application).now.value else null
+        val art = np?.art
+        val chave = if (np != null) "${np.pkg}|${np.title}|${np.artist}" else null
+        if (np != null && art != null && chave != null && chave != capaLocalKey) {
+            capaLocalKey = chave
+            val pequena = android.graphics.Bitmap.createScaledBitmap(art, 300, 300, true)
+            val img = ByteArrayOutputStream()
+            pequena.compress(android.graphics.Bitmap.CompressFormat.JPEG, 80, img)
+            capa = img.toByteArray()
+        }
+        val musica: Any = np?.let { n ->
+            JSONObject().apply {
+                put("app", n.app)
+                put("titulo", n.title ?: "")
+                put("artista", n.artist ?: "")
+                put("tocando", n.playing)
+                put("posMs", n.positionNow())
+                put("durMs", n.durationMs)
+                put("chave", "${n.pkg}|${n.title}|${n.artist}")
+                put("capa", n.art != null)
+            }
+        } ?: JSONObject.NULL
+        val rs = RadioPlayer.get(application).state.value
+        val st = rs.station
+        val radio: Any = if (st != null) {
+            JSONObject().apply {
+                put("nome", st.name)
+                put("titulo", rs.streamTitle ?: "")
+                put("tocando", rs.playing)
+            }
+        } else JSONObject.NULL
+        return JSONObject().apply {
+            put("musica", musica)
+            put("radio", radio)
+            put("musicaDisponivel", Features.mediaControl)
+        }.toString()
     }
 
     private fun asset(name: String): ByteArray = try {

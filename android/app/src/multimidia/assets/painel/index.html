@@ -757,9 +757,7 @@
     pendenteAtualId = d.pendenteId;
     if (d.aviso) el('abast-info').textContent = d.aviso;
     paintPendente(d);
-    var m = d.midia || {};
-    paintMidia(m);
-    paintTocador(m.musica || null);
+
   }
   var SEM_MUSICA = 'Música: o APK do celular não tem acesso às notificações';
   function paintMidia(m) {
@@ -795,6 +793,17 @@
     fetch('/comando', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ acao: acao }) })
       .catch(function () { el('status').textContent = 'Sem resposta do multimídia'; });
   }
+  // Música e rádio vêm do próprio multimídia (não do celular), a cada segundo.
+  function pollMidia() {
+    fetch('/midia?t=' + Date.now(), { cache: 'no-store' })
+      .then(function (r) { return r.json(); })
+      .then(function (m) {
+        paintMidia(m);
+        paintTocador(m.musica || null);
+      })
+      .catch(function () {})
+      .then(function () { setTimeout(pollMidia, 1000); });
+  }
   function poll() {
     var st = el('status');
     fetch('/estado?t=' + Date.now(), { cache: 'no-store' })
@@ -823,6 +832,7 @@
       .then(function () { setTimeout(poll, 700); });
   }
   poll();
+  pollMidia();
 </script>
 </body>
 </html>

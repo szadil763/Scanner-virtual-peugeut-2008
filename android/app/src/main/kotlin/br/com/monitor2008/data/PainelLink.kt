@@ -545,7 +545,23 @@ object PainelLink {
     }
 
     /** Comandos vindos dos botões do painel. Música só com o acesso às notificações (multimídia). */
+    /** Música e rádio: executa no aparelho onde o botão foi tocado (multimídia ou celular). */
+    fun executarMidia(app: Application, acao: String, texto: String = ""): Boolean {
+        when (acao) {
+            "musica.playpause" -> if (Features.mediaControl) MediaWatcher.get(app).playPause() else return false
+            "musica.next" -> if (Features.mediaControl) MediaWatcher.get(app).next() else return false
+            "musica.prev" -> if (Features.mediaControl) MediaWatcher.get(app).previous() else return false
+            "musica.buscar" -> if (Features.mediaControl) buscar(app, texto) else return false
+            "radio.playpause" -> RadioPlayer.get(app).let { r -> if (r.state.value.playing) r.pause() else r.resume() }
+            "radio.next" -> RadioPlayer.get(app).step(true)
+            "radio.prev" -> RadioPlayer.get(app).step(false)
+            else -> return false
+        }
+        return true
+    }
+
     private fun execute(app: Application, cmd: JSONObject) {
+        if (executarMidia(app, cmd.optString("acao"), cmd.optString("texto"))) return
         when (cmd.optString("acao")) {
             "abastecer" -> abastecer(app, cmd)
             "musica.playpause" -> if (Features.mediaControl) MediaWatcher.get(app).playPause()
