@@ -1,6 +1,7 @@
 package br.com.monitor2008.data
 
 import android.content.Context
+import android.content.SharedPreferences
 import br.com.monitor2008.domain.RadioStation
 import br.com.monitor2008.domain.Station
 import br.com.monitor2008.domain.Vehicles
@@ -24,7 +25,53 @@ data class Refuel(
 
 /** Persistência simples em SharedPreferences. Trocar por Room ou Firebase só se virar necessidade. */
 class Store(context: Context) {
-    private val p = context.getSharedPreferences("monitor2008", Context.MODE_PRIVATE)
+    private val ctx = context.applicationContext
+    /** Preferências do aparelho (tema, voz, painel, última aba...): não mudam ao trocar de carro. */
+    private val app: SharedPreferences = ctx.getSharedPreferences("monitor2008_app", Context.MODE_PRIVATE)
+    /** Dados do carro escolhido (viagens, abastecimentos, odômetro, manutenção, adaptador). */
+    private val p: SharedPreferences get() = ctx.getSharedPreferences(carFileName(carKey), Context.MODE_PRIVATE)
+
+    init { migrarPreferenciasDoAparelho() }
+
+    /** Id do carro ativo (ver Vehicles). Sem escolha ainda, vale o 2008 (instalação antiga). */
+    val carKey: String get() = app.getString("vehicleId", null) ?: Vehicles.PEUGEOT_2008.id
+
+    /** Copia, uma vez, as preferências do aparelho do arquivo antigo (que era único). */
+    private fun migrarPreferenciasDoAparelho() {
+        if (app.getBoolean("migrado_v1", false)) return
+        val velho = ctx.getSharedPreferences("monitor2008", Context.MODE_PRIVATE)
+        val ed = app.edit()
+        for ((k, v) in velho.all) {
+            if (k !in CHAVES_DO_APARELHO) continue
+            when (v) {
+                is String -> ed.putString(k, v)
+                is Boolean -> ed.putBoolean(k, v)
+                is Float -> ed.putFloat(k, v)
+                is Int -> ed.putInt(k, v)
+                is Long -> ed.putLong(k, v)
+            }
+        }
+        ed.putBoolean("migrado_v1", true).apply()
+    }
+
+    /**
+     * Adaptador (endereço, em maiúsculas) → id do carro. Já vem com os dois adaptadores conhecidos;
+     * os outros são aprendidos ao escolher o carro em Ajustes com o adaptador conectado.
+     */
+    var adapterCars: Map<String, String>
+        get() {
+            val raw = app.getString("adapterCars", null)
+                ?: "81:23:45:67:89:BA>${Vehicles.PEUGEOT_2008.id};01:23:45:67:89:BA>${Vehicles.C4_LOUNGE_20.id}"
+            return raw.split(';').mapNotNull { e ->
+                val parts = e.split('>')
+                if (parts.size == 2 && parts[0].isNotBlank()) parts[0].uppercase() to parts[1] else null
+            }.toMap()
+        }
+        set(v) { app.edit().putString("adapterCars", v.entries.joinToString(";") { "${it.key}>${it.value}" }).apply() }
+
+    fun learnAdapter(address: String, carId: String) {
+        adapterCars = adapterCars + (address.uppercase() to carId)
+    }
 
     private fun d(key: String, def: Double) = p.getFloat(key, def.toFloat()).toDouble()
 
@@ -63,8 +110,8 @@ class Store(context: Context) {
 
     var useSimulated: Boolean
         // Instalação nova já usa o adaptador (o cliente instala para usar no carro, não para ver a demonstração).
-        get() = p.getBoolean("useSimulated", false)
-        set(v) { p.edit().putBoolean("useSimulated", v).apply() }
+        get() = app.getBoolean("useSimulated", false)
+        set(v) { app.edit().putBoolean("useSimulated", v).apply() }
     var adapterName: String
         get() = p.getString("adapterName", "") ?: ""
         set(v) { p.edit().putString("adapterName", v).apply() }
@@ -133,35 +180,35 @@ class Store(context: Context) {
 
     /** Apps abertos ao lado do Monitor (null = o primeiro instalado). */
     var mapPackage: String?
-        get() = p.getString("mapPackage", null)
-        set(v) { p.edit().putString("mapPackage", v).apply() }
+        get() = app.getString("mapPackage", null)
+        set(v) { app.edit().putString("mapPackage", v).apply() }
     var musicPackage: String?
-        get() = p.getString("musicPackage", null)
-        set(v) { p.edit().putString("musicPackage", v).apply() }
+        get() = app.getString("musicPackage", null)
+        set(v) { app.edit().putString("musicPackage", v).apply() }
 
     /** Ao sair do app, continuar numa janela flutuante (picture-in-picture). */
     var pipOnLeave: Boolean
-        get() = p.getBoolean("pipOnLeave", false)
-        set(v) { p.edit().putBoolean("pipOnLeave", v).apply() }
+        get() = app.getBoolean("pipOnLeave", false)
+        set(v) { app.edit().putBoolean("pipOnLeave", v).apply() }
 
     /**
      * Perfil do carro deste aparelho ([Vehicles]); null = ainda não escolhido. Instalação antiga, que já
      * rodou com o adaptador, era do 2008: vale como 2008 sem perguntar.
      */
     var vehicleId: String?
-        get() = p.getString("vehicleId", null) ?: if (odometerKm > 0) Vehicles.PEUGEOT_2008.id else null
-        set(v) { p.edit().putString("vehicleId", v).apply() }
+        get() = app.getString("vehicleId", null) ?: if (odometerKm > 0) Vehicles.PEUGEOT_2008.id else null
+        set(v) { app.edit().putString("vehicleId", v).apply() }
 
     /**
      * Canal de atualização (UpdateChannel): "ESTAVEL" só recebe versões aprovadas pelo dono; "TESTE"
      * recebe todo APK novo. O aparelho do dono (já rodou com o adaptador) começa no Teste.
      */
     var updateChannel: String
-        get() = p.getString("updateChannel", null) ?: if (odometerKm > 0) "TESTE" else "ESTAVEL"
-        set(v) { p.edit().putString("updateChannel", v).apply() }
+        get() = app.getString("updateChannel", null) ?: if (odometerKm > 0) "TESTE" else "ESTAVEL"
+        set(v) { app.edit().putString("updateChannel", v).apply() }
     var updateCheckedMs: Long
-        get() = p.getLong("updateCheckedMs", 0L)
-        set(v) { p.edit().putLong("updateCheckedMs", v).apply() }
+        get() = app.getLong("updateCheckedMs", 0L)
+        set(v) { app.edit().putLong("updateCheckedMs", v).apply() }
 
     // Km rodados sem o app (domain/MissedDistance): última leitura do contador da central (PID 31)
     // e o hodômetro do app naquele momento.
@@ -184,46 +231,46 @@ class Store(context: Context) {
 
     // Voltar como estava ao ligar o carro (data/SessionResume).
     var lastTab: String?
-        get() = p.getString("lastTab", null)
-        set(v) { p.edit().putString("lastTab", v).apply() }
+        get() = app.getString("lastTab", null)
+        set(v) { app.edit().putString("lastTab", v).apply() }
     var aliveAtMs: Long
-        get() = p.getLong("aliveAtMs", 0L)
-        set(v) { p.edit().putLong("aliveAtMs", v).apply() }
-    val lastPlayingPkg: String? get() = p.getString("lastPlayingPkg", null)
-    val lastPlayingAtMs: Long get() = p.getLong("lastPlayingAtMs", 0L)
+        get() = app.getLong("aliveAtMs", 0L)
+        set(v) { app.edit().putLong("aliveAtMs", v).apply() }
+    val lastPlayingPkg: String? get() = app.getString("lastPlayingPkg", null)
+    val lastPlayingAtMs: Long get() = app.getLong("lastPlayingAtMs", 0L)
     fun saveLastPlaying(pkg: String, atMs: Long) {
-        p.edit().putString("lastPlayingPkg", pkg).putLong("lastPlayingAtMs", atMs).apply()
+        app.edit().putString("lastPlayingPkg", pkg).putLong("lastPlayingAtMs", atMs).apply()
     }
     /** Continuar a rádio ou a música que tocava quando o carro desligou. */
     var resumeMedia: Boolean
-        get() = p.getBoolean("resumeMedia", true)
-        set(v) { p.edit().putBoolean("resumeMedia", v).apply() }
+        get() = app.getBoolean("resumeMedia", true)
+        set(v) { app.edit().putBoolean("resumeMedia", v).apply() }
     /** Abastecimento: o dono informa o valor pago (true) ou os litros (false). Lembra a última escolha. */
     var refuelByMoney: Boolean
-        get() = p.getBoolean("refuelByMoney", false)
-        set(v) { p.edit().putBoolean("refuelByMoney", v).apply() }
+        get() = app.getBoolean("refuelByMoney", false)
+        set(v) { app.edit().putBoolean("refuelByMoney", v).apply() }
     /**
      * Ler o carro sempre, mesmo sem abrir o app: o multimídia liga a leitura em segundo plano ao
      * ligar, e ela reconecta sozinha quando o motor liga. Padrão: ligado.
      */
     var backgroundReading: Boolean
-        get() = p.getBoolean("backgroundReading", true)
-        set(v) { p.edit().putBoolean("backgroundReading", v).apply() }
+        get() = app.getBoolean("backgroundReading", true)
+        set(v) { app.edit().putBoolean("backgroundReading", v).apply() }
 
     /** Endereço do painel no multimídia (ex.: 10.12.38.252:8080). Vazio = não envia. */
     var painelAddress: String
-        get() = p.getString("painelAddress", "") ?: ""
-        set(v) { p.edit().putString("painelAddress", v.trim()).apply() }
+        get() = app.getString("painelAddress", "") ?: ""
+        set(v) { app.edit().putString("painelAddress", v.trim()).apply() }
 
     /** Tela ao dirigir: AUTO, ALWAYS_FULL ou ALWAYS_SIMPLE (domain/DriveMode). */
     var driveMode: String
-        get() = p.getString("driveMode", "AUTO") ?: "AUTO"
-        set(v) { p.edit().putString("driveMode", v).apply() }
+        get() = app.getString("driveMode", "AUTO") ?: "AUTO"
+        set(v) { app.edit().putString("driveMode", v).apply() }
 
     /** Tema "sol forte": textos brancos e fundo preto, para ler com o sol batendo na tela. */
     var highContrast: Boolean
-        get() = p.getBoolean("highContrast", false)
-        set(v) { p.edit().putBoolean("highContrast", v).apply() }
+        get() = app.getBoolean("highContrast", false)
+        set(v) { app.edit().putBoolean("highContrast", v).apply() }
 
     /** Última vez que o dono conferiu ou informou o km do painel (lembrete mensal). 0 = nunca. */
     var odoCheckedMs: Long
@@ -232,46 +279,46 @@ class Store(context: Context) {
 
     /** Chamar o comando de voz dizendo "Monitor" (reconhecimento offline; o modelo é baixado uma vez). */
     var wakeWord: Boolean
-        get() = p.getBoolean("wakeWord", false)
-        set(v) { p.edit().putBoolean("wakeWord", v).apply() }
+        get() = app.getBoolean("wakeWord", false)
+        set(v) { app.edit().putBoolean("wakeWord", v).apply() }
 
     /** Janela flutuante: "MONITOR" (própria, tamanho escolhido) ou "ANDROID" (a do sistema). */
     var floatMode: String
-        get() = p.getString("floatMode", "MONITOR") ?: "MONITOR"
-        set(v) { p.edit().putString("floatMode", v).apply() }
+        get() = app.getString("floatMode", "MONITOR") ?: "MONITOR"
+        set(v) { app.edit().putString("floatMode", v).apply() }
     var floatSize: Int
-        get() = p.getInt("floatSize", 1)
-        set(v) { p.edit().putInt("floatSize", v).apply() }
+        get() = app.getInt("floatSize", 1)
+        set(v) { app.edit().putInt("floatSize", v).apply() }
     var floatItems: String?
-        get() = p.getString("floatItems", null)
-        set(v) { p.edit().putString("floatItems", v).apply() }
+        get() = app.getString("floatItems", null)
+        set(v) { app.edit().putString("floatItems", v).apply() }
     var floatX: Int
-        get() = p.getInt("floatX", 24)
-        set(v) { p.edit().putInt("floatX", v).apply() }
+        get() = app.getInt("floatX", 24)
+        set(v) { app.edit().putInt("floatX", v).apply() }
     var floatY: Int
-        get() = p.getInt("floatY", 120)
-        set(v) { p.edit().putInt("floatY", v).apply() }
+        get() = app.getInt("floatY", 120)
+        set(v) { app.edit().putInt("floatY", v).apply() }
 
     /** Voz do comando de voz (nome técnico da voz do leitor); null = a melhor que o app achar. */
     var ttsVoice: String?
-        get() = p.getString("ttsVoice", null)
-        set(v) { p.edit().putString("ttsVoice", v).apply() }
+        get() = app.getString("ttsVoice", null)
+        set(v) { app.edit().putString("ttsVoice", v).apply() }
     /** Velocidade e tom da fala (1,0 = normal). */
     var ttsRate: Float
-        get() = p.getFloat("ttsRate", 1.0f)
-        set(v) { p.edit().putFloat("ttsRate", v).apply() }
+        get() = app.getFloat("ttsRate", 1.0f)
+        set(v) { app.edit().putFloat("ttsRate", v).apply() }
     var ttsPitch: Float
-        get() = p.getFloat("ttsPitch", 1.0f)
-        set(v) { p.edit().putFloat("ttsPitch", v).apply() }
+        get() = app.getFloat("ttsPitch", 1.0f)
+        set(v) { app.edit().putFloat("ttsPitch", v).apply() }
     /** Abrir o app sozinho quando o multimídia liga (precisa da permissão "sobrepor a outros apps"). */
     var autoOpen: Boolean
-        get() = p.getBoolean("autoOpen", false)
-        set(v) { p.edit().putBoolean("autoOpen", v).apply() }
+        get() = app.getBoolean("autoOpen", false)
+        set(v) { app.edit().putBoolean("autoOpen", v).apply() }
 
     /** Aba Mídias: "MUSICA" ou "RADIO" ao lado dos números do Painel. */
     var mediaMode: String
-        get() = p.getString("mediaMode", "MUSICA") ?: "MUSICA"
-        set(v) { p.edit().putString("mediaMode", v).apply() }
+        get() = app.getString("mediaMode", "MUSICA") ?: "MUSICA"
+        set(v) { app.edit().putString("mediaMode", v).apply() }
 
     /** Apps que já tocaram algo (inclui o Bluetooth e o rádio do multimídia): viram fontes na aba Mídias. */
     val mediaSeen: Set<String> get() = p.getStringSet("mediaSeen", emptySet()) ?: emptySet()
@@ -293,12 +340,12 @@ class Store(context: Context) {
     )
 
     var lastRadio: RadioStation?
-        get() = p.getString("lastRadio", null)?.let { runCatching { radioFrom(JSONObject(it)) }.getOrNull() }
-        set(v) { p.edit().putString("lastRadio", v?.let { radioJson(it).toString() }).apply() }
+        get() = app.getString("lastRadio", null)?.let { runCatching { radioFrom(JSONObject(it)) }.getOrNull() }
+        set(v) { app.edit().putString("lastRadio", v?.let { radioJson(it).toString() }).apply() }
 
     /** Lugares salvos para o comando de voz ("ir para casa"): nome e endereço. */
     fun places(): List<Pair<String, String>> = try {
-        val arr = JSONArray(p.getString("places", "[]"))
+        val arr = JSONArray(app.getString("places", "[]"))
         (0 until arr.length()).map { arr.getJSONObject(it) }.map { it.optString("name") to it.optString("address") }
             .filter { it.first.isNotBlank() && it.second.isNotBlank() }
     } catch (e: Exception) { emptyList() }
@@ -306,18 +353,18 @@ class Store(context: Context) {
     fun savePlaces(list: List<Pair<String, String>>) {
         val arr = JSONArray()
         list.forEach { (n, a) -> arr.put(org.json.JSONObject().put("name", n).put("address", a)) }
-        p.edit().putString("places", arr.toString()).apply()
+        app.edit().putString("places", arr.toString()).apply()
     }
 
     fun radioFavorites(): List<RadioStation> {
-        val arr = JSONArray(p.getString("radioFavorites", "[]"))
+        val arr = JSONArray(app.getString("radioFavorites", "[]"))
         return (0 until arr.length()).mapNotNull { runCatching { radioFrom(arr.getJSONObject(it)) }.getOrNull() }
     }
 
     fun saveRadioFavorites(list: List<RadioStation>) {
         val arr = JSONArray()
         list.forEach { arr.put(radioJson(it)) }
-        p.edit().putString("radioFavorites", arr.toString()).apply()
+        app.edit().putString("radioFavorites", arr.toString()).apply()
     }
 
     // Abastecimentos
@@ -370,3 +417,13 @@ class Store(context: Context) {
         p.edit().putString("refuels", arr.toString()).apply()
     }
 }
+
+
+/** Chaves de preferências que são do aparelho (não mudam ao trocar de carro). */
+private val CHAVES_DO_APARELHO = setOf(
+    "highContrast", "driveMode", "ttsVoice", "ttsRate", "ttsPitch", "wakeWord", "backgroundReading", "floatMode", "floatSize", "floatItems", "floatX", "floatY", "lastTab", "mapPackage", "musicPackage", "mediaMode", "radioFavorites", "lastRadio", "places", "refuelByMoney", "updateChannel", "updateCheckedMs", "autoOpen", "resumeMedia", "pipOnLeave", "painelAddress", "useSimulated", "vehicleId", "lastPlayingAtMs", "lastPlayingPkg", "aliveAtMs"
+)
+
+/** Arquivo de preferências de cada carro: o 2008 segue no arquivo de sempre (não perde o histórico). */
+internal fun carFileName(carId: String): String =
+    if (carId == Vehicles.PEUGEOT_2008.id) "monitor2008" else "monitor2008_$carId"

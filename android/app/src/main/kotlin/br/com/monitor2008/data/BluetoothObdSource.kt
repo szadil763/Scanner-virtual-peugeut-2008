@@ -44,6 +44,8 @@ class BluetoothObdSource(
     override val name = "Adaptador Bluetooth"
 
     private val _info = MutableStateFlow(ConnectionInfo())
+    /** Endereço do adaptador que conectou (para saber de qual carro ele é). */
+    @Volatile var connectedAddress: String? = null
     override val info: StateFlow<ConnectionInfo> = _info.asStateFlow()
 
     private val store = Store(context)
@@ -245,6 +247,7 @@ class BluetoothObdSource(
             adapter.cancelDiscovery()
             openClassic(bonded)?.let { s ->
                 socket = s
+                connectedAddress = bonded.address
                 return Elm327Client(s.inputStream, s.outputStream, ::exchanged).also { client = it }
             }
         }
@@ -269,6 +272,7 @@ class BluetoothObdSource(
             val s = openClassic(bonded)
             if (s != null) {
                 socket = s
+                connectedAddress = bonded.address
                 return Elm327Client(s.inputStream, s.outputStream, ::exchanged).also { client = it }
             }
             return fail(
@@ -375,7 +379,7 @@ class BluetoothObdSource(
 
     private fun openWithRetry(device: BluetoothDevice, tries: Int = 3): BleLink? {
         repeat(tries) { attempt ->
-            BleLink.open(context, device, ::log)?.let { return it }
+            BleLink.open(context, device, ::log)?.let { connectedAddress = device.address; return it }
             if (attempt < tries - 1) Thread.sleep(1_500)
         }
         return null

@@ -4,20 +4,22 @@ import android.content.Context
 import br.com.monitor2008.domain.TripHealth
 import org.json.JSONArray
 import org.json.JSONObject
+import br.com.monitor2008.domain.Vehicles
 import java.io.File
 
 /**
  * Viagens gravadas para a tela Saúde, num arquivo JSON no armazenamento do app.
  * Guarda as últimas [MAX] viagens (um resumo por viagem, poucos KB no total).
  */
-class HealthStore(context: Context) {
-    private val file = File(context.filesDir, "viagens.json")
+class HealthStore(context: Context, carId: String = Vehicles.PEUGEOT_2008.id) {
+    private val sufixo = if (carId == Vehicles.PEUGEOT_2008.id) "" else "-$carId"
+    private val file = File(context.filesDir, "viagens$sufixo.json")
 
     /**
      * Viagem em andamento, gravada a cada minuto: o multimídia pode desligar junto com a ignição
      * antes de o app fechar a viagem. Ao abrir de novo, ela entra no histórico ([takePending]).
      */
-    private val pendingFile = File(context.filesDir, "viagem-em-andamento.json")
+    private val pendingFile = File(context.filesDir, "viagem-em-andamento$sufixo.json")
 
     fun savePending(trip: TripHealth) {
         try { pendingFile.writeText(toJson(trip).toString()) } catch (e: Exception) { }

@@ -176,7 +176,7 @@ class MonitorEngine private constructor(private val app: Application) {
     private var pendingDtcs: List<String>? = null
 
     // Saúde: viagens gravadas (só com o adaptador real) e a viagem em andamento.
-    private val healthStore = HealthStore(app)
+    private var healthStore = HealthStore(app, store.carKey)
     private var trips: List<TripHealth> = healthStore.load().let { saved ->
         // Viagem que ficou pela metade porque o multimídia desligou: entra no histórico agora.
         healthStore.takePending()?.let { (saved + it).takeLast(400).also(healthStore::save) } ?: saved
@@ -234,6 +234,7 @@ class MonitorEngine private constructor(private val app: Application) {
                 // Conexão perdida ou carro desligado: a viagem termina aqui.
                 if (it.state != ConnState.CONNECTED) closeTrip()
                 conn = it
+                if (it.state == ConnState.CONNECTED) (src as? BluetoothObdSource)?.connectedAddress?.let { a -> checkCarByAdapter(a) }
                 // Falhas: lidas assim que conecta, mesmo com o motor desligado (só a ignição ligada).
                 if (it.state == ConnState.CONNECTED && !tripDtcsRead) readTripDtcs()
                 publish()
@@ -453,8 +454,45 @@ class MonitorEngine private constructor(private val app: Application) {
 
     fun setVehicle(id: String) {
         if (Vehicles.byId(id) == null) return
-        store.vehicleId = id
+        // O adaptador conectado agora é deste carro: daqui em diante o app o reconhece sozinho.
+        (source as? BluetoothObdSource)?.connectedAddress?.let { store.learnAdapter(it, id) }
+        if (id != store.carKey) {
+            store.vehicleId = id
+            reloadForCar()
+        }
         publish()
+    }
+
+    /** Adaptador de outro carro conectou: passa a usar os dados dele, sem reiniciar o app. */
+    private fun checkCarByAdapter(address: String) {
+        val carId = store.adapterCars[address.uppercase()] ?: return
+        if (carId == store.carKey || Vehicles.byId(carId) == null) return
+        scope.launch {
+            store.vehicleId = carId
+            reloadForCar()
+        }
+    }
+
+    /** Recarrega o que é de cada carro (viagem, odômetro, abastecimentos, Saúde) e reconecta. */
+    private fun reloadForCar() {
+        odometerKm = store.odometerKm
+        uncalLiters = store.uncalLiters
+        kmSinceFull = store.kmSinceFull
+        realTrip.reset()
+        store.loadTrip()?.let { realTrip.restore(it[0], it[1], it[2], it[3]) }
+        refuelList = store.refuels().asReversed()
+        stationList = store.stations()
+        healthStore = HealthStore(app, store.carKey)
+        trips = healthStore.load().let { saved ->
+            healthStore.takePending()?.let { (saved + it).takeLast(400).also(healthStore::save) } ?: saved
+        }
+        recorder = HealthRecorder()
+        lastHealthMs = 0L
+        lastDistCounter = null
+        lastPendingMs = 0L
+        tripDtcsRead = false
+        engineOffSince = 0L
+        start()
     }
 
     fun diagnosticLog(): List<String> = source?.diagnosticLog().orEmpty()
