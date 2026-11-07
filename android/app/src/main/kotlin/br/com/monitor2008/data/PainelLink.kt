@@ -4,6 +4,7 @@ import android.app.Application
 import android.os.Handler
 import android.os.Looper
 import android.graphics.Bitmap
+import br.com.monitor2008.domain.DriveModeSetting
 import br.com.monitor2008.domain.DtcInfo
 import br.com.monitor2008.domain.MaintCatalog
 import br.com.monitor2008.domain.RefuelMath
@@ -187,6 +188,10 @@ object PainelLink {
             put("manutencao", manutencao(ui))
             put("consumo", consumo(ui))
             put("diagnostico", diagnostico(app, ui))
+            put("ajustes", JSONObject().apply {
+                put("sol", Store(app).highContrast)
+                put("direcao", Store(app).driveMode)
+            })
         }
     }
 
@@ -391,6 +396,9 @@ object PainelLink {
             "musica.buscar" -> if (Features.mediaControl) buscar(app, cmd.optString("texto"))
             "manutencao.feito" -> feitoManutencao(app, cmd.optString("id"))
             "diag.lerFalhas" -> MonitorEngine.get(app).readDtcs()
+            "ajuste.sol" -> MonitorEngine.get(app).setHighContrast(cmd.optBoolean("valor", false))
+            "ajuste.direcao" -> DriveModeSetting.values().firstOrNull { it.name == cmd.optString("valor") }
+                ?.let { MonitorEngine.get(app).setDriveMode(it) }
             "radio.next" -> RadioPlayer.get(app).step(true)
             "radio.prev" -> RadioPlayer.get(app).step(false)
         }

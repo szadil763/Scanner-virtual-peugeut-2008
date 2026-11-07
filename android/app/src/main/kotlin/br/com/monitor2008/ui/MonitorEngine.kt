@@ -247,6 +247,8 @@ class MonitorEngine private constructor(private val app: Application) {
 
     private fun driveSetting() = DriveModeSetting.values().firstOrNull { it.name == store.driveMode } ?: DriveModeSetting.AUTO
 
+    fun setHighContrast(on: Boolean) { store.highContrast = on; publish() }
+
     fun setDriveMode(m: DriveModeSetting) { store.driveMode = m.name; driveTracker.reset(); publish() }
 
     /** Alerta grave falado uma vez a cada 10 minutos por tipo (motor muito quente, bateria sem carga). */

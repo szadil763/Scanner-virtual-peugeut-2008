@@ -7,10 +7,15 @@
 <style>
   :root { --bg:#000; --fg:#fff; --dim:#a8b0b8; --ok:#3ddc6b; --warn:#ffcc33; --bad:#ff5555; --btn:#1b2430; --sel:#1f5fa8; }
   * { box-sizing:border-box; }
-  body { margin:0; background:var(--bg); color:var(--fg); font-family:system-ui,sans-serif; height:100vh; overflow:hidden; display:flex; flex-direction:column; }
+  body { margin:0; background:var(--bg); color:var(--fg); font-family:system-ui,sans-serif; height:100vh; overflow:hidden; }
   #status { font-size:20px; padding:6px 16px; color:var(--dim); flex:0 0 auto; }
   #status.on { color:var(--ok); }
-  .abas { flex:0 0 auto; display:grid; grid-template-columns:repeat(8,1fr); gap:6px; padding:0 8px 8px; }
+  .layout { display:flex; height:100vh; min-height:0; }
+  .menu { flex:0 0 190px; display:flex; flex-direction:column; gap:6px; padding:8px; overflow-y:auto; border-right:2px solid #1a2330; }
+  .menu .aba { min-height:62px; text-align:left; padding:0 12px; font-size:20px; }
+  .menu .aba b { color:var(--dim); font-weight:400; margin-right:8px; }
+  .main { flex:1 1 auto; display:flex; flex-direction:column; min-width:0; min-height:0; }
+  .abas { display:none; }
   .aba { font-size:16px; min-height:56px; background:var(--btn); color:var(--fg); border:2px solid #3a4a5c; border-radius:12px; }
   .aba.sel { background:var(--sel); border-color:#5b9be0; }
   .tela { flex:1 1 auto; min-height:0; display:none; }
@@ -47,6 +52,8 @@
   .metricas { display:grid; grid-template-columns:repeat(4,1fr); gap:10px; }
   .metricas .card { min-height:120px; }
   .v2 { font-size:40px; font-weight:700; }
+  .opc { font-size:22px; min-height:64px; width:100%; background:var(--btn); color:var(--fg); border:3px solid #3a4a5c; border-radius:12px; }
+  .opc.sel { background:var(--sel); border-color:#5b9be0; }
   .feito { font-size:22px; min-height:60px; margin-top:8px; width:100%; background:var(--btn); color:var(--fg); border:3px solid #3a4a5c; border-radius:12px; }
   .feito.conf { background:#5a4a10; border-color:var(--warn); }
   .feito:disabled { background:#222; border-color:#444; color:#777; }
@@ -75,17 +82,21 @@
 </style>
 </head>
 <body>
+<div class="layout">
+<nav class="menu">
+  <button class="aba sel" id="ab-painel" onclick="aba('painel')"><b>1</b>Painel</button>
+  <button class="aba" id="ab-tocador" onclick="aba('tocador')"><b>2</b>Tocador</button>
+  <button class="aba" id="ab-saude" onclick="aba('saude')"><b>3</b>Saúde</button>
+  <button class="aba" id="ab-postos" onclick="aba('postos')"><b>4</b>Postos</button>
+  <button class="aba" id="ab-abastecer" onclick="aba('abastecer')"><b>5</b>Abastecer</button>
+  <button class="aba" id="ab-manutencao" onclick="aba('manutencao')"><b>6</b>Manutenção</button>
+  <button class="aba" id="ab-consumo" onclick="aba('consumo')"><b>7</b>Consumo</button>
+  <button class="aba" id="ab-diag" onclick="aba('diag')"><b>8</b>Diagnóstico</button>
+  <button class="aba" id="ab-ajustes" onclick="aba('ajustes')"><b>9</b>Ajustes</button>
+</nav>
+<main class="main">
 <div id="status">Aguardando o celular…</div>
-<div class="abas">
-  <button class="aba sel" id="ab-painel" onclick="aba('painel')">Painel</button>
-  <button class="aba" id="ab-tocador" onclick="aba('tocador')">Tocador</button>
-  <button class="aba" id="ab-saude" onclick="aba('saude')">Saúde</button>
-  <button class="aba" id="ab-postos" onclick="aba('postos')">Postos</button>
-  <button class="aba" id="ab-abastecer" onclick="aba('abastecer')">Abastecer</button>
-  <button class="aba" id="ab-manutencao" onclick="aba('manutencao')">Manutenção</button>
-  <button class="aba" id="ab-consumo" onclick="aba('consumo')">Consumo</button>
-  <button class="aba" id="ab-diag" onclick="aba('diag')">Diagnóstico</button>
-</div>
+
 
 <div class="tela sel" id="t-painel">
   <div class="grid">
@@ -130,6 +141,20 @@
     <div class="lista" id="dg-falhas" style="padding:0"></div>
     <div class="lbl">Registro do adaptador (últimas linhas)</div>
     <pre id="dg-registro" style="margin:0;background:#0b0f14;border:2px solid #222;border-radius:12px;padding:10px;font-size:14px;color:#cfd8e3;max-height:260px;overflow:auto;white-space:pre-wrap"></pre>
+  </div>
+</div>
+
+<div class="tela" id="t-ajustes">
+  <div class="form">
+    <div class="lbl">Tela</div>
+    <button class="opc" id="aj-sol" onclick="ajusteSol()">Tema sol forte: desligado</button>
+    <div class="lbl">Tela ao dirigir</div>
+    <div class="linha">
+      <button class="opc" id="aj-d-AUTO" onclick="ajusteDirecao('AUTO')">Automático</button>
+      <button class="opc" id="aj-d-ALWAYS_FULL" onclick="ajusteDirecao('ALWAYS_FULL')">Sempre completo</button>
+    </div>
+    <button class="opc" id="aj-d-ALWAYS_SIMPLE" onclick="ajusteDirecao('ALWAYS_SIMPLE')">Sempre simples</button>
+    <div class="aviso">Outras configurações (voz, mapa, lugares, adaptador, abastecimentos) ficam no celular.</div>
   </div>
 </div>
 
@@ -199,6 +224,8 @@
   </div>
 </div>
 
+</main>
+</div>
 <script>
   function el(id) { return document.getElementById(id); }
   function num(v, d) {
@@ -212,7 +239,7 @@
   var abaAtual = 'painel';
   function aba(nome) {
     abaAtual = nome;
-    ['painel', 'tocador', 'saude', 'postos', 'abastecer', 'manutencao', 'consumo', 'diag'].forEach(function (n) {
+    ['painel', 'tocador', 'saude', 'postos', 'abastecer', 'manutencao', 'consumo', 'diag', 'ajustes'].forEach(function (n) {
       el('t-' + n).classList.toggle('sel', n === nome);
       el('ab-' + n).classList.toggle('sel', n === nome);
     });
@@ -424,6 +451,23 @@
     reg.textContent = (g.registro || []).join('\n');
     if (perto) reg.scrollTop = reg.scrollHeight;
   }
+  var sol = false, direcao = 'AUTO';
+  function ajusteSol() {
+    fetch('/comando', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ acao: 'ajuste.sol', valor: !sol }) });
+  }
+  function ajusteDirecao(v) {
+    fetch('/comando', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ acao: 'ajuste.direcao', valor: v }) });
+  }
+  function paintAjustes(a) {
+    if (!a) return;
+    sol = !!a.sol;
+    direcao = a.direcao || 'AUTO';
+    el('aj-sol').textContent = 'Tema sol forte: ' + (sol ? 'ligado' : 'desligado');
+    el('aj-sol').className = 'opc' + (sol ? ' sel' : '');
+    ['AUTO', 'ALWAYS_FULL', 'ALWAYS_SIMPLE'].forEach(function (v) {
+      el('aj-d-' + v).className = 'opc' + (direcao === v ? ' sel' : '');
+    });
+  }
   function buscarMusica() {
     if (!parado) return;
     var t = el('busca-txt').value.trim();
@@ -520,6 +564,7 @@
     paintManut(d.manutencao || []);
     paintConsumo(d);
     paintDiag(d.diagnostico);
+    paintAjustes(d.ajustes);
     var m = d.midia || {};
     paintMidia(m);
     paintTocador(m.musica || null);
