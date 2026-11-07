@@ -10,8 +10,8 @@
   body { margin:0; background:var(--bg); color:var(--fg); font-family:system-ui,sans-serif; height:100vh; overflow:hidden; display:flex; flex-direction:column; }
   #status { font-size:20px; padding:6px 16px; color:var(--dim); flex:0 0 auto; }
   #status.on { color:var(--ok); }
-  .abas { flex:0 0 auto; display:grid; grid-template-columns:repeat(5,1fr); gap:6px; padding:0 8px 8px; }
-  .aba { font-size:19px; min-height:56px; background:var(--btn); color:var(--fg); border:2px solid #3a4a5c; border-radius:12px; }
+  .abas { flex:0 0 auto; display:grid; grid-template-columns:repeat(6,1fr); gap:6px; padding:0 8px 8px; }
+  .aba { font-size:18px; min-height:56px; background:var(--btn); color:var(--fg); border:2px solid #3a4a5c; border-radius:12px; }
   .aba.sel { background:var(--sel); border-color:#5b9be0; }
   .tela { flex:1 1 auto; min-height:0; display:none; }
   .tela.sel { display:flex; flex-direction:column; }
@@ -41,6 +41,9 @@
   .enviar { font-size:26px; min-height:72px; background:#1d5c33; color:var(--fg); border:3px solid #3ddc6b; border-radius:14px; }
   .enviar:disabled { background:#222; border-color:#444; color:#777; }
   .aviso { font-size:20px; color:var(--dim); min-height:26px; }
+  .feito { font-size:22px; min-height:60px; margin-top:8px; width:100%; background:var(--btn); color:var(--fg); border:3px solid #3a4a5c; border-radius:12px; }
+  .feito.conf { background:#5a4a10; border-color:var(--warn); }
+  .feito:disabled { background:#222; border-color:#444; color:#777; }
   /* Tocador */
   .tocador { flex:1 1 auto; overflow-y:auto; display:flex; flex-direction:column; align-items:center; gap:10px; padding:0 12px 8px; min-height:0; }
   .capa { width:min(38vh,300px); height:min(38vh,300px); border-radius:16px; background:#111; border:3px solid #333; object-fit:cover; }
@@ -73,6 +76,7 @@
   <button class="aba" id="ab-saude" onclick="aba('saude')">Saúde</button>
   <button class="aba" id="ab-postos" onclick="aba('postos')">Postos</button>
   <button class="aba" id="ab-abastecer" onclick="aba('abastecer')">Abastecer</button>
+  <button class="aba" id="ab-manutencao" onclick="aba('manutencao')">Manutenção</button>
 </div>
 
 <div class="tela sel" id="t-painel">
@@ -109,6 +113,7 @@
 
 <div class="tela" id="t-saude"><div class="lista" id="saude-lista"></div></div>
 <div class="tela" id="t-postos"><div class="lista" id="postos-lista"></div></div>
+<div class="tela" id="t-manutencao"><div class="lista" id="manut-lista"></div></div>
 
 <div class="tela" id="t-abastecer">
   <div class="form">
@@ -172,7 +177,7 @@
   var abaAtual = 'painel';
   function aba(nome) {
     abaAtual = nome;
-    ['painel', 'tocador', 'saude', 'postos', 'abastecer'].forEach(function (n) {
+    ['painel', 'tocador', 'saude', 'postos', 'abastecer', 'manutencao'].forEach(function (n) {
       el('t-' + n).classList.toggle('sel', n === nome);
       el('ab-' + n).classList.toggle('sel', n === nome);
     });
@@ -251,6 +256,58 @@
       el('capa-vazia').style.display = '';
       chaveCapa = null;
     }
+  }
+  var ultimoManut = '';
+  var confirmaManut = null, confirmaManutTimer = null;
+  var rotuloEstado = { OK: 'Em dia', SOON: 'Perto de vencer', DUE: 'Vencido' };
+  function fmtNum(v) { return Math.round(Math.abs(v)).toLocaleString('pt-BR'); }
+  function detalheManut(m) {
+    if (!m.feito) return 'Ainda não informado. Toque em "Marcar como feito" quando trocar.';
+    var partes = [];
+    if (m.kmRestante !== null && m.kmRestante !== undefined) {
+      partes.push(m.kmRestante >= 0 ? 'Faltam ' + fmtNum(m.kmRestante) + ' km' : 'Passou ' + fmtNum(m.kmRestante) + ' km');
+    }
+    if (m.diasRestantes !== null && m.diasRestantes !== undefined) {
+      partes.push(m.diasRestantes >= 0 ? 'faltam ' + m.diasRestantes + ' dias' : 'passou ' + (-m.diasRestantes) + ' dias');
+    }
+    return (partes.join(' ou ') || '') + '\n' + (m.porque || '');
+  }
+  function manutFeito(id) {
+    if (!parado) return;
+    if (confirmaManut !== id) {
+      confirmaManut = id;
+      clearTimeout(confirmaManutTimer);
+      confirmaManutTimer = setTimeout(function () { confirmaManut = null; ultimoManut = ''; }, 6000);
+      ultimoManut = '';
+      return;
+    }
+    clearTimeout(confirmaManutTimer);
+    confirmaManut = null;
+    ultimoManut = '';
+    fetch('/comando', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ acao: 'manutencao.feito', id: id }) })
+      .catch(function () { el('status').textContent = 'Sem resposta do multimídia'; });
+  }
+  function paintManut(lista) {
+    var chave = JSON.stringify(lista) + '|' + confirmaManut + '|' + parado;
+    if (chave === ultimoManut) return;
+    ultimoManut = chave;
+    var box = el('manut-lista');
+    box.textContent = '';
+    if (!lista || lista.length === 0) {
+      box.appendChild(linha('', 'Sem itens de manutenção', '', ''));
+      return;
+    }
+    lista.forEach(function (m) {
+      var classe = m.feito ? (m.estado === 'OK' ? 'ok' : m.estado === 'SOON' ? 'warn' : m.estado === 'DUE' ? 'alerta' : '') : '';
+      var d = linha(classe, m.nome, m.feito ? (rotuloEstado[m.estado] || '') : 'Não informado', detalheManut(m));
+      var b = document.createElement('button');
+      b.className = 'feito' + (confirmaManut === m.id ? ' conf' : '');
+      b.disabled = !parado;
+      b.textContent = !parado ? 'Só com o carro parado' : (confirmaManut === m.id ? 'Toque de novo para confirmar' : 'Marcar como feito hoje');
+      b.onclick = function () { manutFeito(m.id); };
+      d.appendChild(b);
+      box.appendChild(d);
+    });
   }
   function buscarMusica() {
     if (!parado) return;
@@ -345,6 +402,7 @@
     el('c-bat').className = 'card' + (d.rpm > 400 && d.battery !== null && d.battery < 12.6 ? ' bad' : '');
     paintSaude(d.saude || []);
     paintPostos(d.postos || []);
+    paintManut(d.manutencao || []);
     var m = d.midia || {};
     paintMidia(m);
     paintTocador(m.musica || null);

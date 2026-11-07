@@ -4,6 +4,7 @@ import android.app.Application
 import android.os.Handler
 import android.os.Looper
 import android.graphics.Bitmap
+import br.com.monitor2008.domain.MaintCatalog
 import br.com.monitor2008.domain.RefuelMath
 import br.com.monitor2008.ui.MonitorEngine
 import br.com.monitor2008.ui.UiState
@@ -182,6 +183,7 @@ object PainelLink {
             put("midia", midia(app))
             put("saude", saude(ui))
             put("postos", postos(ui))
+            put("manutencao", manutencao(ui))
         }
     }
 
@@ -193,6 +195,21 @@ object PainelLink {
                 put("status", h.status.name)
                 put("valor", h.value)
                 put("conselho", h.advice)
+            })
+        }
+    }
+
+    /** Itens de manutenção com o estado de cada um (só leitura no multimídia; marcar como feito é comando). */
+    private fun manutencao(ui: UiState): JSONArray = JSONArray().apply {
+        ui.maint.forEach { row ->
+            put(JSONObject().apply {
+                put("id", row.item.id)
+                put("nome", row.item.name)
+                put("porque", row.item.why)
+                put("feito", row.status != null)
+                put("estado", row.status?.state?.name ?: JSONObject.NULL)
+                put("kmRestante", num(row.status?.kmLeft))
+                put("diasRestantes", row.status?.daysLeft ?: JSONObject.NULL)
             })
         }
     }
@@ -297,6 +314,12 @@ object PainelLink {
         MonitorEngine.get(app).registerRefuel(litros, preco, o.optBoolean("cheio", true), o.optBoolean("etanol", false))
     }
 
+    /** Marca um item de manutenção como feito hoje (o celular recusa com o carro andando). */
+    private fun feitoManutencao(app: Application, id: String) {
+        if (MaintCatalog.items.none { it.id == id }) return
+        MonitorEngine.get(app).registerMaintDone(id)
+    }
+
     /** Busca de música ou cantor no app que está tocando (ou no app de música padrão). */
     private fun buscar(app: Application, texto: String) {
         val q = texto.trim().take(100)
@@ -318,6 +341,7 @@ object PainelLink {
                 if (r.state.value.playing) r.pause() else r.resume()
             }
             "musica.buscar" -> if (Features.mediaControl) buscar(app, cmd.optString("texto"))
+            "manutencao.feito" -> feitoManutencao(app, cmd.optString("id"))
             "radio.next" -> RadioPlayer.get(app).step(true)
             "radio.prev" -> RadioPlayer.get(app).step(false)
         }
