@@ -8,6 +8,7 @@ import br.com.monitor2008.domain.DriveModeSetting
 import br.com.monitor2008.domain.DtcInfo
 import br.com.monitor2008.domain.MaintCatalog
 import br.com.monitor2008.domain.RefuelMath
+import br.com.monitor2008.domain.VoiceRefuel
 import br.com.monitor2008.ui.MonitorEngine
 import br.com.monitor2008.ui.StationDraft
 import kotlinx.coroutines.CoroutineScope
@@ -57,6 +58,32 @@ object PainelLink {
     @Volatile private var vozPainelAte = 0L
     @Volatile private var falaId = 0
     @Volatile private var falaTexto = ""
+    /** Abastecimento ditado pela voz do multimídia, esperando a confirmação no painel. */
+    @Volatile private var pendente: JSONObject? = null
+    @Volatile private var pendenteAteMs = 0L
+    @Volatile private var pendenteId = 0
+
+    /** Pedido de voz do abastecimento: guarda para o painel confirmar (não abre tela no celular). */
+    fun pedirAbastecimento(r: VoiceRefuel) {
+        val preco = r.pricePerLiter
+        val litros = r.liters ?: if (r.amount != null && preco != null && preco > 0) RefuelMath.litersFromAmount(r.amount, preco) else null
+        if (preco == null || litros == null || litros <= 0) {
+            enviarFala("Diga o valor e o preço do litro, por exemplo: abasteci cem reais a seis e onze.")
+            return
+        }
+        pendente = JSONObject().apply {
+            put("litros", Math.round(litros * 100) / 100.0)
+            put("preco", Math.round(preco * 100) / 100.0)
+            put("cheio", r.full ?: true)
+            put("etanol", r.ethanol ?: false)
+        }
+        pendenteAteMs = System.currentTimeMillis() + 120_000
+        pendenteId++
+    }
+
+    fun cancelarPendente() {
+        pendente = null
+    }
 
     /** Vale enquanto o pedido de voz veio do multimídia (até 60 s depois do botão). */
     fun vozNoPainel(): Boolean = System.currentTimeMillis() < vozPainelAte
@@ -208,6 +235,8 @@ object PainelLink {
             put("consumo", consumo(ui))
             put("diagnostico", diagnostico(app, ui))
             put("falaId", falaId)
+            put("pendente", if (pendente != null && System.currentTimeMillis() < pendenteAteMs) pendente!! else JSONObject.NULL)
+            put("pendenteId", pendenteId)
             put("fala", falaTexto)
             put("ajustes", JSONObject().apply {
                 put("sol", Store(app).highContrast)
@@ -386,6 +415,7 @@ object PainelLink {
      * registra com o carro andando. Sem posto (o GPS fica no celular): o posto entra depois.
      */
     private fun abastecer(app: Application, o: JSONObject) {
+        pendente = null
         val preco = o.optDouble("preco", Double.NaN)
         if (!preco.isFinite() || preco <= 0) return
         val litros: Double? = if (o.has("litros")) {
@@ -436,6 +466,7 @@ object PainelLink {
             "musica.buscar" -> if (Features.mediaControl) buscar(app, cmd.optString("texto"))
             "manutencao.feito" -> feitoManutencao(app, cmd.optString("id"))
             "diag.lerFalhas" -> MonitorEngine.get(app).readDtcs()
+            "pendente.cancelar" -> cancelarPendente()
             "voz.ouvir" -> {
                 vozPainelAte = System.currentTimeMillis() + 60_000
                 VoiceAssistant.get(app).listen(beepWhenReady = true)

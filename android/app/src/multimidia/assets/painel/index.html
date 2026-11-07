@@ -99,6 +99,13 @@
 </nav>
 <main class="main">
 <div id="status">Aguardando o celular…</div>
+<div id="pend" style="display:none;margin:0 10px 8px;padding:12px;border:3px solid #5b9be0;border-radius:14px;background:#10243a">
+  <div id="pend-txt" style="font-size:24px;font-weight:700;margin-bottom:10px"></div>
+  <div class="linha">
+    <button class="enviar" id="pend-ok" onclick="confirmarPendente()">Confirmar</button>
+    <button class="feito" style="margin-top:0;min-height:72px" onclick="cancelarPendente()">Cancelar</button>
+  </div>
+</div>
 <div id="vozinfo" style="font-size:16px;color:var(--dim);padding:0 16px 4px;min-height:20px"></div>
 
 
@@ -559,6 +566,38 @@
       mostraVoz();
     }
   }
+  var pendenteOculto = -1, pendenteAtual = null;
+  function paintPendente(d) {
+    var box = el('pend');
+    if (!d.pendente || d.pendenteId === pendenteOculto) {
+      box.style.display = 'none';
+      pendenteAtual = null;
+      return;
+    }
+    pendenteAtual = d.pendente;
+    var p = d.pendente;
+    el('pend-txt').textContent = 'Registrar ' + Number(p.litros).toFixed(2) + ' L a R$ ' + Number(p.preco).toFixed(2) +
+      ' · ' + (p.etanol ? 'etanol' : 'gasolina') + ' · ' + (p.cheio ? 'tanque cheio' : 'parcial') + '?';
+    el('pend-ok').disabled = !parado;
+    el('pend-ok').textContent = parado ? 'Confirmar' : 'Só com o carro parado';
+    box.style.display = '';
+  }
+  var pendenteAtualId = null;
+  function confirmarPendente() {
+    if (!pendenteAtual || !parado) return;
+    var p = pendenteAtual;
+    pendenteOculto = pendenteAtualId;
+    el('pend').style.display = 'none';
+    fetch('/comando', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ acao: 'abastecer', litros: p.litros, preco: p.preco, cheio: p.cheio, etanol: p.etanol }) })
+      .then(function () { el('vozinfo').textContent = 'Abastecimento enviado para registrar. Confira no celular (Consumo e Postos).'; })
+      .catch(function () { el('vozinfo').textContent = 'Sem resposta do multimídia. Nada foi registrado.'; });
+  }
+  function cancelarPendente() {
+    pendenteOculto = pendenteAtualId;
+    el('pend').style.display = 'none';
+    fetch('/comando', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ acao: 'pendente.cancelar' }) });
+  }
   function buscarMusica() {
     if (!parado) return;
     var t = el('busca-txt').value.trim();
@@ -657,6 +696,8 @@
     paintDiag(d.diagnostico);
     paintAjustes(d.ajustes);
     falarResposta(d);
+    pendenteAtualId = d.pendenteId;
+    paintPendente(d);
     var m = d.midia || {};
     paintMidia(m);
     paintTocador(m.musica || null);

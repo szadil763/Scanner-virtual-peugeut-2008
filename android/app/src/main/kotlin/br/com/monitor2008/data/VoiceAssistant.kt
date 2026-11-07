@@ -187,6 +187,12 @@ class VoiceAssistant private constructor(private val app: Application) {
         val text = VoiceCommands.answer(cmd, snap)
         // Fala primeiro: as ações abaixo podem falar depois (resultado da busca da rádio, por exemplo).
         if (text.isNotBlank()) speak(text)
+        // Pedido do multimídia: o abastecimento é confirmado no painel, sem abrir tela no celular.
+        if (PainelLink.vozNoPainel() && cmd.intent == VoiceIntent.ABASTECER) {
+            PainelLink.pedirAbastecimento(cmd.refuel ?: VoiceRefuel())
+            _state.value = VoiceState.Idle
+            return
+        }
         val needsScreen = cmd.intent == VoiceIntent.ABRIR || (cmd.intent == VoiceIntent.ABASTECER && !snap.moving)
         when {
             // Rota, mapa, rádio, música, pausar: atende mesmo com o Monitor atrás do mapa.
