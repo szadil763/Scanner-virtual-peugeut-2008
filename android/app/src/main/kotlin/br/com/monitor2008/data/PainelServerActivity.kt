@@ -122,6 +122,8 @@ class PainelServerActivity : Activity() {
                         val json = "{\"idadeMs\":$age,\"dados\":${latestJson ?: "null"}}"
                         send(out, 200, "application/json; charset=utf-8", json.toByteArray(Charsets.UTF_8))
                     }
+                    method == "GET" && path == "/ping" ->
+                        send(out, 200, "text/plain; charset=utf-8", "monitor2008".toByteArray(Charsets.UTF_8))
                     method == "GET" && (path == "/" || path == "/painel") ->
                         send(out, 200, "text/html; charset=utf-8", asset("painel/index.html"))
                     method == "GET" && path == "/teste" ->

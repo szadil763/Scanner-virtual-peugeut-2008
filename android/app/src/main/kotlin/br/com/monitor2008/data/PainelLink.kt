@@ -7,7 +7,13 @@ import br.com.monitor2008.ui.UiState
 import org.json.JSONArray
 import org.json.JSONObject
 import java.net.HttpURLConnection
+import java.net.Inet4Address
+import java.net.NetworkInterface
 import java.net.URL
+import java.util.Collections
+import java.util.concurrent.Future
+import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicReference
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 
@@ -21,14 +27,30 @@ object PainelLink {
     private val pool: ExecutorService = Executors.newSingleThreadExecutor { r ->
         Thread(r, "painel-envio").apply { isDaemon = true }
     }
+    private val scanner: ExecutorService = Executors.newSingleThreadExecutor { r ->
+        Thread(r, "painel-busca").apply { isDaemon = true }
+    }
     private val main by lazy { Handler(Looper.getMainLooper()) }
     @Volatile private var lastSentMs = 0L
+    /** Endereço achado pela busca (ou o último que funcionou). */
+    @Volatile private var discovered: String? = null
+    private var failCount = 0
+    @Volatile private var lastScanMs = 0L
+    private val scanning = AtomicBoolean(false)
 
-    fun maybeSend(app: Application, address: String, ui: UiState) {
-        val target = normalize(address) ?: return
+    /**
+     * Envia os números para o multimídia. Usa o endereço achado pela busca, ou o digitado em
+     * Ajustes. Se falhar várias vezes, procura o multimídia de novo na rede do celular.
+     */
+    fun maybeSend(app: Application, manual: String, ui: UiState) {
         val now = System.currentTimeMillis()
         if (now - lastSentMs < 1000) return
         lastSentMs = now
+        val target = discovered ?: normalize(manual)
+        if (target == null) {
+            scheduleScan()
+            return
+        }
         val body = toJson(app, ui).toString().toByteArray(Charsets.UTF_8)
         pool.execute { post(app, target, body) }
     }
@@ -39,6 +61,65 @@ object PainelLink {
         if (a.isBlank()) return null
         return if (a.contains(':')) a else "$a:8080"
     }
+
+    private fun scheduleScan() {
+        val now = System.currentTimeMillis()
+        if (now - lastScanMs < 10_000 || !scanning.compareAndSet(false, true)) return
+        lastScanMs = now
+        scanner.execute {
+            try {
+                discovered = findPainel()
+            } finally {
+                scanning.set(false)
+            }
+        }
+    }
+
+    /** Procura o /ping do multimídia em todas as redes do celular (hotspot, Wi-Fi), com 32 conexões ao mesmo tempo. */
+    private fun findPainel(): String? {
+        val found = AtomicReference<String?>(null)
+        val probes = Executors.newFixedThreadPool(32)
+        val futures = ArrayList<Future<*>>()
+        for (base in localSubnets()) {
+            for (h in 1..254) {
+                val ip = "$base.$h"
+                futures.add(probes.submit {
+                    if (found.get() == null && isPainel(ip)) found.compareAndSet(null, "$ip:$PORT")
+                })
+            }
+        }
+        futures.forEach { try { it.get() } catch (_: Exception) { } }
+        probes.shutdownNow()
+        return found.get()
+    }
+
+    private fun isPainel(ip: String): Boolean = try {
+        val c = URL("http://$ip:$PORT/ping").openConnection() as HttpURLConnection
+        c.connectTimeout = 400
+        c.readTimeout = 600
+        val ok = c.responseCode == 200 &&
+            c.inputStream.bufferedReader(Charsets.UTF_8).use { it.readText() }.trim() == "monitor2008"
+        c.disconnect()
+        ok
+    } catch (_: Exception) {
+        false
+    }
+
+    /** Redes IPv4 do celular, sem o 4G (a busca não varre a operadora). Ex.: "192.168.43". */
+    private fun localSubnets(): List<String> = try {
+        Collections.list(NetworkInterface.getNetworkInterfaces())
+            .filter { it.isUp && !it.isLoopback && !isCellular(it.name) }
+            .flatMap { Collections.list(it.inetAddresses) }
+            .filterIsInstance<Inet4Address>()
+            .filter { !it.isLoopbackAddress }
+            .mapNotNull { it.hostAddress?.substringBeforeLast('.') }
+            .distinct()
+    } catch (_: Exception) {
+        emptyList()
+    }
+
+    private fun isCellular(name: String): Boolean =
+        listOf("rmnet", "ccmni", "v4-", "tun", "dummy").any { name.startsWith(it) }
 
     fun toJson(app: Application, ui: UiState): JSONObject {
         val s = ui.sample
@@ -118,6 +199,8 @@ object PainelLink {
 
     private fun num(d: Double?): Any = if (d != null && d.isFinite()) d else JSONObject.NULL
 
+    private const val PORT = 8080
+
     private fun post(app: Application, target: String, body: ByteArray) {
         try {
             val c = URL("http://$target/estado").openConnection() as HttpURLConnection
@@ -128,6 +211,7 @@ object PainelLink {
             c.setFixedLengthStreamingMode(body.size)
             c.setRequestProperty("Content-Type", "application/json; charset=utf-8")
             c.outputStream.use { it.write(body) }
+            failCount = 0
             if (c.responseCode == 200) {
                 val txt = c.inputStream.bufferedReader(Charsets.UTF_8).use { it.readText() }
                 val arr = JSONObject(txt).optJSONArray("comandos")
@@ -140,7 +224,12 @@ object PainelLink {
             }
             c.disconnect()
         } catch (_: Exception) {
-            // Multimídia desligado ou fora da rede: tenta de novo no próximo envio.
+            // Multimídia desligado ou fora da rede: depois de 3 falhas, procura de novo.
+            if (++failCount >= 3) {
+                failCount = 0
+                discovered = null
+                scheduleScan()
+            }
         }
     }
 

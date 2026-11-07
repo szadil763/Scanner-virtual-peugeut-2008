@@ -27,16 +27,16 @@ internal fun PainelSection() {
     var saved by remember { mutableStateOf(false) }
     Text("Painel no multimídia", fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
     Text(
-        "Com o multimídia ligado no hotspot deste celular, o app envia o painel para ele. " +
-            "Digite o endereço que aparece na tela \"Painel\" do multimídia (ex.: 10.12.38.252:8080). " +
-            "Deixe vazio para não enviar.",
+        "Com o multimídia ligado no hotspot deste celular, o app envia o painel para ele e acha o multimídia sozinho na rede. " +
+            "O endereço abaixo é opcional: use só se a busca não achar (ex.: 10.12.38.252:8080, o que aparece na tela Painel do multimídia). " +
+            "Deixe vazio para a busca automática.",
         color = MaterialTheme.colorScheme.onSurfaceVariant,
         fontSize = 15.sp,
     )
     OutlinedTextField(
         value = addr,
         onValueChange = { addr = it; saved = false },
-        label = { Text("Endereço do multimídia") },
+        label = { Text("Endereço (opcional)") },
         singleLine = true,
         modifier = Modifier.fillMaxWidth(),
     )
@@ -45,7 +45,7 @@ internal fun PainelSection() {
     }
     if (saved) {
         Text(
-            if (store.painelAddress.isBlank()) "Envio desligado." else "Salvo: o painel será enviado para ${store.painelAddress}.",
+            if (store.painelAddress.isBlank()) "Busca automática do multimídia." else "Salvo: o painel será enviado para ${store.painelAddress}.",
             fontSize = 15.sp,
         )
     }
