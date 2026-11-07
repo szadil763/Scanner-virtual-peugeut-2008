@@ -40,12 +40,18 @@ class PainelServerActivity : Activity() {
     @Volatile private var capa: ByteArray? = null
     private var web: WebView? = null
     private var tts: TextToSpeech? = null
+    /** Estado da voz deste aparelho, mostrado no painel (para saber por que a fala não sai). */
+    @Volatile private var ttsStatus = "iniciando"
 
     /** Ponte para o painel falar a resposta de voz pelo texto-para-voz deste aparelho. */
     inner class VozBridge {
         @JavascriptInterface
         fun falar(texto: String) {
-            tts?.speak(texto, TextToSpeech.QUEUE_FLUSH, null, "painel-voz")
+            val engine = tts
+            if (engine == null) { ttsStatus = "voz não iniciou"; return }
+            if (engine.speak(texto, TextToSpeech.QUEUE_FLUSH, null, "painel-voz") == TextToSpeech.ERROR) {
+                ttsStatus = "erro ao falar"
+            }
         }
     }
 
@@ -56,7 +62,16 @@ class PainelServerActivity : Activity() {
             setPadding(24, 12, 24, 12)
         }
         tts = TextToSpeech(this) { status ->
-            if (status == TextToSpeech.SUCCESS) tts?.language = Locale("pt", "BR")
+            if (status == TextToSpeech.SUCCESS) {
+                val r = tts?.setLanguage(Locale("pt", "BR"))
+                ttsStatus = if (r == TextToSpeech.LANG_MISSING_DATA || r == TextToSpeech.LANG_NOT_SUPPORTED) {
+                    "sem voz em português instalada"
+                } else {
+                    "pronta"
+                }
+            } else {
+                ttsStatus = "sem motor de voz neste aparelho"
+            }
         }
         val view = WebView(this).apply {
             settings.javaScriptEnabled = true
@@ -148,7 +163,7 @@ class PainelServerActivity : Activity() {
                     }
                     method == "GET" && path == "/estado" -> {
                         val age = if (latestAtMs == 0L) -1 else System.currentTimeMillis() - latestAtMs
-                        val json = "{\"idadeMs\":$age,\"dados\":${latestJson ?: "null"}}"
+                        val json = "{\"idadeMs\":$age,\"dados\":${latestJson ?: "null"},\"vozMultimidia\":\"$ttsStatus\"}"
                         send(out, 200, "application/json; charset=utf-8", json.toByteArray(Charsets.UTF_8))
                     }
                     method == "GET" && path == "/ping" ->

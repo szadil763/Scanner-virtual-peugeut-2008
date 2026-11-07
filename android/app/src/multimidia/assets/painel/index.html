@@ -99,6 +99,7 @@
 </nav>
 <main class="main">
 <div id="status">Aguardando o celular…</div>
+<div id="vozinfo" style="font-size:16px;color:var(--dim);padding:0 16px 4px;min-height:20px"></div>
 
 
 <div class="tela sel" id="t-painel">
@@ -543,13 +544,19 @@
     clearTimeout(vozTimer);
     vozTimer = setTimeout(function () { b.disabled = false; }, 8000);
   }
-  var ultimaFala = null;
+  var ultimaFala = null, ultimoFalaTxt = '', vozStatus = '';
+  function mostraVoz() {
+    el('vozinfo').textContent = 'Voz deste multimídia: ' + (vozStatus || '…') + (ultimoFalaTxt ? ' · última resposta: ' + ultimoFalaTxt : '');
+  }
   function falarResposta(d) {
     if (d.falaId === undefined) return;
     if (ultimaFala === null) { ultimaFala = d.falaId; return; }
     if (d.falaId !== ultimaFala) {
       ultimaFala = d.falaId;
+      if (d.fala) { ultimoFalaTxt = d.fala; }
       if (d.fala && window.monitorVoz) monitorVoz.falar(d.fala);
+      else if (d.fala) { vozStatus = 'sem ponte de voz'; }
+      mostraVoz();
     }
   }
   function buscarMusica() {
@@ -685,6 +692,8 @@
     fetch('/estado?t=' + Date.now(), { cache: 'no-store' })
       .then(function (r) { return r.json(); })
       .then(function (s) {
+        vozStatus = s.vozMultimidia || '';
+        mostraVoz();
         if (s.dados && s.idadeMs >= 0 && s.idadeMs < 4000) {
           if (s.dados.ok === false) {
             st.textContent = 'Celular sem conexão com o carro';
