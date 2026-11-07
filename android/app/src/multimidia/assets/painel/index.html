@@ -96,6 +96,7 @@
   <button class="aba" id="ab-consumo" onclick="aba('consumo')"><b>7</b>Consumo</button>
   <button class="aba" id="ab-diag" onclick="aba('diag')"><b>8</b>Diagnóstico</button>
   <button class="aba" id="ab-ajustes" onclick="aba('ajustes')"><b>9</b>Ajustes</button>
+  <button class="aba" id="ab-mapa" onclick="aba('mapa')"><b>10</b>Mapa</button>
 </nav>
 <main class="main">
 <div id="status">Aguardando o celular…</div>
@@ -152,6 +153,17 @@
     <div class="lista" id="dg-falhas" style="padding:0"></div>
     <div class="lbl">Registro do adaptador (últimas linhas)</div>
     <pre id="dg-registro" style="margin:0;background:#0b0f14;border:2px solid #222;border-radius:12px;padding:10px;font-size:14px;color:#cfd8e3;max-height:260px;overflow:auto;white-space:pre-wrap"></pre>
+  </div>
+</div>
+
+<div class="tela" id="t-mapa">
+  <div class="form">
+    <div class="aviso" style="font-size:22px">O mapa abre no celular (Google Maps ou Waze). A rota aparece na tela do celular.</div>
+    <button class="enviar" style="min-height:80px" onclick="mapaAbrir()">Abrir o mapa no celular</button>
+    <div class="lbl">Para onde?</div>
+    <input type="text" id="mapa-dest" maxlength="150" placeholder="Endereço ou lugar salvo (ex.: Casa)" style="font-size:28px;min-height:64px;background:#000;color:var(--fg);border:3px solid #3a4a5c;border-radius:12px;padding:0 12px">
+    <button class="enviar" id="mapa-ir" style="min-height:72px" onclick="mapaRota()">Traçar a rota no celular</button>
+    <div class="aviso" id="mapa-aviso">Digitar o destino só com o carro parado.</div>
   </div>
 </div>
 
@@ -251,7 +263,7 @@
   var abaAtual = 'painel';
   function aba(nome) {
     abaAtual = nome;
-    ['painel', 'tocador', 'saude', 'postos', 'abastecer', 'manutencao', 'consumo', 'diag', 'ajustes'].forEach(function (n) {
+    ['painel', 'tocador', 'saude', 'postos', 'abastecer', 'manutencao', 'consumo', 'diag', 'ajustes', 'mapa'].forEach(function (n) {
       el('t-' + n).classList.toggle('sel', n === nome);
       el('ab-' + n).classList.toggle('sel', n === nome);
     });
@@ -600,6 +612,19 @@
     el('pend').style.display = 'none';
     fetch('/comando', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ acao: 'pendente.cancelar' }) });
   }
+  function mapaAbrir() {
+    fetch('/comando', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ acao: 'mapa.abrir' }) })
+      .then(function () { el('mapa-aviso').textContent = 'Abrindo o mapa no celular.'; })
+      .catch(function () { el('mapa-aviso').textContent = 'Sem resposta do multimídia.'; });
+  }
+  function mapaRota() {
+    if (!parado) return;
+    var t = el('mapa-dest').value.trim();
+    if (!t) { el('mapa-aviso').textContent = 'Digite o destino.'; return; }
+    fetch('/comando', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ acao: 'mapa.rota', texto: t }) })
+      .then(function () { el('mapa-aviso').textContent = 'Traçando a rota para "' + t + '" no celular.'; })
+      .catch(function () { el('mapa-aviso').textContent = 'Sem resposta do multimídia.'; });
+  }
   function buscarMusica() {
     if (!parado) return;
     var t = el('busca-txt').value.trim();
@@ -637,6 +662,8 @@
   function refreshParado() {
     el('ab-enviar').disabled = !parado;
     el('busca-btn').disabled = !parado;
+    el('mapa-ir').disabled = !parado;
+    el('mapa-dest').disabled = !parado;
     el('busca-aviso').textContent = parado ? 'Pesquisa só com o carro parado.' : 'Com o carro andando, a pesquisa fica bloqueada.';
     if (parado) {
       el('ab-aviso').textContent = confirmando ? 'Toque de novo para confirmar.' : 'Só com o carro parado. Depois de tocar, toque de novo para confirmar.';

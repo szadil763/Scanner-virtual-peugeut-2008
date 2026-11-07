@@ -8,6 +8,7 @@ import br.com.monitor2008.domain.DriveModeSetting
 import br.com.monitor2008.domain.DtcInfo
 import br.com.monitor2008.domain.MaintCatalog
 import br.com.monitor2008.domain.RefuelMath
+import br.com.monitor2008.domain.VoiceCommands
 import br.com.monitor2008.domain.VoiceRefuel
 import br.com.monitor2008.ui.MonitorEngine
 import br.com.monitor2008.ui.StationDraft
@@ -480,6 +481,11 @@ object PainelLink {
             "manutencao.feito" -> feitoManutencao(app, cmd.optString("id"))
             "diag.lerFalhas" -> MonitorEngine.get(app).readDtcs()
             "pendente.cancelar" -> cancelarPendente()
+            "mapa.abrir" -> AppLauncher(app).openMap(null)?.let { enviarFala(it) }
+            "mapa.rota" -> cmd.optString("texto").trim().takeIf { it.isNotEmpty() }?.let { q ->
+                val endereco = VoiceCommands.placeFor(q, Store(app).places()) ?: q
+                AppLauncher(app).routeTo(endereco, null)?.let { enviarFala(it) }
+            }
             "voz.ouvir" -> {
                 vozPainelAte = System.currentTimeMillis() + 60_000
                 VoiceAssistant.get(app).listen(beepWhenReady = true)
