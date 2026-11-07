@@ -62,6 +62,8 @@ object PainelLink {
     @Volatile private var pendente: JSONObject? = null
     @Volatile private var pendenteAteMs = 0L
     @Volatile private var pendenteId = 0
+    /** Resultado do último abastecimento pelo painel (posto identificado ou o motivo de não ter achado). */
+    @Volatile private var avisoAbastecimento = ""
 
     /** Pedido de voz do abastecimento: guarda para o painel confirmar (não abre tela no celular). */
     fun pedirAbastecimento(r: VoiceRefuel) {
@@ -237,6 +239,7 @@ object PainelLink {
             put("falaId", falaId)
             put("pendente", if (pendente != null && System.currentTimeMillis() < pendenteAteMs) pendente!! else JSONObject.NULL)
             put("pendenteId", pendenteId)
+            put("aviso", avisoAbastecimento)
             put("fala", falaTexto)
             put("ajustes", JSONObject().apply {
                 put("sol", Store(app).highContrast)
@@ -307,6 +310,9 @@ object PainelLink {
                     put("cheio", r.full)
                     put("etanol", r.ethanol)
                     put("kmL", num(r.realKmPerL))
+                    val st = ui.stations.firstOrNull { it.id == r.stationId }
+                    put("posto", st?.name ?: "")
+                    put("endereco", st?.address ?: "")
                 })
             }
         })
@@ -430,10 +436,17 @@ object PainelLink {
         // Posto pelo GPS do celular (como na tela de abastecimento). Sem GPS, registra sem posto.
         scope.launch {
             val fix = PlaceFinder.current(app, timeoutMs = 10_000)
-            val place = fix?.let {
-                StationDraft(it.latitude, it.longitude, "", PlaceFinder.address(app, it.latitude, it.longitude) ?: "")
-            }
+            val endereco = fix?.let { PlaceFinder.address(app, it.latitude, it.longitude) ?: "" }
+            val place = fix?.let { StationDraft(it.latitude, it.longitude, "", endereco ?: "") }
             MonitorEngine.get(app).registerRefuel(litros, preco, cheio, etanol, place)
+            val quanto = String.format(java.util.Locale("pt", "BR"), "%.2f", litros)
+            val valor = String.format(java.util.Locale("pt", "BR"), "%.2f", preco)
+            val posto = when {
+                fix == null -> "posto não identificado: o GPS do celular não respondeu (confira a localização do celular)"
+                endereco.isNullOrBlank() -> "posto: localização achada, mas sem endereço"
+                else -> "posto: $endereco"
+            }
+            avisoAbastecimento = "Registrado: $quanto L a R$ $valor · $posto"
         }
     }
 

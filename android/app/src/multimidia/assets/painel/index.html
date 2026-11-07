@@ -211,6 +211,7 @@
     </div>
     <button class="enviar" id="ab-enviar" onclick="enviarAbastecimento()">Registrar no celular</button>
     <div class="aviso" id="ab-aviso">Só com o carro parado. Depois de tocar, toque de novo para confirmar.</div>
+    <div class="aviso" id="abast-info" style="font-size:22px;color:var(--ok)"></div>
   </div>
 </div>
 
@@ -490,6 +491,7 @@
       var tipo = (a.cheio ? 'cheio' : 'parcial') + ' · ' + (a.etanol ? 'etanol' : 'gasolina');
       var det = 'R$ ' + Number(a.preco).toFixed(2) + '/L · ' + tipo +
         (a.kmL !== null && a.kmL !== undefined ? ' · ' + Number(a.kmL).toFixed(1) + ' km/l real' : '');
+      if (a.posto) det = 'Posto: ' + a.posto + (a.endereco ? ' · ' + a.endereco : '') + '\n' + det;
       box.appendChild(linha('', dataDia(a.dia) + ' · ' + Number(a.litros).toFixed(1) + ' L', '', det));
     });
   }
@@ -697,6 +699,7 @@
     paintAjustes(d.ajustes);
     falarResposta(d);
     pendenteAtualId = d.pendenteId;
+    if (d.aviso) el('abast-info').textContent = d.aviso;
     paintPendente(d);
     var m = d.midia || {};
     paintMidia(m);
