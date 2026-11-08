@@ -190,6 +190,17 @@
     <button class="mbtn" onclick="aba('manutencao')">🔧 Manutenção</button>
     <button class="mbtn" onclick="aba('diag')">🩺 Diagnóstico</button>
     <button class="mbtn" onclick="aba('ajustes')">⚙️ Ajustes</button>
+    <button class="mbtn" onclick="aba('ajuda')">❓ Como conectar</button>
+  </div>
+</div>
+
+<div class="tela" id="t-ajuda">
+  <div class="lista" style="gap:12px">
+    <div class="item"><div class="t">1. Ligue o hotspot do celular</div><div class="d">Em Configurações do celular, ligue o ponto de acesso (hotspot).</div></div>
+    <div class="item"><div class="t">2. Conecte o multimídia no hotspot</div><div class="d">No multimídia, escolha o Wi-Fi com o nome do hotspot do celular.</div></div>
+    <div class="item"><div class="t">3. Abra o Monitor no celular</div><div class="d">Deixe o app aberto (ou em segundo plano) no celular.</div></div>
+    <div class="item"><div class="t">4. Ligue o carro</div><div class="d">Com a ignição ligada, o painel mostra os números em alguns segundos.</div></div>
+    <div class="item"><div class="t">Se não aparecer nada</div><div class="d">Confira o hotspot, o Bluetooth do celular e se o adaptador está na tomada do carro. Depois, feche e abra o painel.</div></div>
   </div>
 </div>
 
@@ -273,12 +284,12 @@
     return m + ':' + ('0' + (s % 60)).slice(-2);
   }
   var abaAtual = 'painel';
-  var MAIS = ['saude', 'postos', 'consumo', 'manutencao', 'diag', 'ajustes'];
+  var MAIS = ['saude', 'postos', 'consumo', 'manutencao', 'diag', 'ajustes', 'ajuda'];
   function aba(nome) {
     abaAtual = nome;
     if (nome === 'mapa' && mapaObj) setTimeout(function () { mapaObj.invalidateSize(); }, 150);
     var grupo = MAIS.indexOf(nome) >= 0 ? 'mais' : nome;
-    ['painel', 'tocador', 'saude', 'postos', 'abastecer', 'manutencao', 'consumo', 'diag', 'ajustes', 'mapa', 'mais'].forEach(function (n) {
+    ['painel', 'tocador', 'saude', 'postos', 'abastecer', 'manutencao', 'consumo', 'diag', 'ajustes', 'mapa', 'ajuda', 'mais'].forEach(function (n) {
       el('t-' + n).classList.toggle('sel', n === nome);
     });
     ['painel', 'tocador', 'mapa', 'abastecer', 'mais'].forEach(function (n) {
@@ -825,7 +836,7 @@
         mostraVoz();
         if (s.dados && s.idadeMs >= 0 && s.idadeMs < 4000) {
           if (s.dados.ok === false) {
-            st.textContent = 'Celular sem conexão com o carro';
+            st.textContent = 'O celular não está conectado ao carro. Confira se o adaptador está na tomada do carro, com a ignição ligada, e se o Bluetooth do celular está ligado.';
             st.className = '';
           } else {
             st.textContent = 'Conectado ao celular';
@@ -833,12 +844,12 @@
           }
           paint(s.dados);
         } else {
-          st.textContent = 'Sem dados do celular. Abra o Monitor no celular.';
+          st.textContent = 'Sem dados do celular. Confira: 1) o hotspot do celular está ligado; 2) este multimídia está conectado nele; 3) o app Monitor está aberto no celular.';
           st.className = '';
         }
       })
       .catch(function () {
-        st.textContent = 'Sem resposta do multimídia';
+        st.textContent = 'Este painel não respondeu. Feche e abra o Painel Monitor 2008 no multimídia.';
         st.className = '';
       })
       .then(function () { setTimeout(poll, 700); });
