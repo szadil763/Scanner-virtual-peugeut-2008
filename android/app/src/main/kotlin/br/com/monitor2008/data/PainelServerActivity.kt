@@ -112,6 +112,15 @@ class PainelServerActivity : Activity() {
         }
     }
 
+    /**
+     * Liga o acompanhamento da música ao abrir/voltar para o painel. Antes só a tela principal do app fazia
+     * isso, então pelo ícone "Painel" o tocador nunca via o que o Spotify estava tocando.
+     */
+    override fun onResume() {
+        super.onResume()
+        if (Features.mediaControl) MediaWatcher.get(application).start()
+    }
+
     override fun onDestroy() {
         running = false
         try { server?.close() } catch (_: Exception) { }
@@ -279,6 +288,7 @@ class PainelServerActivity : Activity() {
             }
             "ajuste.continuar" -> st.resumeMedia = o.optBoolean("valor", true)
             "ajuste.lugarRemover" -> st.savePlaces(st.places().filter { it.first != valor })
+            "sistema.notificacoes" -> SystemSettings.notificationAccess(this)
             "atualizacao.verificar" -> Updater.get(application).check()
             "atualizacao.instalar" -> {
                 val up = Updater.get(application)
@@ -406,6 +416,8 @@ class PainelServerActivity : Activity() {
             put("ajustes", ajustesLocais())
             put("atualizacao", atualizacaoLocal())
             put("musicaAviso", JSONObject().put("id", PainelLink.avisoMusica.first).put("texto", PainelLink.avisoMusica.second))
+            // Sem o acesso às notificações o painel não vê o que toca (o painel mostra como ativar).
+            put("acessoNotificacoes", if (Features.mediaControl) MediaWatcher.get(application).allowed.value else true)
             put("musicaDisponivel", Features.mediaControl)
         }.toString()
     }
@@ -493,6 +505,7 @@ class PainelServerActivity : Activity() {
         private val AJUSTES_LOCAIS = setOf(
             "ajuste.mapa", "ajuste.musica", "ajuste.voz", "ajuste.vozOuvir", "ajuste.velocidade", "ajuste.tom",
             "ajuste.continuar", "ajuste.lugarRemover", "atualizacao.verificar", "atualizacao.instalar",
+            "sistema.notificacoes",
         )
         private const val VALIDADE_MS = 20_000L
         /** Fila de comandos (instante, JSON) esperando o próximo envio do celular. */

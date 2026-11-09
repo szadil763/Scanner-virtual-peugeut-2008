@@ -598,6 +598,7 @@ object PainelLink {
         val q = texto.trim().take(100)
         if (q.isEmpty()) return
         val media = MediaWatcher.get(app)
+        media.start() // confere de novo o acesso às notificações (o dono pode ter acabado de ativar)
         val launcher = AppLauncher(app)
         val pkg = launcher.musicFor(null) ?: media.now.value?.pkg
         if (pkg == null) {
@@ -637,7 +638,19 @@ object PainelLink {
             override fun run() {
                 tentativas++
                 val n = media.now.value
-                if (n != null && n.pkg == pkg && n.playing) {
+                if (!media.allowed.value) {
+                    // Sem o acesso às notificações o painel não vê o que toca: volta depois de uns segundos
+                    // e avisa o que fazer, em vez de ficar esperando para sempre.
+                    if (tentativas >= 6) {
+                        try {
+                            app.startActivity(
+                                android.content.Intent(app, PainelServerActivity::class.java)
+                                    .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK or android.content.Intent.FLAG_ACTIVITY_REORDER_TO_FRONT),
+                            )
+                        } catch (_: Exception) { }
+                        avisarMusica("Falta o acesso às notificações: sem ele o painel não vê nem controla a música. Toque em Ativar na aba Mídias.")
+                    } else h.postDelayed(this, 500L)
+                } else if (n != null && n.pkg == pkg && n.playing) {
                     try {
                         app.startActivity(
                             android.content.Intent(app, PainelServerActivity::class.java)
