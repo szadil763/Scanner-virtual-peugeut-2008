@@ -255,6 +255,38 @@ class PainelServerActivity : Activity() {
             }
             "ajuste.continuar" -> st.resumeMedia = o.optBoolean("valor", true)
             "ajuste.lugarRemover" -> st.savePlaces(st.places().filter { it.first != valor })
+            "atualizacao.verificar" -> Updater.get(application).check()
+            "atualizacao.instalar" -> {
+                val up = Updater.get(application)
+                when (val s = up.state.value) {
+                    is UpdateState.Available -> {
+                        if (up.canInstall()) up.download(s.version) else startActivity(up.permissionIntent())
+                    }
+                    is UpdateState.Ready -> {
+                        if (up.canInstall()) up.install(this, s.file) else startActivity(up.permissionIntent())
+                    }
+                    else -> {}
+                }
+            }
+        }
+    }
+
+    /** Estado da atualização do software, para a tela Ajustes do painel. */
+    private fun atualizacaoLocal(): JSONObject {
+        val up = Updater.get(application)
+        val (texto, podeInstalar, pronta) = when (val s = up.state.value) {
+            is UpdateState.Idle -> Triple("Versão instalada: ${up.installedCode}. Toque em Verificar.", false, false)
+            is UpdateState.Checking -> Triple("Verificando…", false, false)
+            is UpdateState.UpToDate -> Triple("Já está na versão mais recente (${up.installedCode}).", false, false)
+            is UpdateState.Available -> Triple("Versão nova: ${s.version.versionName}. Toque em Baixar e instalar.", true, false)
+            is UpdateState.Downloading -> Triple("Baixando ${s.version.versionName}: ${(s.progress * 100).toInt()}%", false, false)
+            is UpdateState.Ready -> Triple("Versão ${s.version.versionName} baixada. Toque em Instalar agora.", true, true)
+            is UpdateState.Failed -> Triple(s.message, false, false)
+        }
+        return JSONObject().apply {
+            put("texto", texto)
+            put("podeInstalar", podeInstalar)
+            put("pronta", pronta)
         }
     }
 
@@ -348,6 +380,7 @@ class PainelServerActivity : Activity() {
             put("radio", radio)
             put("radios", lista)
             put("ajustes", ajustesLocais())
+            put("atualizacao", atualizacaoLocal())
             put("musicaDisponivel", Features.mediaControl)
         }.toString()
     }
@@ -434,7 +467,7 @@ class PainelServerActivity : Activity() {
         /** Ajustes que mudam as preferências deste multimídia (mapa, música, voz, lugares, rádio ao ligar). */
         private val AJUSTES_LOCAIS = setOf(
             "ajuste.mapa", "ajuste.musica", "ajuste.voz", "ajuste.vozOuvir", "ajuste.velocidade", "ajuste.tom",
-            "ajuste.continuar", "ajuste.lugarRemover",
+            "ajuste.continuar", "ajuste.lugarRemover", "atualizacao.verificar", "atualizacao.instalar",
         )
         private const val VALIDADE_MS = 20_000L
         /** Fila de comandos (instante, JSON) esperando o próximo envio do celular. */

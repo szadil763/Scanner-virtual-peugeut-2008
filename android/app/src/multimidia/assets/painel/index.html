@@ -26,8 +26,7 @@
   .aba.sel { background:var(--sel); border-color:#5b9be0; }
   .tela { flex:1 1 auto; min-height:0; display:none; }
   .tela.sel { display:flex; flex-direction:column; }
-  .grid { flex:1 1 auto; display:grid; grid-template-columns:repeat(5,1fr); grid-template-rows:1fr 1fr; gap:8px; padding:0 10px 8px; min-height:0; }
-  @media (max-width: 900px) { .grid { grid-template-columns:repeat(3,1fr); grid-template-rows:repeat(4,1fr); } }
+  .grid { flex:1 1 auto; display:grid; grid-template-columns:repeat(3,1fr); grid-template-rows:1fr 1fr; gap:8px; padding:0 10px 8px; min-height:0; }
   .split { flex:1 1 auto; display:grid; grid-template-columns:1fr 1fr; gap:12px; padding:0 12px 8px; min-height:0; overflow-y:auto; }
   .split .capa { width:auto; height:200px; max-width:200px; aspect-ratio:1 / 1; }
   .split .tocador { gap:6px; }
@@ -156,10 +155,6 @@
     <div class="card" id="c-kml"><div class="lbl" id="kml-lbl">Consumo agora</div><div class="val" id="kml">--</div><div class="unit" id="kml-unit">km/l</div></div>
     <div class="card" id="c-avg"><div class="lbl">Média da viagem</div><div class="val" id="avg">--</div><div class="unit">km/l</div></div>
     <div class="card" id="c-bat"><div class="lbl">Bateria</div><div class="val" id="bat">--</div><div class="unit">V</div></div>
-    <div class="card" id="c-carga"><div class="lbl">Carga do motor</div><div class="val" id="carga">--</div><div class="unit">%</div></div>
-    <div class="card" id="c-pressao"><div class="lbl">Pressão no coletor</div><div class="val" id="pressao">--</div><div class="unit">kPa</div></div>
-    <div class="card" id="c-ar"><div class="lbl">Ar na admissão</div><div class="val" id="ar">--</div><div class="unit">°C</div></div>
-    <div class="card" id="c-borb"><div class="lbl">Borboleta</div><div class="val" id="borb">--</div><div class="unit">%</div></div>
   </div>
 </div>
 
@@ -221,6 +216,13 @@
 <div class="tela" id="t-diag">
   <div class="consumo">
     <div class="item" id="dg-estado"><div class="t" id="dg-t">Conexão</div><div class="v" id="dg-v">--</div><div class="d" id="dg-d"></div></div>
+    <div class="lbl">Sensores do motor (tempo real)</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px 16px;font-size:20px;padding:4px 2px">
+      <div>Carga do motor: <b id="sg-carga">--</b> %</div>
+      <div>Pressão no coletor: <b id="sg-pressao">--</b> kPa</div>
+      <div>Ar na admissão: <b id="sg-ar">--</b> °C</div>
+      <div>Borboleta: <b id="sg-borb">--</b> %</div>
+    </div>
     <div class="lbl">Falhas armazenadas na central</div>
     <button class="feito" style="margin-top:0" onclick="lerFalhas()">Ler falhas agora (só consulta, não apaga)</button>
     <div class="lista" id="dg-falhas" style="padding:0"></div>
@@ -266,6 +268,12 @@
       <button class="opc" id="aj-d-ALWAYS_FULL" onclick="ajusteDirecao('ALWAYS_FULL')">Sempre completo</button>
     </div>
     <button class="opc" id="aj-d-ALWAYS_SIMPLE" onclick="ajusteDirecao('ALWAYS_SIMPLE')">Sempre simples</button>
+    <div class="lbl">Atualização do software</div>
+    <div style="display:grid;gap:10px">
+      <div class="aviso" id="at-texto">Toque em Verificar para ver se há versão nova.</div>
+      <button class="enviar" onclick="cmdAjuste('atualizacao.verificar')">Verificar atualização</button>
+      <button class="opc" id="at-instalar" style="display:none" onclick="cmdAjuste('atualizacao.instalar')">Baixar e instalar</button>
+    </div>
     <div class="lbl">Conta Google e nuvem</div>
     <div class="aviso" id="aj-conta">Conta: ver no celular</div>
     <button class="enviar" onclick="cmdAjuste('nuvem.sincronizar')">Sincronizar este carro</button>
@@ -801,6 +809,13 @@
     cont.textContent = 'Continuar a rádio ou a música: ' + (a.continuar ? 'ligado' : 'desligado');
     cont.className = 'opc' + (a.continuar ? ' sel' : '');
   }
+  function paintAtualizacao(a) {
+    if (!a) return;
+    el('at-texto').textContent = a.texto || '';
+    var b = el('at-instalar');
+    b.style.display = a.podeInstalar ? '' : 'none';
+    b.textContent = a.pronta ? 'Instalar agora' : 'Baixar e instalar';
+  }
   function ajusteContinuar() {
     var ligado = el('aj-cont').classList.contains('sel');
     cmdAjuste('ajuste.continuar', { valor: !ligado });
@@ -1023,10 +1038,10 @@
     if ((avg === null || avg === undefined) && d.tripAvgL100 > 0) avg = 100 / d.tripAvgL100;
     el('avg').textContent = num(avg, 1);
     el('bat').textContent = num(d.battery, 1);
-    el('carga').textContent = num(d.carga, 0);
-    el('pressao').textContent = num(d.pressaoKpa, 0);
-    el('ar').textContent = num(d.arAdmissao, 0);
-    el('borb').textContent = num(d.borboleta, 0);
+    el('sg-carga').textContent = num(d.carga, 0);
+    el('sg-pressao').textContent = num(d.pressaoKpa, 0);
+    el('sg-ar').textContent = num(d.arAdmissao, 0);
+    el('sg-borb').textContent = num(d.borboleta, 0);
     el('c-cool').className = 'card' + (d.coolant >= 110 ? ' bad' : d.coolant >= 100 ? ' warn' : '');
     el('c-bat').className = 'card' + (d.rpm > 400 && d.battery !== null && d.battery < 12.6 ? ' bad' : '');
     paintSaude(d.saude || []);
@@ -1128,6 +1143,7 @@
         paintMidia(m);
         paintRadios(m);
         paintAjustesLocais(m.ajustes);
+        paintAtualizacao(m.atualizacao);
         paintTocador(m.musica || null);
       })
       .catch(function () {})
