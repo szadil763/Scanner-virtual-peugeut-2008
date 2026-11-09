@@ -337,6 +337,14 @@
     <div class="linha" id="aj-musicas"></div>
     <div class="lbl">Ao ligar o carro</div>
     <button class="opc" id="aj-cont" onclick="ajusteContinuar()">Continuar a rádio ou a música</button>
+    <div class="lbl">Miniatura do Monitor sobre outros apps</div>
+    <div class="aviso" id="fl-texto">Ao abrir o Spotify, o Monitor fica por cima em miniatura.</div>
+    <button class="opc" id="fl-modo" onclick="flutuanteModo()">Miniatura do Monitor: ligada</button>
+    <button class="enviar" id="fl-perm" style="display:none" onclick="cmdAjuste('sistema.sobrepor')">Liberar "sobrepor a outros apps"</button>
+    <div class="aviso">Números na miniatura</div>
+    <div class="linha" id="fl-itens"></div>
+    <div class="aviso">Tamanho da miniatura</div>
+    <div class="linha" id="fl-tam"></div>
 
 
     </div>
@@ -957,6 +965,28 @@
     var cont = el('aj-cont');
     cont.textContent = 'Continuar a rádio ou a música: ' + (a.continuar ? 'ligado' : 'desligado');
     cont.className = 'opc' + (a.continuar ? ' sel' : '');
+    var fl = a.flutuante;
+    if (fl) {
+      var ligada = fl.modo === 'MONITOR';
+      el('fl-modo').textContent = 'Miniatura do Monitor: ' + (ligada ? 'ligada' : 'desligada');
+      el('fl-modo').className = 'opc' + (ligada ? ' sel' : '');
+      el('fl-perm').style.display = (ligada && !fl.permissao) ? 'block' : 'none';
+      el('fl-texto').textContent = !ligada
+        ? 'Desligada: o Android usa a janela dele, que é menor.'
+        : (fl.permissao
+          ? 'Ao abrir o Spotify, o Monitor fica por cima em miniatura, com os números do carro. Toque nela para voltar ao painel.'
+          : 'Falta liberar "sobrepor a outros apps" para a miniatura aparecer.');
+      var boxI = el('fl-itens');
+      boxI.textContent = '';
+      (fl.todos || []).forEach(function (it) {
+        boxI.appendChild(botaoAj(it.nome, 'opc' + (fl.itens.indexOf(it.id) >= 0 ? ' sel' : ''), function () { cmdAjuste('ajuste.flutuanteItem', { valor: it.id }); }));
+      });
+      var boxT = el('fl-tam');
+      boxT.textContent = '';
+      ['Pequena', 'Média', 'Grande'].forEach(function (n, i) {
+        boxT.appendChild(botaoAj(n, 'opc' + (fl.tamanho === i ? ' sel' : ''), function () { cmdAjuste('ajuste.flutuanteTamanho', { valor: i }); }));
+      });
+    }
   }
   function paintAtualizacao(a) {
     if (!a) return;
@@ -972,6 +1002,9 @@
   function grupoAj(g) {
     document.querySelectorAll('#seg-aj .opc').forEach(function (b) { b.classList.toggle('sel', b.dataset.g === g); });
     document.querySelectorAll('.gr-aj').forEach(function (d) { d.classList.toggle('sel', d.id === 'gr-' + g); });
+  }
+  function flutuanteModo() {
+    cmdAjuste('ajuste.flutuante', { valor: el('fl-modo').classList.contains('sel') ? 'ANDROID' : 'MONITOR' });
   }
   function ajusteContinuar() {
     var ligado = el('aj-cont').classList.contains('sel');

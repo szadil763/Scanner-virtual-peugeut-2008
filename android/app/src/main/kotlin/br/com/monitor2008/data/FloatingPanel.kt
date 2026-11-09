@@ -26,6 +26,7 @@ import br.com.monitor2008.ui.UiState
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import kotlin.math.abs
@@ -47,13 +48,26 @@ object FloatingPanel {
 
     val showing: Boolean get() = root != null
 
+    /** Tela para onde o toque na janela volta: o app completo (padrão) ou o Painel do multimídia. */
+    private var retorno: Class<out android.app.Activity> = MainActivity::class.java
+
+    /**
+     * Números vindos de fora (o Painel recebe os do celular): o multimídia não lê o carro, então a janela
+     * usa estes quando estão frescos (menos de 5 s) e os do próprio app quando não.
+     */
+    @Volatile private var externo: FloatValues? = null
+    @Volatile private var externoMs = 0L
+    fun setExterno(v: FloatValues) { externo = v; externoMs = System.currentTimeMillis() }
+    private fun externoFresco(): FloatValues? = externo?.takeIf { System.currentTimeMillis() - externoMs < 5_000 }
+
     /** Pode usar a janela própria: APK do multimídia, escolhida em Ajustes e com a permissão liberada. */
     fun available(ctx: Context): Boolean =
         Features.ownFloatingWindow && Store(ctx).floatMode == "MONITOR" && Settings.canDrawOverlays(ctx)
 
-    fun show(ctx: Context) {
+    fun show(ctx: Context, retornoPara: Class<out android.app.Activity>? = null) {
         val app = ctx.applicationContext as Application
         if (!available(app)) return
+        retorno = retornoPara ?: MainActivity::class.java
         if (root != null) return
         val wm = app.getSystemService(WindowManager::class.java) ?: return
         val store = Store(app)
@@ -78,6 +92,8 @@ object FloatingPanel {
         val engine = MonitorEngine.get(app)
         job = scope.launch {
             launch { engine.ui.collect { update(it) } }
+            // Números do celular (Painel): chegam a cada segundo e não passam pelo MonitorEngine.
+            launch { while (true) { delay(1_000); externoFresco()?.let { aplicar(it) } } }
             // O título mostra o comando de voz: "Ouvindo..." e o que foi entendido.
             launch { VoiceAssistant.get(app).state.collect { showVoice(it) } }
         }
@@ -123,7 +139,7 @@ object FloatingPanel {
             wm.removeView(old)
             wm.addView(view, p)
             root = view
-            update(MonitorEngine.get(app).ui.value)
+            aplicar(externoFresco() ?: valores(MonitorEngine.get(app).ui.value))
         } catch (_: Exception) { }
     }
 
@@ -243,18 +259,26 @@ object FloatingPanel {
     private fun openApp(app: Application) {
         try {
             app.startActivity(
-                Intent(app, MainActivity::class.java)
+                Intent(app, retorno)
                     .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT or Intent.FLAG_ACTIVITY_SINGLE_TOP),
             )
         } catch (_: Exception) { }
     }
 
-    private fun update(ui: UiState) {
+    private fun valores(ui: UiState): FloatValues {
         val s = ui.sample
-        val v = FloatValues(
+        return FloatValues(
             speedKmh = s?.speedKmh, kmPerL = ui.kmPerL, avgKmPerL = ui.tripAvgKmPerL,
             rpm = s?.rpm, coolantC = s?.coolantC, batteryV = s?.batteryV,
         )
+    }
+
+    private fun update(ui: UiState) {
+        if (externoFresco() != null) return // os números do celular têm prioridade
+        aplicar(valores(ui))
+    }
+
+    private fun aplicar(v: FloatValues) {
         cells.forEach { (item, views) ->
             views.first.text = FloatRules.text(item, v)
             views.first.setTextColor(if (FloatRules.warn(item, v)) Color.rgb(251, 191, 36) else Color.WHITE)

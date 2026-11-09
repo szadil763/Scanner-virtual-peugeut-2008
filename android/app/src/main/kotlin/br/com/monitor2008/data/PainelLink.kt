@@ -631,10 +631,16 @@ object PainelLink {
         //    O pedido pela sessão de mídia é aceito mas muitas vezes ignorado, então fica como segunda chance.
         val erro = launcher.playFromSearch(pkg, q, null)
         if (erro == null) {
-            // O app abre na frente para aceitar a busca; assim que ele toca, o painel volta para a frente
-            // e a música aparece no tocador do multimídia.
-            avisarMusica("Pedi ao $nome para tocar \"$q\"…")
-            voltarAoPainel(app, media, pkg, nome)
+            // O app abre na frente para aceitar a busca. Com a miniatura liberada, o Monitor fica por cima dele
+            // com os números do carro e um toque volta ao painel; sem ela, o painel volta quando o app toca.
+            val miniatura = FloatingPanel.available(app)
+            if (miniatura) {
+                FloatingPanel.show(app, PainelServerActivity::class.java)
+                avisarMusica("Pedi ao $nome para tocar \"$q\". Toque na miniatura do Monitor para voltar ao painel.")
+            } else {
+                avisarMusica("Pedi ao $nome para tocar \"$q\"… Para ver o Monitor em miniatura sobre o app, libere \"sobrepor a outros apps\" em Ajustes > Mapa e música.")
+                voltarAoPainel(app, media, pkg, nome)
+            }
             return
         }
         if (media.playFromSearchQuietly(pkg, q)) {
@@ -644,7 +650,8 @@ object PainelLink {
         }
         // 2) O app não aceitou a busca: abre o app para o dono procurar por lá.
         val aberto = launcher.openApp(pkg, null)
-        avisarMusica(if (aberto == null) "$erro Abri o $nome para você buscar por lá." else "$erro $aberto")
+        if (aberto == null && FloatingPanel.available(app)) FloatingPanel.show(app, PainelServerActivity::class.java)
+        avisarMusica(if (aberto == null) "$erro Abri o $nome para você buscar por lá. Toque na miniatura do Monitor para voltar." else "$erro $aberto")
     }
 
     /**

@@ -119,6 +119,7 @@ class PainelServerActivity : Activity() {
     override fun onResume() {
         super.onResume()
         if (Features.mediaControl) MediaWatcher.get(application).start()
+        FloatingPanel.hide(this) // de volta ao painel: a miniatura some
     }
 
     override fun onDestroy() {
@@ -147,6 +148,17 @@ class PainelServerActivity : Activity() {
                     method == "POST" && path == "/estado" -> {
                         latestJson = String(body, Charsets.UTF_8)
                         latestAtMs = System.currentTimeMillis()
+                        // A miniatura sobre outros apps mostra estes números (o multimídia não lê o carro).
+                        try {
+                            val j = JSONObject(latestJson!!)
+                            fun d(k: String): Double? = j.optDouble(k, Double.NaN).takeIf { it.isFinite() }
+                            FloatingPanel.setExterno(
+                                br.com.monitor2008.domain.FloatValues(
+                                    speedKmh = d("speed"), kmPerL = d("kmL"), avgKmPerL = d("tripAvgKmL"),
+                                    rpm = d("rpm"), coolantC = d("coolant"), batteryV = d("battery"),
+                                ),
+                            )
+                        } catch (_: Exception) { }
                         // Resposta: os comandos que os botões pediram desde o último envio.
                         val cmds = JSONArray()
                         val agora = System.currentTimeMillis()
@@ -289,6 +301,18 @@ class PainelServerActivity : Activity() {
             "ajuste.continuar" -> st.resumeMedia = o.optBoolean("valor", true)
             "ajuste.lugarRemover" -> st.savePlaces(st.places().filter { it.first != valor })
             "sistema.notificacoes" -> SystemSettings.notificationAccess(this)
+            "sistema.sobrepor" -> SystemSettings.overlay(this)
+            "ajuste.flutuante" -> if (valor == "MONITOR" || valor == "ANDROID") {
+                st.floatMode = valor
+                if (valor == "ANDROID") FloatingPanel.hide(this)
+            }
+            "ajuste.flutuanteItem" -> br.com.monitor2008.domain.FloatItem.values().firstOrNull { it.name == valor }?.let { item ->
+                st.floatItems = br.com.monitor2008.domain.FloatRules.serialize(
+                    br.com.monitor2008.domain.FloatRules.toggle(br.com.monitor2008.domain.FloatRules.parse(st.floatItems), item),
+                )
+                FloatingPanel.refresh(this)
+            }
+            "ajuste.flutuanteTamanho" -> valor.toIntOrNull()?.let { st.floatSize = it.coerceIn(0, 2); FloatingPanel.refresh(this) }
             "atualizacao.verificar" -> Updater.get(application).check()
             "atualizacao.instalar" -> {
                 val up = Updater.get(application)
@@ -340,6 +364,17 @@ class PainelServerActivity : Activity() {
             put("velocidade", Math.round(st.ttsRate * 10) / 10.0)
             put("tom", Math.round(st.ttsPitch * 10) / 10.0)
             put("continuar", st.resumeMedia)
+            put("flutuante", JSONObject().apply {
+                put("modo", st.floatMode)
+                put("permissao", android.provider.Settings.canDrawOverlays(this@PainelServerActivity))
+                put("tamanho", st.floatSize)
+                put("itens", JSONArray().apply {
+                    br.com.monitor2008.domain.FloatRules.parse(st.floatItems).forEach { put(it.name) }
+                })
+                put("todos", JSONArray().apply {
+                    br.com.monitor2008.domain.FloatItem.values().forEach { put(JSONObject().put("id", it.name).put("nome", it.label)) }
+                })
+            })
             put("lugares", JSONArray().apply {
                 st.places().forEach { put(JSONObject().put("nome", it.first).put("endereco", it.second)) }
             })
@@ -505,7 +540,7 @@ class PainelServerActivity : Activity() {
         private val AJUSTES_LOCAIS = setOf(
             "ajuste.mapa", "ajuste.musica", "ajuste.voz", "ajuste.vozOuvir", "ajuste.velocidade", "ajuste.tom",
             "ajuste.continuar", "ajuste.lugarRemover", "atualizacao.verificar", "atualizacao.instalar",
-            "sistema.notificacoes",
+            "sistema.notificacoes", "sistema.sobrepor", "ajuste.flutuante", "ajuste.flutuanteItem", "ajuste.flutuanteTamanho",
         )
         private const val VALIDADE_MS = 20_000L
         /** Fila de comandos (instante, JSON) esperando o próximo envio do celular. */
