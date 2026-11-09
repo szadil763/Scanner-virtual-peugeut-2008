@@ -220,6 +220,10 @@
       Para mostrar e controlar a música aqui, ative o acesso às notificações do Monitor 2008.
       <button class="feito" onclick="cmdAjuste('sistema.notificacoes')">Ativar o acesso às notificações</button>
     </div>
+    <div id="sem-sobrepor" style="display:none;width:100%;border:2px solid #ffcc33;border-radius:16px;padding:12px;font-size:18px;color:#ffcc33">
+      Para o Monitor ficar em miniatura sobre o Spotify, libere "sobrepor a outros apps". Na tela que abrir, escolha o Monitor 2008 e ative a permissão.
+      <button class="feito" onclick="cmdAjuste('sistema.sobrepor')">Ativar a miniatura sobre outros apps</button>
+    </div>
     <img class="capa" id="capa" alt="" style="display:none">
     <div class="capa vazia" id="capa-vazia">Sem capa</div>
     <div class="tit2" id="tc-tit">Nada tocando</div>
@@ -1453,6 +1457,8 @@
         paintRadios(m);
         paintAjustesLocais(m.ajustes);
         el('sem-acesso').style.display = (m.acessoNotificacoes === false) ? 'block' : 'none';
+        var flM = m.ajustes && m.ajustes.flutuante;
+        el('sem-sobrepor').style.display = (flM && flM.modo === 'MONITOR' && !flM.permissao) ? 'block' : 'none';
         paintAtualizacao(m.atualizacao);
         paintAvisoMusica(m.musicaAviso);
         paintTocador(m.musica || null);
