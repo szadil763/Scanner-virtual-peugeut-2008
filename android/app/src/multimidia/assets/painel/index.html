@@ -1108,7 +1108,7 @@
   }
   function mapaAbrir() {
     fetch('/comando', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ acao: 'mapa.abrir' }) })
-      .then(function () { el('mapa-aviso').textContent = 'Abrindo o mapa.'; })
+      .then(function () { el('mapa-aviso').textContent = 'Abrindo o mapa. O Monitor fica em miniatura por cima; toque nela para voltar ao painel.'; })
       .catch(function () { el('mapa-aviso').textContent = 'Sem resposta do multimídia.'; });
   }
   function mapaRota() {
@@ -1116,7 +1116,7 @@
     var t = el('mapa-dest').value.trim();
     if (!t) { el('mapa-aviso').textContent = 'Digite o destino.'; return; }
     fetch('/comando', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ acao: 'mapa.rota', texto: t }) })
-      .then(function () { el('mapa-aviso').textContent = 'Traçando a rota para "' + t + '".'; })
+      .then(function () { el('mapa-aviso').textContent = 'Traçando a rota para "' + t + '". O Monitor fica em miniatura por cima; toque nela para voltar ao painel.'; })
       .catch(function () { el('mapa-aviso').textContent = 'Sem resposta do multimídia.'; });
   }
   // Resultado da busca de música: fica na tela por alguns segundos (o texto padrão volta depois).

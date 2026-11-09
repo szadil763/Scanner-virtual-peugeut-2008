@@ -222,6 +222,10 @@ class PainelServerActivity : Activity() {
                                     } ?: "Digite o destino."
                                 } catch (_: Exception) { "Não consegui abrir o mapa." }
                                 if (erro != null && comandoValido(obj)) pending.add(System.currentTimeMillis() to obj.toString())
+                                // Mapa aberto aqui: o Monitor fica por cima em miniatura (números do carro); o toque volta ao painel.
+                                if (erro == null && FloatingPanel.available(application)) {
+                                    FloatingPanel.show(application, PainelServerActivity::class.java)
+                                }
                             }
                         } else if (obj != null && acaoLocal in AJUSTES_LOCAIS) {
                             // Ajustes deste multimídia: mudam as preferências daqui, não passam pelo celular.
