@@ -339,8 +339,21 @@ object PainelLink {
             put("posto", postoAchado ?: JSONObject.NULL)
             put("fala", falaTexto)
             put("ajustes", JSONObject().apply {
-                put("sol", Store(app).highContrast)
-                put("direcao", Store(app).driveMode)
+                val st = Store(app)
+                put("sol", st.highContrast)
+                put("direcao", st.driveMode)
+                put("combustivel", when {
+                    st.ethanolFraction >= 0.9 -> "ETANOL"
+                    st.ethanolFraction >= 0.31 -> "E32"
+                    else -> "E30"
+                })
+                put("calibracao", Math.round(st.calibration * 100) / 100.0)
+                put("preco", Math.round(st.fuelPrice * 100) / 100.0)
+                put("eficiencia", Math.round(st.volumetricEfficiency * 100) / 100.0)
+                put("carro", st.vehicleId ?: "")
+                put("carros", JSONArray().apply {
+                    br.com.monitor2008.domain.Vehicles.all.forEach { v -> put(JSONObject().put("id", v.id).put("nome", v.name)) }
+                })
             })
         }
     }
@@ -619,6 +632,20 @@ object PainelLink {
             "ajuste.sol" -> MonitorEngine.get(app).setHighContrast(cmd.optBoolean("valor", false))
             "ajuste.direcao" -> DriveModeSetting.values().firstOrNull { it.name == cmd.optString("valor") }
                 ?.let { MonitorEngine.get(app).setDriveMode(it) }
+            "ajuste.combustivel" -> {
+                val st = Store(app)
+                st.ethanolFraction = when (cmd.optString("valor")) { "ETANOL" -> 0.95; "E32" -> 0.32; else -> 0.30 }
+            }
+            "ajuste.calibracao" -> Store(app).let { st ->
+                st.calibration = (st.calibration + (if (cmd.optInt("valor", 0) > 0) 0.05 else -0.05)).coerceIn(0.5, 1.5)
+            }
+            "ajuste.preco" -> Store(app).let { st ->
+                st.fuelPrice = (st.fuelPrice + (if (cmd.optInt("valor", 0) > 0) 0.05 else -0.05)).coerceIn(1.0, 30.0)
+            }
+            "ajuste.eficiencia" -> Store(app).let { st ->
+                st.volumetricEfficiency = (st.volumetricEfficiency + (if (cmd.optInt("valor", 0) > 0) 0.05 else -0.05)).coerceIn(0.4, 1.2)
+            }
+            "ajuste.carro" -> br.com.monitor2008.domain.Vehicles.byId(cmd.optString("valor"))?.let { MonitorEngine.get(app).setVehicle(it.id) }
             "radio.next" -> RadioPlayer.get(app).step(true)
             "radio.prev" -> RadioPlayer.get(app).step(false)
         }

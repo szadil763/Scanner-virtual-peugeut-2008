@@ -315,7 +315,7 @@ class PainelServerActivity : Activity() {
         private val COMANDOS = setOf(
             "musica.playpause", "musica.next", "musica.prev",
             "radio.playpause", "radio.next", "radio.prev",
-            "abastecer", "musica.buscar", "manutencao.feito", "diag.lerFalhas", "ajuste.sol", "ajuste.direcao", "voz.ouvir", "pendente.cancelar", "mapa.abrir", "mapa.rota", "mapa.limpar", "posto.localizar",
+            "abastecer", "musica.buscar", "manutencao.feito", "diag.lerFalhas", "ajuste.sol", "ajuste.direcao", "ajuste.combustivel", "ajuste.calibracao", "ajuste.preco", "ajuste.eficiencia", "ajuste.carro", "voz.ouvir", "pendente.cancelar", "mapa.abrir", "mapa.rota", "mapa.limpar", "posto.localizar",
         )
         private const val VALIDADE_MS = 20_000L
         /** Fila de comandos (instante, JSON) esperando o próximo envio do celular. */
@@ -328,6 +328,9 @@ class PainelServerActivity : Activity() {
             if (acao == "diag.lerFalhas" || acao == "pendente.cancelar" || acao == "mapa.abrir" || acao == "mapa.limpar") return true
             if (acao == "mapa.rota") return o.optString("texto").isNotBlank() && o.optString("texto").length <= 150
             if (acao == "ajuste.sol" || acao == "voz.ouvir" || acao == "posto.localizar") return true
+            if (acao == "ajuste.combustivel") return o.optString("valor") in setOf("E30", "E32", "ETANOL")
+            if (acao == "ajuste.calibracao" || acao == "ajuste.preco" || acao == "ajuste.eficiencia") return o.has("valor")
+            if (acao == "ajuste.carro") return o.optString("valor").isNotBlank()
             if (acao == "ajuste.direcao") return o.optString("valor") in setOf("AUTO", "ALWAYS_FULL", "ALWAYS_SIMPLE")
             if (acao == "manutencao.feito") return o.optString("id").isNotBlank() && o.optString("id").length <= 40
             if (acao == "musica.buscar") return o.optString("texto").isNotBlank() && o.optString("texto").length <= 100

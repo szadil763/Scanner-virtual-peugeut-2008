@@ -197,6 +197,20 @@
 
 <div class="tela" id="t-ajustes">
   <div class="form">
+    <div class="lbl">Combustível no tanque</div>
+    <div class="linha">
+      <button class="opc" id="aj-c-E30" onclick="ajusteComb('E30')">Gasolina E30</button>
+      <button class="opc" id="aj-c-E32" onclick="ajusteComb('E32')">Gasolina E32</button>
+    </div>
+    <button class="opc" id="aj-c-ETANOL" onclick="ajusteComb('ETANOL')">Etanol</button>
+    <div class="lbl">Fator de calibração (ajustado pelos abastecimentos)</div>
+    <div class="linha"><button class="opc" onclick="ajusteAjuste('ajuste.calibracao',-1)">−</button><div class="v2" id="aj-cal">--</div><button class="opc" onclick="ajusteAjuste('ajuste.calibracao',1)">+</button></div>
+    <div class="lbl">Preço do combustível (R$/litro)</div>
+    <div class="linha"><button class="opc" onclick="ajusteAjuste('ajuste.preco',-1)">−</button><div class="v2" id="aj-preco">--</div><button class="opc" onclick="ajusteAjuste('ajuste.preco',1)">+</button></div>
+    <div class="lbl">Eficiência volumétrica (usada só no método MAP)</div>
+    <div class="linha"><button class="opc" onclick="ajusteAjuste('ajuste.eficiencia',-1)">−</button><div class="v2" id="aj-ef">--</div><button class="opc" onclick="ajusteAjuste('ajuste.eficiencia',1)">+</button></div>
+    <div class="lbl">Carro</div>
+    <div id="aj-carros"></div>
     <div class="lbl">Tela</div>
     <button class="opc" id="aj-sol" onclick="ajusteSol()">Tema sol forte: desligado</button>
     <div class="lbl">Tela ao dirigir</div>
@@ -205,7 +219,7 @@
       <button class="opc" id="aj-d-ALWAYS_FULL" onclick="ajusteDirecao('ALWAYS_FULL')">Sempre completo</button>
     </div>
     <button class="opc" id="aj-d-ALWAYS_SIMPLE" onclick="ajusteDirecao('ALWAYS_SIMPLE')">Sempre simples</button>
-    <div class="aviso">Outras configurações (voz, mapa, lugares, adaptador, abastecimentos) ficam no celular.</div>
+    <div class="aviso">Adaptador, janela flutuante e atualização do app ficam no celular.</div>
   </div>
 </div>
 
@@ -607,8 +621,32 @@
   function ajusteDirecao(v) {
     fetch('/comando', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ acao: 'ajuste.direcao', valor: v }) });
   }
+  function ajusteComb(v) { cmdAjuste('ajuste.combustivel', { valor: v }); }
+  function ajusteAjuste(acao, sinal) { cmdAjuste(acao, { valor: sinal }); }
+  function ajusteCarro(id) { cmdAjuste('ajuste.carro', { valor: id }); }
+  function cmdAjuste(acao, extra) {
+    var corpo = Object.assign({ acao: acao }, extra || {});
+    fetch('/comando', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(corpo) });
+  }
   function paintAjustes(a) {
     if (!a) return;
+    ['E30', 'E32', 'ETANOL'].forEach(function (c) { el('aj-c-' + c).className = 'opc' + (a.combustivel === c ? ' sel' : ''); });
+    el('aj-cal').textContent = Number(a.calibracao).toFixed(2);
+    el('aj-preco').textContent = Number(a.preco).toFixed(2).replace('.', ',');
+    el('aj-ef').textContent = Number(a.eficiencia).toFixed(2).replace('.', ',');
+    var box = el('aj-carros');
+    if (box && !box.dataset.ok && a.carros) {
+      box.dataset.ok = '1';
+      a.carros.forEach(function (c) {
+        var b = document.createElement('button');
+        b.className = 'opc';
+        b.dataset.id = c.id;
+        b.textContent = c.nome;
+        b.onclick = function () { ajusteCarro(c.id); };
+        box.appendChild(b);
+      });
+    }
+    if (box) Array.prototype.forEach.call(box.children, function (b) { b.className = 'opc' + (b.dataset.id === a.carro ? ' sel' : ''); });
     sol = !!a.sol;
     direcao = a.direcao || 'AUTO';
     el('aj-sol').textContent = 'Tema sol forte: ' + (sol ? 'ligado' : 'desligado');
