@@ -1,7 +1,9 @@
 package br.com.monitor2008.data
 
+import android.content.Context
 import br.com.monitor2008.domain.MaintCatalog
 import br.com.monitor2008.domain.Station
+import br.com.monitor2008.ui.MonitorEngine
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.database.FirebaseDatabase
 import com.google.firebase.database.ServerValue
@@ -12,31 +14,43 @@ import org.json.JSONObject
  * Dados de cada CARRO na nuvem (Firebase Realtime Database), em /carros/<carro>.
  * Quem está na lista de membros do carro lê e grava. Quem é convidado (pelo e-mail, em
  * "convites") entra sozinho ao sincronizar. Os dados são do carro, não da pessoa.
- * Regras: ver docs/FIREBASE.md.
+ * Sobe tudo do carro: abastecimentos, postos, manutenção, odômetro, configurações e as
+ * viagens da Saúde. Regras: ver docs/FIREBASE.md.
  */
 object Nuvem {
     private fun carro(id: String) = FirebaseDatabase.getInstance().reference.child("carros").child(id)
 
     fun uid(): String? = FirebaseAuth.getInstance().currentUser?.uid
 
-    /** Sincroniza o carro: entra na lista do carro, traz o que falta no aparelho e envia o que ele tem. */
-    fun sincronizar(store: Store, depois: (Boolean, String) -> Unit) {
+    /** Sincroniza o carro: entra na lista, traz o que falta no aparelho e envia o que ele tem. */
+    fun sincronizar(ctx: Context, store: Store, depois: (Boolean, String) -> Unit) {
         val uid = uid() ?: return depois(false, "Entre com a conta Google primeiro.")
         val id = store.carKey
         carro(id).child("membros").child(uid).setValue(true)
-            .addOnSuccessListener { receber(store, id, depois) }
+            .addOnSuccessListener { receber(ctx, store, id, depois) }
             .addOnFailureListener { depois(false, "Não consegui entrar no carro na nuvem: ${it.message ?: "sem permissão"}") }
     }
 
-    /** Traz da nuvem o que o aparelho ainda não tem (abastecimentos, postos, manutenção, odômetro). */
-    private fun receber(store: Store, id: String, depois: (Boolean, String) -> Unit) {
+    /** Traz da nuvem o que o aparelho ainda não tem e depois envia o que ele tem. */
+    private fun receber(ctx: Context, store: Store, id: String, depois: (Boolean, String) -> Unit) {
         carro(id).get()
             .addOnSuccessListener { snap ->
+                var trouxe = false
                 if (snap.exists()) {
                     val abast = JSONArray(snap.child("abastecimentos").getValue(String::class.java) ?: "[]")
                     val postos = JSONArray(snap.child("postos").getValue(String::class.java) ?: "[]")
                     val manut = JSONObject(snap.child("manutencao").getValue(String::class.java) ?: "{}")
                     val odo = snap.child("odometro").getValue(Double::class.java) ?: 0.0
+                    val tudo = snap.child("tudo").getValue(String::class.java)
+                    val viagens = snap.child("viagensSaude").getValue(String::class.java)
+
+                    // Aparelho novo para este carro: traz tudo (configurações, calibração, óleo e viagens da Saúde).
+                    if (!store.carroTemDados() && !tudo.isNullOrBlank()) {
+                        store.importarCarro(JSONObject(tudo))
+                        trouxe = true
+                    }
+                    if (!viagens.isNullOrBlank()) HealthStore(ctx, id).restaurarRaw(viagens)
+
                     if (store.refuels().isEmpty()) {
                         for (i in 0 until abast.length()) {
                             val o = abast.getJSONObject(i)
@@ -54,6 +68,7 @@ object Nuvem {
                                     tankRatio = if (o.isNull("tanque")) null else o.getDouble("tanque"),
                                 ),
                             )
+                            trouxe = true
                         }
                     }
                     if (store.stations().isEmpty() && postos.length() > 0) {
@@ -63,20 +78,28 @@ object Nuvem {
                                 Station(p.getString("id"), p.getString("name"), p.optString("address", ""), p.getDouble("lat"), p.getDouble("lon"))
                             },
                         )
+                        trouxe = true
                     }
-                    if (store.odometerKm == 0.0 && odo > 0) store.saveProgress(odo, store.uncalLiters, store.kmSinceFull)
+                    if (store.odometerKm == 0.0 && odo > 0) {
+                        store.saveProgress(odo, store.uncalLiters, store.kmSinceFull)
+                        trouxe = true
+                    }
                     for (item in MaintCatalog.items) {
                         val m = manut.optJSONObject(item.id) ?: continue
-                        if (!store.maintConfigured(item.id)) store.setMaintDone(item.id, m.getDouble("km"), m.getLong("dia"))
+                        if (!store.maintConfigured(item.id)) {
+                            store.setMaintDone(item.id, m.getDouble("km"), m.getLong("dia"))
+                            trouxe = true
+                        }
                     }
                 }
-                enviar(store, id, depois)
+                if (trouxe) MonitorEngine.get(ctx.applicationContext as android.app.Application).recarregarCarro()
+                enviar(ctx, store, id, depois)
             }
             .addOnFailureListener { depois(false, "Não consegui ler o carro na nuvem: ${it.message ?: "sem permissão"}") }
     }
 
-    /** Envia o que o aparelho tem deste carro. */
-    private fun enviar(store: Store, id: String, depois: (Boolean, String) -> Unit) {
+    /** Envia tudo o que o aparelho tem deste carro. */
+    private fun enviar(ctx: Context, store: Store, id: String, depois: (Boolean, String) -> Unit) {
         val uid = uid() ?: return depois(false, "Entre com a conta Google primeiro.")
         val abast = JSONArray().apply {
             store.refuels().forEach { r ->
@@ -121,6 +144,8 @@ object Nuvem {
             "postos" to postos.toString(),
             "manutencao" to manut.toString(),
             "odometro" to store.odometerKm,
+            "tudo" to store.exportarCarro().toString(),
+            "viagensSaude" to HealthStore(ctx, id).rawJson(),
             "atualizadoEm" to ServerValue.TIMESTAMP,
         )
         carro(id).updateChildren(dados)

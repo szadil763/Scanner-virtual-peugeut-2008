@@ -80,6 +80,41 @@ class Store(context: Context) {
     val uncalLiters: Double get() = p.getString("uncalLiters", null)?.toDoubleOrNull() ?: 0.0
     val kmSinceFull: Double get() = p.getString("kmSinceFull", null)?.toDoubleOrNull() ?: 0.0
 
+    /** Tudo que é do carro (preferências do arquivo do carro), com o tipo de cada valor. */
+    fun exportarCarro(): org.json.JSONObject {
+        val out = org.json.JSONObject()
+        for ((k, v) in p.all) {
+            val o = org.json.JSONObject()
+            when (v) {
+                is String -> out.put(k, o.put("t", "s").put("v", v))
+                is Boolean -> out.put(k, o.put("t", "b").put("v", v))
+                is Float -> out.put(k, o.put("t", "f").put("v", v.toDouble()))
+                is Int -> out.put(k, o.put("t", "i").put("v", v))
+                is Long -> out.put(k, o.put("t", "l").put("v", v))
+            }
+        }
+        return out
+    }
+
+    /** Grava o que veio da nuvem no arquivo do carro. */
+    fun importarCarro(j: org.json.JSONObject) {
+        val ed = p.edit()
+        for (k in j.keys()) {
+            val o = j.getJSONObject(k)
+            when (o.getString("t")) {
+                "s" -> ed.putString(k, o.getString("v"))
+                "b" -> ed.putBoolean(k, o.getBoolean("v"))
+                "f" -> ed.putFloat(k, o.getDouble("v").toFloat())
+                "i" -> ed.putInt(k, o.getInt("v"))
+                "l" -> ed.putLong(k, o.getLong("v"))
+            }
+        }
+        ed.apply()
+    }
+
+    /** O carro já tem dados neste aparelho? (senão, pode trazer da nuvem sem perder nada) */
+    fun carroTemDados(): Boolean = p.contains("odometerKm") || p.contains("trip") || p.contains("refuels")
+
     fun saveProgress(odometerKm: Double, uncalLiters: Double, kmSinceFull: Double) {
         p.edit()
             .putString("odometerKm", odometerKm.toString())

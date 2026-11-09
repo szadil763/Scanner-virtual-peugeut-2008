@@ -476,6 +476,9 @@ class MonitorEngine private constructor(private val app: Application) {
     }
 
     /** Recarrega o que é de cada carro (viagem, odômetro, abastecimentos, Saúde) e reconecta. */
+    /** Recarrega o carro deste aparelho (depois de trazer os dados da nuvem). */
+    fun recarregarCarro() = reloadForCar()
+
     private fun reloadForCar() {
         odometerKm = store.odometerKm
         uncalLiters = store.uncalLiters

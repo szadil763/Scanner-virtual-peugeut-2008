@@ -47,7 +47,7 @@ internal fun ContaSection() {
     if (atual != null) {
         Text("Conectado como: $atual", fontSize = 16.sp)
         Text("Carro deste aparelho: $nomeCarro", fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
-        Button({ Nuvem.sincronizar(store) { _, texto -> aviso = texto } }, Modifier.height(56.dp)) {
+        Button({ Nuvem.sincronizar(ctx, store) { _, texto -> aviso = texto } }, Modifier.height(56.dp)) {
             Text("Sincronizar este carro", fontSize = 17.sp)
         }
         OutlinedTextField(

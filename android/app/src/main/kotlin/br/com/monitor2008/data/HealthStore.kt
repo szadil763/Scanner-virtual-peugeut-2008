@@ -36,6 +36,14 @@ class HealthStore(context: Context, carId: String = Vehicles.PEUGEOT_2008.id) {
         pendingFile.delete()
     }
 
+    /** Viagens gravadas, em texto (para subir para a nuvem). Vazio se não há nada. */
+    fun rawJson(): String = try { if (file.exists()) file.readText() else "" } catch (e: Exception) { "" }
+
+    /** Restaura as viagens a partir do texto da nuvem (só quando o aparelho ainda não tem viagens). */
+    fun restaurarRaw(json: String) {
+        try { if (json.isNotBlank() && !file.exists()) file.writeText(json) } catch (e: Exception) { }
+    }
+
     fun load(): List<TripHealth> = try {
         if (!file.exists()) emptyList() else {
             val arr = JSONArray(file.readText())
