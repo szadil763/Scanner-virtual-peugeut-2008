@@ -323,6 +323,7 @@ object PainelLink {
             put("parado", !ui.moving)
             put("tripAvgKmL", num(ui.tripAvgKmPerL))
             put("tripAvgL100", num(ui.tripAvgL100))
+            put("tripAvgMovKmL", num(ui.tripAvgKmPerLMoving))
             put("tripKm", num(ui.tripKm))
             put("tripMin", ui.tripMinutes)
             // Tempo real extra: carga, pressão no coletor, ar de admissão e borboleta (só o que o carro responde).

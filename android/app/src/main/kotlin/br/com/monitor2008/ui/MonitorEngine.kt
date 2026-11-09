@@ -70,6 +70,8 @@ data class UiState(
     val method: FlowMethod? = null,
     val tripAvgKmPerL: Double? = null,
     val tripAvgL100: Double? = null,
+    /** Média só com o carro andando (sem o combustível gasto parado). */
+    val tripAvgKmPerLMoving: Double? = null,
     val tripKm: Double = 0.0,
     val tripLiters: Double = 0.0,
     val tripAvgSpeed: Double = 0.0,
@@ -150,7 +152,7 @@ class MonitorEngine private constructor(private val app: Application) {
     // Trajeto real: soma todas as viagens e fica gravado até "Zerar trajeto". A simulação usa outro,
     // que zera a cada início, para não misturar dados de teste com os do carro.
     private val realTrip = TripAccumulator().also { t ->
-        store.loadTrip()?.let { t.restore(it[0], it[1], it[2], it[3]) }
+        store.loadTrip()?.let { a -> t.restore(a[0], a[1], a[2], a[3], a.getOrElse(4) { a[1] }) }
     }
     private val simTrip = TripAccumulator()
     private val trip: TripAccumulator get() = if (store.useSimulated) simTrip else realTrip
@@ -484,7 +486,7 @@ class MonitorEngine private constructor(private val app: Application) {
         uncalLiters = store.uncalLiters
         kmSinceFull = store.kmSinceFull
         realTrip.reset()
-        store.loadTrip()?.let { realTrip.restore(it[0], it[1], it[2], it[3]) }
+        store.loadTrip()?.let { a -> realTrip.restore(a[0], a[1], a[2], a[3], a.getOrElse(4) { a[1] }) }
         refuelList = store.refuels().asReversed()
         stationList = store.stations()
         healthStore = HealthStore(app, store.carKey)
@@ -650,7 +652,7 @@ class MonitorEngine private constructor(private val app: Application) {
     /** Grava o progresso (odômetro, acumuladores e trajeto). Chamado a cada 20 s e quando o app sai da tela. */
     fun saveNow() {
         store.saveProgress(odometerKm, uncalLiters, kmSinceFull)
-        realTrip.let { store.saveTrip(it.distanceKm, it.liters, it.seconds, it.kmWithFuel) }
+        realTrip.let { store.saveTrip(it.distanceKm, it.liters, it.seconds, it.kmWithFuel, it.litersMoving) }
     }
 
     private fun stationRatings(): List<StationRating> {
@@ -682,6 +684,7 @@ class MonitorEngine private constructor(private val app: Application) {
             method = lastMethod,
             tripAvgKmPerL = trip.avgKmPerL,
             tripAvgL100 = trip.avgLPer100Km,
+            tripAvgKmPerLMoving = trip.avgKmPerLMoving,
             tripKm = trip.distanceKm,
             tripLiters = trip.liters,
             tripAvgSpeed = trip.avgSpeedKmh,

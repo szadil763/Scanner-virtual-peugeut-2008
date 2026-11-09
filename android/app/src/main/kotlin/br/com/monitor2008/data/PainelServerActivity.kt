@@ -77,6 +77,8 @@ class PainelServerActivity : Activity() {
                 ttsStatus = "sem motor de voz neste aparelho"
             }
         }
+        // Confere em silêncio se há versão nova (no máximo a cada 6 h); o painel mostra um ponto em Mais.
+        Updater.get(application).checkQuietly()
         val view = WebView(this).apply {
             settings.javaScriptEnabled = true
             settings.cacheMode = WebSettings.LOAD_NO_CACHE

@@ -66,7 +66,7 @@
   .consumo { flex:1 1 auto; overflow-y:auto; display:flex; flex-direction:column; gap:10px; padding:0 10px 8px; min-height:0; }
   .grafs { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
   .gf canvas { width:100%; height:200px; display:block; background:#0b0f14; border-radius:12px; border:2px solid #222; }
-  .metricas { display:grid; grid-template-columns:repeat(4,1fr); gap:10px; }
+  .metricas { display:grid; grid-template-columns:repeat(5,1fr); gap:10px; }
   .metricas .card { min-height:120px; }
   .v2 { font-size:40px; font-weight:700; }
   .opc { font-size:22px; min-height:64px; width:100%; background:var(--btn); color:var(--fg); border:3px solid #3a4a5c; border-radius:12px; }
@@ -139,6 +139,19 @@
   /* Menu Mais em grade 3x2. */
   #t-mais .lista { display:grid !important; grid-template-columns:repeat(3,1fr); gap:12px; align-content:start; overflow-y:auto; }
   #t-mais .mbtn { min-height:120px; font-size:26px; text-align:center; padding:0 12px; }
+  /* Ponto vermelho: versão nova disponível. */
+  .menu .aba, .mbtn, .seg-aj .opc { position:relative; }
+  .aba.novo::after, .mbtn.novo::after, .seg-aj .opc.novo::after { content:''; position:absolute; top:8px; right:calc(50% - 30px); width:14px; height:14px; border-radius:50%; background:#f87171; }
+  .mbtn.novo::after, .seg-aj .opc.novo::after { right:14px; top:12px; }
+  /* Ajustes em grupos. */
+  .seg-aj { display:grid; grid-template-columns:repeat(5,1fr); gap:8px; }
+  .gr-aj { display:none; }
+  .gr-aj.sel { display:flex; flex-direction:column; gap:10px; }
+  /* Teclado numérico do Abastecer. */
+  .campo input.ativo { border-color:#7dd3fc !important; }
+  .teclado { display:grid; grid-template-columns:repeat(4,1fr); gap:8px; }
+  .teclado button { min-height:64px; font-size:30px; background:transparent; color:#7dd3fc; border:2px solid #6b7280; border-radius:16px; font-weight:600; }
+  .teclado button:disabled { color:#6b7280; border-color:#444; }
 </style>
 </head>
 <body>
@@ -170,7 +183,7 @@
     <div class="card" id="c-rpm"><div class="lbl">Rotação</div><div class="val" id="rpm">--</div><div class="unit">rpm</div></div>
     <div class="card" id="c-cool"><div class="lbl">Motor</div><div class="val" id="cool">--</div><div class="unit">°C</div></div>
     <div class="card" id="c-kml"><div class="lbl" id="kml-lbl">Consumo agora</div><div class="val" id="kml">--</div><div class="unit" id="kml-unit">km/l</div></div>
-    <div class="card" id="c-avg"><div class="lbl">Média da viagem</div><div class="val" id="avg">--</div><div class="unit">km/l</div></div>
+    <div class="card" id="c-avg"><div class="lbl">Média da viagem</div><div class="val" id="avg">--</div><div class="unit">km/l</div><div class="unit" id="avg-mov" style="font-size:18px"></div></div>
     <div class="card" id="c-bat"><div class="lbl">Bateria</div><div class="val" id="bat">--</div><div class="unit">V</div></div>
   </div>
 </div>
@@ -217,10 +230,10 @@
     <div class="lbl">Consumo do carro agora</div>
     <div class="metricas" style="grid-template-columns:1fr 1fr;margin-top:8px">
       <div class="card"><div class="lbl">Consumo agora</div><div class="v2" id="mc-kml">--</div><div class="unit">km/l</div></div>
-      <div class="card"><div class="lbl">Média do trajeto</div><div class="v2" id="mc-media">--</div><div class="unit">km/l</div></div>
+      <div class="card"><div class="lbl">Média com paradas</div><div class="v2" id="mc-media">--</div><div class="unit">km/l</div></div>
       <div class="card"><div class="lbl">Distância</div><div class="v2" id="mc-dist">--</div><div class="unit">km</div></div>
       <div class="card"><div class="lbl">Custo do trajeto</div><div class="v2" id="mc-custo">--</div><div class="unit">R$</div></div>
-      <div class="card"><div class="lbl">Vel. média</div><div class="v2" id="mc-vmed">--</div><div class="unit">km/h</div></div>
+      <div class="card"><div class="lbl">Média em movimento</div><div class="v2" id="mc-mov">--</div><div class="unit">km/l</div></div>
       <div class="card"><div class="lbl">Combustível</div><div class="v2" id="mc-lph">--</div><div class="unit">L/h</div></div>
     </div>
   </div>
@@ -263,6 +276,8 @@
 
 <div class="tela" id="t-ajustes">
   <div class="form">
+    <div class="seg-aj" id="seg-aj"><button class="opc sel" data-g="carro" onclick="grupoAj('carro')">Carro</button><button class="opc" data-g="tela" onclick="grupoAj('tela')">Tela</button><button class="opc" data-g="mapa" onclick="grupoAj('mapa')">Mapa e música</button><button class="opc" data-g="voz" onclick="grupoAj('voz')">Voz</button><button class="opc" id="chip-conta" data-g="conta" onclick="grupoAj('conta')">Conta e atualização</button></div>
+    <div class="gr-aj sel" id="gr-carro">
     <div class="lbl">Combustível no tanque</div>
     <div class="linha">
       <button class="opc" id="aj-c-E30" onclick="ajusteComb('E30')">Gasolina E30</button>
@@ -277,6 +292,8 @@
     <div class="linha"><button class="opc" onclick="ajusteAjuste('ajuste.eficiencia',-1)">−</button><div class="v2" id="aj-ef">--</div><button class="opc" onclick="ajusteAjuste('ajuste.eficiencia',1)">+</button></div>
     <div class="lbl">Carro</div>
     <div id="aj-carros"></div>
+    </div>
+    <div class="gr-aj" id="gr-tela">
     <div class="lbl">Tela</div>
     <button class="opc" id="aj-sol" onclick="ajusteSol()">Tema sol forte: desligado</button>
     <div class="lbl">Tela ao dirigir</div>
@@ -285,6 +302,29 @@
       <button class="opc" id="aj-d-ALWAYS_FULL" onclick="ajusteDirecao('ALWAYS_FULL')">Sempre completo</button>
     </div>
     <button class="opc" id="aj-d-ALWAYS_SIMPLE" onclick="ajusteDirecao('ALWAYS_SIMPLE')">Sempre simples</button>
+    </div>
+    <div class="gr-aj" id="gr-mapa">
+    <div class="lbl">Lugares salvos</div>
+    <div id="aj-lugares"></div>
+    <div class="aviso">Para salvar um lugar novo, use o celular (pede digitação).</div>
+    <div class="lbl">App de mapa</div>
+    <div class="linha" id="aj-mapas"></div>
+    <div class="lbl">App de música</div>
+    <div class="linha" id="aj-musicas"></div>
+    <div class="lbl">Ao ligar o carro</div>
+    <button class="opc" id="aj-cont" onclick="ajusteContinuar()">Continuar a rádio ou a música</button>
+
+
+    </div>
+    <div class="gr-aj" id="gr-voz">
+    <div class="lbl">Voz do app</div>
+    <div id="aj-vozes"></div>
+    <div class="lbl">Velocidade da fala</div>
+    <div class="linha"><button class="opc" onclick="cmdAjuste('ajuste.velocidade',{valor:-1})">−</button><div class="v2" id="aj-vel">--</div><button class="opc" onclick="cmdAjuste('ajuste.velocidade',{valor:1})">+</button></div>
+    <div class="lbl">Tom da voz</div>
+    <div class="linha"><button class="opc" onclick="cmdAjuste('ajuste.tom',{valor:-1})">−</button><div class="v2" id="aj-tom">--</div><button class="opc" onclick="cmdAjuste('ajuste.tom',{valor:1})">+</button></div>
+    </div>
+    <div class="gr-aj" id="gr-conta">
     <div class="lbl">Atualização do software</div>
     <div style="display:grid;gap:10px">
       <div class="aviso" id="at-texto">Toque em Verificar para ver se há versão nova.</div>
@@ -295,21 +335,7 @@
     <div class="aviso" id="aj-conta">Conta: ver no celular</div>
     <button class="enviar" onclick="cmdAjuste('nuvem.sincronizar')">Sincronizar este carro</button>
     <div class="aviso">Convidar pessoa e sair da conta ficam no celular.</div>
-    <div class="lbl">Lugares salvos</div>
-    <div id="aj-lugares"></div>
-    <div class="aviso">Para salvar um lugar novo, use o celular (pede digitação).</div>
-    <div class="lbl">App de mapa</div>
-    <div class="linha" id="aj-mapas"></div>
-    <div class="lbl">App de música</div>
-    <div class="linha" id="aj-musicas"></div>
-    <div class="lbl">Voz do app</div>
-    <div id="aj-vozes"></div>
-    <div class="lbl">Velocidade da fala</div>
-    <div class="linha"><button class="opc" onclick="cmdAjuste('ajuste.velocidade',{valor:-1})">−</button><div class="v2" id="aj-vel">--</div><button class="opc" onclick="cmdAjuste('ajuste.velocidade',{valor:1})">+</button></div>
-    <div class="lbl">Tom da voz</div>
-    <div class="linha"><button class="opc" onclick="cmdAjuste('ajuste.tom',{valor:-1})">−</button><div class="v2" id="aj-tom">--</div><button class="opc" onclick="cmdAjuste('ajuste.tom',{valor:1})">+</button></div>
-    <div class="lbl">Ao ligar o carro</div>
-    <button class="opc" id="aj-cont" onclick="ajusteContinuar()">Continuar a rádio ou a música</button>
+    </div>
     <div class="aviso">Adaptador, conexão automática e janela flutuante ficam no celular.</div>
   </div>
 </div>
@@ -320,7 +346,7 @@
     <button class="mbtn" onclick="aba('abastecer')">⛽ Abastecer</button>
     <button class="mbtn" onclick="aba('postos')">📍 Postos</button>
     <button class="mbtn" onclick="aba('manutencao')">🔧 Manutenção</button>
-    <button class="mbtn" onclick="aba('ajustes')">⚙️ Ajustes</button>
+    <button class="mbtn" id="mb-ajustes" onclick="aba('ajustes')">⚙️ Ajustes</button>
     <button class="mbtn" onclick="aba('ajuda')">❓ Como conectar</button>
   </div>
 </div>
@@ -342,7 +368,8 @@
       <div class="gf"><div class="lbl">Velocidade (km/h)</div><canvas id="cv-vel"></canvas></div>
     </div>
     <div class="metricas">
-      <div class="card"><div class="lbl">Média do trajeto</div><div class="v2" id="c-media">--</div><div class="unit">km/l</div></div>
+      <div class="card"><div class="lbl">Média com paradas</div><div class="v2" id="c-media">--</div><div class="unit">km/l</div></div>
+      <div class="card"><div class="lbl">Média em movimento</div><div class="v2" id="c-media-mov">--</div><div class="unit">km/l</div></div>
       <div class="card"><div class="lbl">Distância</div><div class="v2" id="c-dist">--</div><div class="unit">km</div></div>
       <div class="card"><div class="lbl">Custo do trajeto</div><div class="v2" id="c-custo">--</div><div class="unit">R$</div></div>
       <div class="card"><div class="lbl">Vel. média</div><div class="v2" id="c-vmed">--</div><div class="unit">km/h</div></div>
@@ -360,11 +387,16 @@
     </div>
     <div class="linha">
       <label class="campo">Quanto (<span id="lbl-quant">R$</span>)
-        <input type="number" id="ab-quant" inputmode="decimal" step="0.01" min="0" oninput="atualizaPrevia()">
+        <input type="text" id="ab-quant" inputmode="none" readonly onclick="campoAb('ab-quant')">
       </label>
       <label class="campo">Preço por litro (R$)
-        <input type="number" id="ab-preco" inputmode="decimal" step="0.01" min="0" oninput="atualizaPrevia()">
+        <input type="text" id="ab-preco" inputmode="none" readonly onclick="campoAb('ab-preco')">
       </label>
+    </div>
+    <div class="teclado" id="teclado">
+      <button onclick="tecla('1')">1</button><button onclick="tecla('2')">2</button><button onclick="tecla('3')">3</button><button onclick="tecla('x')" aria-label="Apagar">⌫</button>
+      <button onclick="tecla('4')">4</button><button onclick="tecla('5')">5</button><button onclick="tecla('6')">6</button><button onclick="tecla(',')">,</button>
+      <button onclick="tecla('7')">7</button><button onclick="tecla('8')">8</button><button onclick="tecla('9')">9</button><button onclick="tecla('0')">0</button>
     </div>
     <div class="aviso" id="ab-previa">&nbsp;</div>
     <div class="linha">
@@ -634,7 +666,13 @@
     if (c.height !== h) c.height = h;
     var g = c.getContext('2d');
     g.clearRect(0, 0, w, h);
-    if (!vals || vals.length < 2) return;
+    if (!vals || vals.length < 2) {
+      g.fillStyle = '#6b7280';
+      g.font = '20px sans-serif';
+      g.textAlign = 'center';
+      g.fillText('Sem dados ainda', w / 2, h / 2);
+      return;
+    }
     var mx = max || Math.max.apply(null, vals) || 1;
     g.strokeStyle = cor;
     g.lineWidth = 3;
@@ -655,6 +693,7 @@
     desenhaLinha('cv-km', c.historico, 0, '#3ddc6b');
     desenhaLinha('cv-vel', c.velocidades, 140, '#38bdf8');
     el('c-media').textContent = num(d.tripAvgKmL, 1);
+    el('c-media-mov').textContent = num(d.tripAvgMovKmL, 1);
     el('c-dist').textContent = num(d.tripKm, 1);
     el('c-custo').textContent = num(c.custo, 2);
     el('c-vmed').textContent = num(c.velMedia, 0);
@@ -663,7 +702,7 @@
     el('mc-media').textContent = num(d.tripAvgKmL, 1);
     el('mc-dist').textContent = num(d.tripKm, 1);
     el('mc-custo').textContent = num(c.custo, 2);
-    el('mc-vmed').textContent = num(c.velMedia, 0);
+    el('mc-mov').textContent = num(d.tripAvgMovKmL, 1);
     el('mc-lph').textContent = num(d.lph, 1);
     var chave = JSON.stringify(c.abastecimentos);
     if (chave === ultimoAbast) return;
@@ -833,6 +872,14 @@
     var b = el('at-instalar');
     b.style.display = a.podeInstalar ? '' : 'none';
     b.textContent = a.pronta ? 'Instalar agora' : 'Baixar e instalar';
+    ['ab-mais', 'mb-ajustes', 'chip-conta'].forEach(function (id) {
+      var x = el(id);
+      if (x) x.classList.toggle('novo', !!a.podeInstalar);
+    });
+  }
+  function grupoAj(g) {
+    document.querySelectorAll('#seg-aj .opc').forEach(function (b) { b.classList.toggle('sel', b.dataset.g === g); });
+    document.querySelectorAll('.gr-aj').forEach(function (d) { d.classList.toggle('sel', d.id === 'gr-' + g); });
   }
   function ajusteContinuar() {
     var ligado = el('aj-cont').classList.contains('sel');
@@ -960,16 +1007,37 @@
     }
     atualizaPrevia();
   }
+  // Teclado numérico na tela (o teclado do Android não abre): o campo tocado recebe os números.
+  var campoAtivo = 'ab-quant';
+  function numCampo(id) { return parseFloat((el(id).value || '').replace(',', '.')); }
+  function campoAb(id) {
+    campoAtivo = id;
+    el('ab-quant').classList.toggle('ativo', id === 'ab-quant');
+    el('ab-preco').classList.toggle('ativo', id === 'ab-preco');
+  }
+  function tecla(k) {
+    if (!parado) return;
+    var inp = el(campoAtivo), v = inp.value;
+    if (k === 'x') v = v.slice(0, -1);
+    else if (k === ',') { if (v.indexOf(',') < 0) v = (v === '' ? '0' : v) + ','; }
+    else if (v.length < 7) v += k;
+    inp.value = v;
+    atualizaPrevia();
+  }
+  setTimeout(function () { campoAb('ab-quant'); }, 0);
   function atualizaPrevia() {
-    var q = parseFloat(el('ab-quant').value), p = parseFloat(el('ab-preco').value);
+    var q = numCampo('ab-quant'), p = numCampo('ab-preco');
     var txt = ' ';
     if (q > 0 && p > 0) {
       txt = escolha.modo === 'valor' ? '≈ ' + (q / p).toFixed(2) + ' litros' : '≈ R$ ' + (q * p).toFixed(2) + ' pagos';
     }
     el('ab-previa').textContent = txt;
   }
+  var avisoFixo = '', aguardandoConfirmacao = false, confirmacaoTimer = null, avisoAntes = '';
+  function setAviso(t) { avisoFixo = t; el('ab-aviso').textContent = t; }
   function refreshParado() {
     el('ab-enviar').disabled = !parado;
+    document.querySelectorAll('#teclado button').forEach(function (b) { b.disabled = !parado; });
     el('busca-btn').disabled = !parado;
     el('mapa-ir').disabled = !parado;
     el('mapa-dest').disabled = !parado;
@@ -979,6 +1047,7 @@
     } else {
       el('ab-aviso').textContent = 'Com o carro andando, o abastecimento fica bloqueado.';
     }
+    if (avisoFixo) el('ab-aviso').textContent = avisoFixo;
     el('ab-enviar').textContent = confirmando ? 'Confirmar abastecimento' : 'Registrar abastecimento';
   }
   var postoAtual = null, postoLocalAtual = null, mapaPostoObj = null, mapaPostoCamadas = null;
@@ -994,13 +1063,13 @@
   }
   function buscarPostoParaRegistro() {
     aguardandoPosto = true;
-    el('ab-aviso').textContent = 'Buscando sua localização…';
+    setAviso('Buscando sua localização…');
     localizarPosto();
     clearTimeout(aguardandoTimer);
     aguardandoTimer = setTimeout(function () {
       if (!aguardandoPosto) return;
       aguardandoPosto = false;
-      el('ab-aviso').textContent = 'Não consegui sua localização. Confira o GPS e toque de novo.';
+      setAviso('Não consegui sua localização. Confira o GPS e toque de novo.');
     }, 20000);
   }
   function paintPosto(p) {
@@ -1016,7 +1085,7 @@
       aguardandoPosto = false;
       clearTimeout(aguardandoTimer);
       postoRecente = true;
-      el('ab-aviso').textContent = 'Endereço preenchido: ' + p.endereco;
+      setAviso('Endereço preenchido: ' + p.endereco);
       setTimeout(enviarAbastecimento, 200);
     }
     el('posto-status').textContent = 'Posto localizado pelo GPS.';
@@ -1037,10 +1106,11 @@
   function enviarAbastecimento() {
     if (!parado) return;
     if (!confirmando) {
-      var q = parseFloat(el('ab-quant').value), p = parseFloat(el('ab-preco').value);
-      if (!(q > 0) || !(p > 0)) { el('ab-aviso').textContent = 'Preencha a quantidade e o preço.'; return; }
+      var q = numCampo('ab-quant'), p = numCampo('ab-preco');
+      if (!(q > 0) || !(p > 0)) { setAviso('Preencha a quantidade e o preço.'); return; }
       if (!postoRecente) { buscarPostoParaRegistro(); return; }
       postoRecente = false;
+      avisoFixo = '';
       confirmando = true;
       refreshParado();
       clearTimeout(confirmaTimer);
@@ -1050,7 +1120,7 @@
     clearTimeout(confirmaTimer);
     confirmando = false;
     if (!postoAtual) { postoRecente = false; buscarPostoParaRegistro(); return; }
-    var q2 = parseFloat(el('ab-quant').value), p2 = parseFloat(el('ab-preco').value);
+    var q2 = numCampo('ab-quant'), p2 = numCampo('ab-preco');
     var corpo = { acao: 'abastecer', preco: p2, cheio: escolha.tanque === 'cheio', etanol: escolha.comb === 'etanol' };
     if (escolha.modo === 'valor') corpo.valor = q2; else corpo.litros = q2;
     corpo.lat = postoAtual.lat; corpo.lon = postoAtual.lon; corpo.endereco = postoAtual.endereco;
@@ -1058,7 +1128,15 @@
       .then(function () {
         el('ab-quant').value = '';
         atualizaPrevia();
-        el('ab-aviso').textContent = 'Enviado. Confira no celular (Consumo/Postos).';
+        avisoAntes = el('abast-info').textContent;
+        aguardandoConfirmacao = true;
+        setAviso('Enviado ao celular. Aguardando a confirmação…');
+        clearTimeout(confirmacaoTimer);
+        confirmacaoTimer = setTimeout(function () {
+          if (!aguardandoConfirmacao) return;
+          aguardandoConfirmacao = false;
+          setAviso('O celular não confirmou. Confira se o app está aberto no celular.');
+        }, 20000);
       })
       .catch(function () { el('ab-aviso').textContent = 'Sem resposta do multimídia. Nada foi registrado.'; });
     refreshParado();
@@ -1082,6 +1160,7 @@
     if ((avg === null || avg === undefined) && d.tripAvgL100 > 0) avg = 100 / d.tripAvgL100;
     el('avg').textContent = num(avg, 1);
     el('bat').textContent = num(d.battery, 1);
+    el('avg-mov').textContent = (d.tripAvgMovKmL !== null && d.tripAvgMovKmL !== undefined) ? 'em movimento: ' + num(d.tripAvgMovKmL, 1) : '';
     el('sg-carga').textContent = num(d.carga, 0);
     el('sg-pressao').textContent = num(d.pressaoKpa, 0);
     el('sg-ar').textContent = num(d.arAdmissao, 0);
@@ -1101,6 +1180,11 @@
     falarResposta(d);
     pendenteAtualId = d.pendenteId;
     if (d.aviso) el('abast-info').textContent = d.aviso;
+    if (d.aviso && aguardandoConfirmacao && d.aviso !== avisoAntes) {
+      aguardandoConfirmacao = false;
+      clearTimeout(confirmacaoTimer);
+      setAviso(d.aviso);
+    }
     paintPendente(d);
 
   }

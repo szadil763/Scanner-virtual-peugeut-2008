@@ -23,6 +23,27 @@ class TripAndMaintenanceTest {
         assertNull(t.avgKmPerL)
     }
 
+    @Test fun movingAverageLeavesOutIdleFuel() {
+        val t = TripAccumulator()
+        repeat(3600) { t.add(1.0, 0.0, 1.0) }  // 1 hora parado gastando 1 L/h
+        repeat(3600) { t.add(1.0, 60.0, 5.0) } // 1 hora a 60 km/h gastando 5 L/h
+        assertEquals(6.0, t.liters, 1e-6)
+        assertEquals(10.0, t.avgKmPerL!!, 1e-6)        // 60 km / 6 L (inclui a marcha lenta)
+        assertEquals(12.0, t.avgKmPerLMoving!!, 1e-6)  // 60 km / 5 L (só andando)
+    }
+
+    @Test fun movingAverageSurvivesRestoreAndOldTripFallsBackToTotal() {
+        val a = TripAccumulator()
+        repeat(3600) { a.add(1.0, 0.0, 1.0) }
+        repeat(3600) { a.add(1.0, 60.0, 5.0) }
+        val b = TripAccumulator()
+        b.restore(a.distanceKm, a.liters, a.seconds, a.kmWithFuel, a.litersMoving)
+        assertEquals(12.0, b.avgKmPerLMoving!!, 1e-6)
+        val velho = TripAccumulator()
+        velho.restore(a.distanceKm, a.liters, a.seconds, a.kmWithFuel) // trajeto gravado sem o valor novo
+        assertEquals(velho.avgKmPerL!!, velho.avgKmPerLMoving!!, 1e-6)
+    }
+
     @Test fun tripResets() {
         val t = TripAccumulator()
         t.add(10.0, 50.0, 4.0)

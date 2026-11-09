@@ -153,10 +153,10 @@ class Store(context: Context) {
 
     // Trajeto: soma de todas as viagens até o usuário zerar.
     fun loadTrip(): DoubleArray? =
-        p.getString("trip", null)?.split(';')?.mapNotNull { it.toDoubleOrNull() }?.takeIf { it.size == 4 }?.toDoubleArray()
+        p.getString("trip", null)?.split(';')?.mapNotNull { it.toDoubleOrNull() }?.takeIf { it.size == 4 || it.size == 5 }?.toDoubleArray()
 
-    fun saveTrip(distanceKm: Double, liters: Double, seconds: Double, kmWithFuel: Double) {
-        p.edit().putString("trip", "$distanceKm;$liters;$seconds;$kmWithFuel").apply()
+    fun saveTrip(distanceKm: Double, liters: Double, seconds: Double, kmWithFuel: Double, litersMoving: Double) {
+        p.edit().putString("trip", "$distanceKm;$liters;$seconds;$kmWithFuel;$litersMoving").apply()
     }
 
     /** Dia em que o trajeto foi zerado pela última vez (null = nunca). */
