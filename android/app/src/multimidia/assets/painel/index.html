@@ -445,8 +445,11 @@
     </div>
     <button class="feito" id="zerar-1" onclick="zerarTrajeto(this)">Zerar trajeto</button>
     <div class="aviso">Zera a média, a distância, o custo e a velocidade média do trajeto. Os abastecimentos e a Saúde não são apagados. Só com o carro parado.</div>
+    <div class="lbl">Trajetos anteriores</div>
+    <div class="aviso" id="trj-total">Nenhum trajeto guardado ainda. Cada vez que você zera o trajeto, o resumo dele fica guardado aqui.</div>
+    <div class="lista" id="trj-lista" style="padding:0;flex:0 0 auto;overflow:visible"></div>
     <div class="lbl">Últimos abastecimentos</div>
-    <div class="lista" id="abast-lista" style="padding:0"></div>
+    <div class="lista" id="abast-lista" style="padding:0;flex:0 0 auto;overflow:visible"></div>
   </div>
 </div>
 
@@ -814,7 +817,30 @@
   function dataDia(dia) {
     return new Date(dia * 86400000).toLocaleDateString('pt-BR', { timeZone: 'UTC' });
   }
+  // Trajetos guardados a cada "Zerar trajeto": soma de todos (km, litros, custo, média geral) e os 10 últimos.
+  var ultimoTrajetos = '';
+  function paintTrajetos(t) {
+    if (!t) return;
+    var chave = JSON.stringify(t);
+    if (chave === ultimoTrajetos) return;
+    ultimoTrajetos = chave;
+    var tot = t.total || {};
+    if (!tot.quantidade) {
+      el('trj-total').textContent = 'Nenhum trajeto guardado ainda. Cada vez que você zera o trajeto, o resumo dele fica guardado aqui.';
+    } else {
+      el('trj-total').textContent = tot.quantidade + (tot.quantidade === 1 ? ' trajeto' : ' trajetos') + ' guardados · soma: ' +
+        num(tot.km, 1) + ' km · ' + num(tot.litros, 1) + ' L · R$ ' + num(tot.custo, 2) +
+        ' · média geral ' + num(tot.mediaKmL, 1) + ' km/l' + (tot.mediaMovKmL ? ' (em movimento ' + num(tot.mediaMovKmL, 1) + ')' : '');
+    }
+    var box = el('trj-lista');
+    box.textContent = '';
+    (t.lista || []).forEach(function (r) {
+      var quando = new Date(r.fim).toLocaleDateString('pt-BR') + ' ' + new Date(r.fim).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+      box.appendChild(linha('', quando + ' · ' + num(r.km, 1) + ' km', '', num(r.litros, 1) + ' L · ' + num(r.kmL, 1) + ' km/l · R$ ' + num(r.custo, 2)));
+    });
+  }
   function paintConsumo(d) {
+    paintTrajetos(d.trajetos);
     var c = d.consumo;
     if (!c) return;
     desenhaLinha('cv-km', c.historico, 0, '#3ddc6b');

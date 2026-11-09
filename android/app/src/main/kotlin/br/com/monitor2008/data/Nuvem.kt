@@ -43,6 +43,7 @@ object Nuvem {
                     val odo = snap.child("odometro").getValue(Double::class.java) ?: 0.0
                     val tudo = snap.child("tudo").getValue(String::class.java)
                     val viagens = snap.child("viagensSaude").getValue(String::class.java)
+                    val trajetos = snap.child("trajetos").getValue(String::class.java)
 
                     // Aparelho novo para este carro: traz tudo (configurações, calibração, óleo e viagens da Saúde).
                     if (!store.carroTemDados() && !tudo.isNullOrBlank()) {
@@ -50,6 +51,11 @@ object Nuvem {
                         trouxe = true
                     }
                     if (!viagens.isNullOrBlank()) HealthStore(ctx, id).restaurarRaw(viagens)
+                    // Aparelho sem trajetos guardados: traz os da nuvem.
+                    if (store.tripArchive().isEmpty() && !trajetos.isNullOrBlank()) {
+                        store.importTripArchive(trajetos)
+                        trouxe = true
+                    }
 
                     if (store.refuels().isEmpty()) {
                         for (i in 0 until abast.length()) {
@@ -96,6 +102,12 @@ object Nuvem {
                 enviar(ctx, store, id, depois)
             }
             .addOnFailureListener { depois(false, "Não consegui ler o carro na nuvem: ${it.message ?: "sem permissão"}") }
+    }
+
+    /** Envia só os trajetos guardados (ao zerar o trajeto). Em silêncio: sem conta ou sem sincronizar o carro antes, não faz nada. */
+    fun enviarTrajetos(store: Store) {
+        if (uid() == null) return
+        carro(store.carKey).child("trajetos").setValue(store.tripArchiveJson())
     }
 
     /** Envia tudo o que o aparelho tem deste carro. */
@@ -146,6 +158,7 @@ object Nuvem {
             "odometro" to store.odometerKm,
             "tudo" to store.exportarCarro().toString(),
             "viagensSaude" to HealthStore(ctx, id).rawJson(),
+            "trajetos" to store.tripArchiveJson(),
             "atualizadoEm" to ServerValue.TIMESTAMP,
         )
         carro(id).updateChildren(dados)

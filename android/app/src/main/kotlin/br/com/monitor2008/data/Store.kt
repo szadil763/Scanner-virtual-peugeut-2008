@@ -167,6 +167,38 @@ class Store(context: Context) {
         p.edit().putString("trip", "$distanceKm;$liters;$seconds;$kmWithFuel;$litersMoving").apply()
     }
 
+    // Trajetos guardados cada vez que o dono zera o trajeto (para estudar a soma de todos).
+    fun tripArchiveJson(): String = p.getString("tripArchive", "[]") ?: "[]"
+
+    fun tripArchive(): List<br.com.monitor2008.domain.TripRecord> = try {
+        val arr = JSONArray(tripArchiveJson())
+        (0 until arr.length()).map { i ->
+            val o = arr.getJSONObject(i)
+            br.com.monitor2008.domain.TripRecord(
+                endMs = o.getLong("fim"), distanceKm = o.getDouble("km"), liters = o.getDouble("litros"),
+                seconds = o.getDouble("seg"), kmWithFuel = o.getDouble("kmComComb"),
+                litersMoving = o.optDouble("litrosMov", o.getDouble("litros")), pricePerLiter = o.optDouble("preco", 0.0),
+                calibration = o.optDouble("fator", 1.0), ethanolFraction = o.optDouble("etanol", 0.3), odometerKm = o.optDouble("odo", 0.0),
+            )
+        }
+    } catch (e: Exception) { emptyList() }
+
+    fun archiveTrip(r: br.com.monitor2008.domain.TripRecord) {
+        val arr = JSONArray(tripArchiveJson())
+        arr.put(
+            JSONObject().put("fim", r.endMs).put("km", r.distanceKm).put("litros", r.liters).put("seg", r.seconds)
+                .put("kmComComb", r.kmWithFuel).put("litrosMov", r.litersMoving).put("preco", r.pricePerLiter)
+                .put("fator", r.calibration).put("etanol", r.ethanolFraction).put("odo", r.odometerKm),
+        )
+        // Guarda os últimos 1000: sobra para anos de uso.
+        val keep = JSONArray()
+        for (i in maxOf(0, arr.length() - 1000) until arr.length()) keep.put(arr.get(i))
+        p.edit().putString("tripArchive", keep.toString()).apply()
+    }
+
+    /** Traz os trajetos da nuvem (aparelho novo para este carro). */
+    fun importTripArchive(raw: String) { p.edit().putString("tripArchive", raw).apply() }
+
     /** Dia em que o trajeto foi zerado pela última vez (null = nunca). */
     var tripSinceDay: Long?
         get() = if (p.contains("tripSinceDay")) p.getLong("tripSinceDay", 0) else null

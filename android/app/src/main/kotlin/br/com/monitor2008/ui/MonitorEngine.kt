@@ -519,6 +519,17 @@ class MonitorEngine private constructor(private val app: Application) {
     fun diagnosticLog(): List<String> = source?.diagnosticLog().orEmpty()
 
     fun resetTrip() {
+        // Antes de zerar, guarda o resumo do trajeto para estudar depois (e envia para a nuvem, se houver conta).
+        if (!store.useSimulated && br.com.monitor2008.domain.TripArchive.shouldArchive(trip.distanceKm)) {
+            store.archiveTrip(
+                br.com.monitor2008.domain.TripRecord(
+                    endMs = System.currentTimeMillis(), distanceKm = trip.distanceKm, liters = trip.liters, seconds = trip.seconds,
+                    kmWithFuel = trip.kmWithFuel, litersMoving = trip.litersMoving, pricePerLiter = store.fuelPrice,
+                    calibration = store.calibration, ethanolFraction = store.ethanolFraction, odometerKm = odometerKm,
+                ),
+            )
+            try { br.com.monitor2008.data.Nuvem.enviarTrajetos(store) } catch (_: Exception) { }
+        }
         trip.reset(); history.clear()
         if (!store.useSimulated) store.tripSinceDay = LocalDate.now().toEpochDay()
         saveNow()

@@ -195,6 +195,9 @@ object PainelLink {
      * Ajustes. Se falhar várias vezes, procura o multimídia de novo na rede do celular.
      */
     fun maybeSend(app: Application, manual: String, ui: UiState) {
+        // O multimídia só recebe: se mandasse os próprios números (o motor dele também roda), o painel piscava
+        // entre os dados do celular e os dele, com o trajeto antigo.
+        if (Features.mediaControl) return
         val now = System.currentTimeMillis()
         if (now - lastSentMs < 1000) return
         lastSentMs = now
@@ -324,6 +327,7 @@ object PainelLink {
             put("tripAvgKmL", num(ui.tripAvgKmPerL))
             put("tripAvgL100", num(ui.tripAvgL100))
             put("tripAvgMovKmL", num(ui.tripAvgKmPerLMoving))
+            put("trajetos", trajetosJson(app))
             // Versão deste app: o painel avisa se o celular e o multimídia estão em versões diferentes.
             put("versao", Updater.get(app).installedCode)
             // Combustível estimado no tanque: só uma estimativa, a partir do último abastecimento cheio.
@@ -422,6 +426,40 @@ object PainelLink {
         })
         put("pendentes", JSONArray(ui.pendingDtcs ?: emptyList<String>()))
         put("registro", JSONArray(MonitorEngine.get(app).diagnosticLog().takeLast(60)))
+    }
+
+    @Volatile private var trajetosCache: Pair<String, JSONObject>? = null
+
+    /** Soma dos trajetos guardados e os 10 últimos, para a tela Consumo (refaz só quando o arquivo muda). */
+    private fun trajetosJson(app: Application): JSONObject {
+        val st = Store(app)
+        val raw = st.tripArchiveJson()
+        trajetosCache?.takeIf { it.first == raw }?.let { return it.second }
+        val lista = st.tripArchive()
+        val t = br.com.monitor2008.domain.TripArchive.totals(lista)
+        val json = JSONObject().apply {
+            put("total", JSONObject().apply {
+                put("quantidade", t.count)
+                put("km", r1(t.distanceKm))
+                put("litros", r1(t.liters))
+                put("custo", r2(t.cost))
+                put("mediaKmL", num(t.avgKmPerL))
+                put("mediaMovKmL", num(t.avgKmPerLMoving))
+            })
+            put("lista", JSONArray().apply {
+                lista.takeLast(10).reversed().forEach { r ->
+                    put(JSONObject().apply {
+                        put("fim", r.endMs)
+                        put("km", r1(r.distanceKm))
+                        put("litros", r1(r.liters))
+                        put("kmL", num(r.avgKmPerL))
+                        put("custo", r2(r.cost))
+                    })
+                }
+            })
+        }
+        trajetosCache = raw to json
+        return json
     }
 
     /** Dados da tela Consumo: gráficos, viagem e últimos abastecimentos (só leitura no multimídia). */

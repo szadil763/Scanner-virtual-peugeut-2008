@@ -135,6 +135,15 @@ class PainelServerActivity : Activity() {
         super.onDestroy()
     }
 
+    /** O pedido veio deste mesmo aparelho (o app do multimídia também tem o motor de leitura e se acha na rede). */
+    private fun esteAparelho(a: java.net.InetAddress?): Boolean {
+        if (a == null) return false
+        if (a.isLoopbackAddress || a.isAnyLocalAddress) return true
+        return try {
+            Collections.list(NetworkInterface.getNetworkInterfaces()).any { ni -> Collections.list(ni.inetAddresses).any { it == a } }
+        } catch (_: Exception) { false }
+    }
+
     private fun handle(client: Socket) {
         client.use { sock ->
             try {
@@ -150,6 +159,9 @@ class PainelServerActivity : Activity() {
                     ?.substringAfter(':')?.trim()?.toIntOrNull() ?: 0
                 val body = if (len in 1..MAX_BODY) readBody(input, len) else ByteArray(0)
                 when {
+                    // O próprio multimídia não é fonte de dados (só o celular): descarta o que vier daqui mesmo.
+                    method == "POST" && path == "/estado" && esteAparelho(sock.inetAddress) ->
+                        send(out, 200, "application/json; charset=utf-8", "{\"comandos\":[]}".toByteArray(Charsets.UTF_8))
                     method == "POST" && path == "/estado" -> {
                         latestJson = String(body, Charsets.UTF_8)
                         latestAtMs = System.currentTimeMillis()
