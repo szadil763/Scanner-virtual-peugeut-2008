@@ -30,6 +30,16 @@ class FuelQualityTest {
         assertNull(FuelQuality.nearest(listOf(a), -23.5550, -46.6333)) // ~500 m
     }
 
+    @Test fun stationTypedByHandHasNoLocationAndIsIgnoredByProximity() {
+        val manual = Station("m", "Posto do Zé", "Av. Brasil, 10", 0.0, 0.0)
+        val gps = Station("g", "Posto GPS", "", -23.5505, -46.6333)
+        assertEquals(true, manual.semLocalizacao)
+        assertEquals(false, gps.semLocalizacao)
+        // Um posto à mão não pode "capturar" um abastecimento perto do ponto 0,0.
+        assertNull(FuelQuality.nearest(listOf(manual), 0.0001, 0.0001))
+        assertEquals("g", FuelQuality.nearest(listOf(manual, gps), -23.5510, -46.6333)?.id)
+    }
+
     @Test fun badStationStandsOut() {
         val (stops, trips) = scenario(
             listOf("bom", "bom", "ruim", "bom", "ruim"),

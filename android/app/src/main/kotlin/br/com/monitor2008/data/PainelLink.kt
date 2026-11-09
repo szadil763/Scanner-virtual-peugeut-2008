@@ -422,8 +422,9 @@ object PainelLink {
         put("litrosViagem", r2(ui.tripLiters))
         put("velMedia", r1(ui.tripAvgSpeed))
         put("abastecimentos", JSONArray().apply {
-            ui.refuels.take(5).forEach { r ->
+            ui.refuels.take(30).forEach { r ->
                 put(JSONObject().apply {
+                    put("id", r.timeMs)
                     put("dia", r.epochDay)
                     put("litros", r2(r.liters))
                     put("preco", r2(r.pricePerLiter))
@@ -557,9 +558,20 @@ object PainelLink {
         val etanol = o.optBoolean("etanol", false)
         // Posto pelo GPS do celular (como na tela de abastecimento). Sem GPS, registra sem posto.
         // Posto que o multimídia mostrou (coordenadas enviadas no comando): não procura de novo.
+        val nomePosto = o.optString("posto", "").trim().take(80)
         if (o.has("lat") && o.has("lon")) {
-            val place = StationDraft(o.getDouble("lat"), o.getDouble("lon"), "", o.optString("endereco", ""))
+            val place = StationDraft(o.getDouble("lat"), o.getDouble("lon"), nomePosto, o.optString("endereco", ""))
             MonitorEngine.get(app).registerRefuel(litros, preco, cheio, etanol, place)
+            avisarAbastecimento(litros, preco, "posto: " + nomePosto.ifBlank { o.optString("endereco", "").ifBlank { "sem endereço" } })
+            return
+        }
+        if (nomePosto.isNotEmpty()) {
+            // Posto digitado à mão (o GPS não achou): registra com o nome, sem coordenadas.
+            MonitorEngine.get(app).registerRefuel(
+                litros, preco, cheio, etanol,
+                manualStation = nomePosto to o.optString("endereco", "").trim().take(120),
+            )
+            avisarAbastecimento(litros, preco, "posto: $nomePosto")
             return
         }
         scope.launch {
@@ -574,8 +586,17 @@ object PainelLink {
                 endereco.isNullOrBlank() -> "posto: localização achada, mas sem endereço"
                 else -> "posto: $endereco"
             }
-            avisoAbastecimento = "Registrado: $quanto L a R$ $valor · $posto"
+            avisoAbastecimento = "${horaAgora()} · Registrado: $quanto L a R$ $valor · $posto"
         }
+    }
+
+    private fun horaAgora(): String = java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale("pt", "BR")).format(java.util.Date())
+
+    /** Confirmação para o painel; a hora faz cada aviso ser diferente do anterior. */
+    private fun avisarAbastecimento(litros: Double, preco: Double, posto: String) {
+        val quanto = String.format(java.util.Locale("pt", "BR"), "%.2f", litros)
+        val valor = String.format(java.util.Locale("pt", "BR"), "%.2f", preco)
+        avisoAbastecimento = "${horaAgora()} · Registrado: $quanto L a R$ $valor · $posto"
     }
 
     /** Marca um item de manutenção como feito hoje (o celular recusa com o carro andando). */
@@ -750,6 +771,21 @@ object PainelLink {
             "radio.next" -> RadioPlayer.get(app).step(true)
             "radio.prev" -> RadioPlayer.get(app).step(false)
             "nuvem.sincronizar" -> Nuvem.sincronizar(app, Store(app)) { _, msg -> enviarFala(msg) }
+            "abastecimento.apagar" -> {
+                MonitorEngine.get(app).deleteRefuel(cmd.optLong("id"))
+                avisoAbastecimento = "${horaAgora()} · Abastecimento apagado."
+            }
+            "abastecimento.editar" -> {
+                MonitorEngine.get(app).editRefuel(
+                    cmd.optLong("id"),
+                    cmd.optDouble("litros", Double.NaN).takeIf { it.isFinite() },
+                    cmd.optDouble("preco", Double.NaN).takeIf { it.isFinite() },
+                    if (cmd.has("cheio")) cmd.optBoolean("cheio") else null,
+                    if (cmd.has("etanol")) cmd.optBoolean("etanol") else null,
+                    cmd.optString("posto", "").ifBlank { null },
+                )
+                avisoAbastecimento = "${horaAgora()} · Abastecimento atualizado."
+            }
         }
     }
 }

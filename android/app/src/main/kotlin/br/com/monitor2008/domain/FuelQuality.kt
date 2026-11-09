@@ -7,7 +7,10 @@ import kotlin.math.sin
 import kotlin.math.sqrt
 
 /** Posto registrado num abastecimento. Postos a menos de [FuelQuality.SAME_STATION_M] são o mesmo. */
-data class Station(val id: String, val name: String, val address: String, val lat: Double, val lon: Double)
+data class Station(val id: String, val name: String, val address: String, val lat: Double, val lon: Double) {
+    /** Posto digitado à mão, sem GPS (guardado com latitude e longitude 0): não entra na busca por proximidade. */
+    val semLocalizacao: Boolean get() = lat == 0.0 && lon == 0.0
+}
 
 /** Um abastecimento, do ponto de vista da qualidade do combustível. */
 data class FuelStop(
@@ -78,7 +81,8 @@ object FuelQuality {
 
     /** Posto já registrado a menos de [maxM] metros, o mais perto. */
     fun nearest(stations: List<Station>, lat: Double, lon: Double, maxM: Double = SAME_STATION_M): Station? =
-        stations.map { it to distanceM(lat, lon, it.lat, it.lon) }.filter { it.second <= maxM }.minByOrNull { it.second }?.first
+        stations.filter { !it.semLocalizacao }
+            .map { it to distanceM(lat, lon, it.lat, it.lon) }.filter { it.second <= maxM }.minByOrNull { it.second }?.first
 
     private fun median(v: List<Double>): Double? {
         if (v.isEmpty()) return null
@@ -180,7 +184,7 @@ object FuelQuality {
             StationRating(
                 station = st, grade = grade, tanks = compared.size, visits = visits.size,
                 lastPrice = visits.lastOrNull()?.pricePerLiter, lastVisitMs = visits.lastOrNull()?.timeMs ?: 0L,
-                distanceKm = here?.let { distanceM(it.first, it.second, st.lat, st.lon) / 1000 },
+                distanceKm = if (st.semLocalizacao) null else here?.let { distanceM(it.first, it.second, st.lat, st.lon) / 1000 },
                 summary = summary,
             )
         }.sortedWith(compareBy<StationRating> { order.indexOf(it.grade) }.thenBy { it.distanceKm ?: Double.MAX_VALUE })

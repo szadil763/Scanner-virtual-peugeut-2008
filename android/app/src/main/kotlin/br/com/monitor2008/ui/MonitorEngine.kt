@@ -511,7 +511,14 @@ class MonitorEngine private constructor(private val app: Application) {
         publish()
     }
 
-    fun registerRefuel(liters: Double, price: Double, full: Boolean, ethanol: Boolean = store.ethanolFraction >= 0.9, place: StationDraft? = null) {
+    /**
+     * [manualStation]: nome e endereço digitados à mão quando o GPS não achou o posto (sem coordenadas).
+     * Só vale se [place] for nulo.
+     */
+    fun registerRefuel(
+        liters: Double, price: Double, full: Boolean, ethanol: Boolean = store.ethanolFraction >= 0.9,
+        place: StationDraft? = null, manualStation: Pair<String, String>? = null,
+    ) {
         if (_ui.value.moving) return
         // Litros reais ÷ previstos do tanque que termina agora: só de cheio a cheio, sem parcial no meio.
         // Tanque com km rodados sem o app: faltam litros na conta, então não mede nem calibra.
@@ -519,7 +526,7 @@ class MonitorEngine private constructor(private val app: Application) {
         val tankRatio = if (full && !incomplete && store.baselineValid && store.pendingRealLiters == 0.0 && uncalLiters > 1.0 && kmSinceFull > 20.0) {
             liters / uncalLiters
         } else null
-        val stationId = place?.let { saveStation(it) }
+        val stationId = place?.let { saveStation(it) } ?: manualStation?.let { saveManualStation(it.first, it.second) }
         // O combustível escolhido no abastecimento passa a valer no cálculo do consumo.
         if (ethanol) store.ethanolFraction = 0.95 else if (store.ethanolFraction >= 0.9) store.ethanolFraction = 0.32
         val before = RefuelState(
@@ -545,6 +552,53 @@ class MonitorEngine private constructor(private val app: Application) {
             ),
         )
         store.saveProgress(odometerKm, uncalLiters, kmSinceFull)
+        refuelList = store.refuels().asReversed()
+        publish()
+    }
+
+    /** Posto digitado à mão (sem GPS): o mesmo nome reaproveita o posto; senão cria um sem localização. */
+    private fun saveManualStation(name: String, address: String): String {
+        val existing = stationList.firstOrNull { it.semLocalizacao && it.name.equals(name, ignoreCase = true) }
+        if (existing != null) return existing.id
+        val s = Station(java.util.UUID.randomUUID().toString(), name, address, 0.0, 0.0)
+        stationList = stationList + s
+        store.saveStations(stationList)
+        return s.id
+    }
+
+    /**
+     * Apaga um abastecimento (identificado pela hora). Não desfaz o que ele mudou na calibração do consumo:
+     * se foi uma simulação que mexeu no fator, ajuste o fator em Ajustes.
+     */
+    fun deleteRefuel(timeMs: Long) {
+        if (_ui.value.moving) return
+        store.saveRefuels(store.refuels().filter { it.timeMs != timeMs })
+        refuelList = store.refuels().asReversed()
+        publish()
+    }
+
+    /** Corrige um abastecimento já registrado. Campos nulos ficam como estão. Não recalcula a calibração. */
+    fun editRefuel(timeMs: Long, liters: Double?, price: Double?, full: Boolean?, ethanol: Boolean?, stationName: String?) {
+        if (_ui.value.moving) return
+        val all = store.refuels()
+        val i = all.indexOfFirst { it.timeMs == timeMs }
+        if (i < 0) return
+        var r = all[i]
+        if (liters != null && liters > 0) r = r.copy(liters = liters)
+        if (price != null && price > 0) r = r.copy(pricePerLiter = price)
+        if (full != null) r = r.copy(full = full)
+        if (ethanol != null) r = r.copy(ethanol = ethanol)
+        val nome = stationName?.trim().orEmpty()
+        if (nome.isNotEmpty()) {
+            val id = r.stationId
+            if (id != null && stationList.any { it.id == id }) {
+                stationList = stationList.map { if (it.id == id) it.copy(name = nome) else it }
+                store.saveStations(stationList)
+            } else {
+                r = r.copy(stationId = saveManualStation(nome, ""))
+            }
+        }
+        store.saveRefuels(all.toMutableList().also { it[i] = r })
         refuelList = store.refuels().asReversed()
         publish()
     }

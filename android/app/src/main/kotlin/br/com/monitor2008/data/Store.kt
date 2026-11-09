@@ -439,16 +439,23 @@ class Store(context: Context) {
         p.edit().putString("stations", arr.toString()).apply()
     }
 
+    private fun refuelJson(r: Refuel): JSONObject = JSONObject()
+        .put("day", r.epochDay).put("liters", r.liters).put("price", r.pricePerLiter)
+        .put("full", r.full).put("odo", r.odometerKm)
+        .put("real", r.realKmPerL ?: JSONObject.NULL)
+        .put("time", r.timeMs).put("station", r.stationId ?: "").put("eth", r.ethanol)
+        .put("ratio", r.tankRatio ?: JSONObject.NULL)
+
     fun addRefuel(r: Refuel) {
         val arr = JSONArray(p.getString("refuels", "[]"))
-        arr.put(
-            JSONObject()
-                .put("day", r.epochDay).put("liters", r.liters).put("price", r.pricePerLiter)
-                .put("full", r.full).put("odo", r.odometerKm)
-                .put("real", r.realKmPerL ?: JSONObject.NULL)
-                .put("time", r.timeMs).put("station", r.stationId ?: "").put("eth", r.ethanol)
-                .put("ratio", r.tankRatio ?: JSONObject.NULL),
-        )
+        arr.put(refuelJson(r))
+        p.edit().putString("refuels", arr.toString()).apply()
+    }
+
+    /** Grava a lista inteira (apagar e editar abastecimentos). */
+    fun saveRefuels(list: List<Refuel>) {
+        val arr = JSONArray()
+        list.forEach { arr.put(refuelJson(it)) }
         p.edit().putString("refuels", arr.toString()).apply()
     }
 }

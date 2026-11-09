@@ -159,6 +159,23 @@
 <body>
 <button id="voz" onclick="ouvirVoz()">🎤</button>
 <div id="toast" role="status"></div>
+<div id="edit-abast" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;z-index:60;background:#000;padding:20px;overflow-y:auto">
+  <div style="max-width:640px;margin:0 auto;display:grid;gap:10px">
+    <div class="lbl">Editar abastecimento</div>
+    <label class="campo">Litros <input type="text" id="ed-litros" inputmode="decimal"></label>
+    <label class="campo">Preço por litro (R$) <input type="text" id="ed-preco" inputmode="decimal"></label>
+    <div class="linha">
+      <button class="op" id="ed-cheio" onclick="edAlt('cheio')">Tanque cheio</button>
+      <button class="op" id="ed-etanol" onclick="edAlt('etanol')">Gasolina</button>
+    </div>
+    <label class="campo">Nome do posto <input type="text" id="ed-posto" maxlength="80" placeholder="Opcional"></label>
+    <div class="linha">
+      <button class="enviar" onclick="salvarEdicao()">Salvar alterações</button>
+      <button class="feito" style="margin-top:0" onclick="fecharEdicao()">Cancelar</button>
+    </div>
+    <div class="aviso">Corrige só os dados deste abastecimento. A calibração do consumo não é recalculada.</div>
+  </div>
+</div>
 <div class="layout">
 <nav class="menu">
   <button class="aba sel" id="ab-painel" onclick="aba('painel')"><span class="ic">📊</span>Painel</button>
@@ -420,8 +437,17 @@
       <div id="mapa-posto" style="height:220px;border-radius:14px;border:2px solid #222;display:none;margin:8px 0"></div>
       <div id="posto-endereco" style="font-size:18px;margin-bottom:6px"></div>
       <button class="feito" style="margin-top:0" onclick="localizarPosto()">Localizar de novo</button>
+      <button class="feito" id="posto-manual-btn" onclick="mostrarPostoManual(true)">Informar o posto à mão</button>
+      <div id="posto-manual" style="display:none;margin-top:8px">
+        <label class="campo">Nome do posto
+          <input type="text" id="posto-nome" maxlength="80" placeholder="Ex.: Posto Ipiranga Centro">
+        </label>
+        <label class="campo">Endereço (opcional)
+          <input type="text" id="posto-end" maxlength="120" placeholder="Rua e número">
+        </label>
+      </div>
     </div>
-    <button class="enviar" id="ab-enviar" onclick="enviarAbastecimento()">Registrar abastecimento</button>
+    <button class="enviar" id="ab-enviar" onclick="enviarAbastecimento()">Salvar abastecimento</button>
     <div class="aviso" id="ab-aviso">Só com o carro parado. Depois de tocar, toque de novo para confirmar.</div>
     <div class="aviso" id="abast-info" style="font-size:22px;color:var(--ok)"></div>
   </div>
@@ -665,6 +691,53 @@
     });
   }
   var ultimoAbast = '';
+  // Apagar: dois toques (o primeiro pede confirmação). Editar: abre uma janela com os campos.
+  var apagarConfirma = null, apagarTimer = null;
+  function apagarAbast(id, btn) {
+    if (!parado || !id) return;
+    if (apagarConfirma !== id) {
+      apagarConfirma = id;
+      btn.textContent = 'Toque de novo para apagar';
+      btn.className = 'feito conf';
+      clearTimeout(apagarTimer);
+      apagarTimer = setTimeout(function () { apagarConfirma = null; btn.textContent = 'Apagar'; btn.className = 'feito'; }, 6000);
+      return;
+    }
+    apagarConfirma = null;
+    clearTimeout(apagarTimer);
+    cmdAjuste('abastecimento.apagar', { id: id });
+    toast('Apagando o abastecimento…');
+  }
+  var edAtual = null, edCheio = true, edEtanol = false;
+  function numTxt(id) { return parseFloat((el(id).value || '').replace(',', '.')); }
+  function abrirEdicao(a) {
+    edAtual = a;
+    el('ed-litros').value = String(a.litros).replace('.', ',');
+    el('ed-preco').value = String(a.preco).replace('.', ',');
+    el('ed-posto').value = a.posto || '';
+    edCheio = !!a.cheio;
+    edEtanol = !!a.etanol;
+    edPintar();
+    el('edit-abast').style.display = 'block';
+  }
+  function edPintar() {
+    el('ed-cheio').textContent = edCheio ? 'Tanque cheio' : 'Parcial';
+    el('ed-etanol').textContent = edEtanol ? 'Etanol' : 'Gasolina';
+  }
+  function edAlt(qual) {
+    if (qual === 'cheio') edCheio = !edCheio; else edEtanol = !edEtanol;
+    edPintar();
+  }
+  function fecharEdicao() { el('edit-abast').style.display = 'none'; edAtual = null; }
+  function salvarEdicao() {
+    if (!edAtual || !parado) return;
+    var litros = numTxt('ed-litros'), preco = numTxt('ed-preco');
+    if (!(litros >= 0.5 && litros <= 200)) { toast('Litros entre 0,5 e 200.'); return; }
+    if (!(preco >= 1 && preco <= 30)) { toast('Preço por litro entre 1 e 30.'); return; }
+    cmdAjuste('abastecimento.editar', { id: edAtual.id, litros: litros, preco: preco, cheio: edCheio, etanol: edEtanol, posto: el('ed-posto').value.trim() });
+    toast('Salvando as alterações…');
+    fecharEdicao();
+  }
   function desenhaLinha(id, vals, max, cor) {
     var c = el(id);
     if (!c) return;
@@ -725,7 +798,17 @@
       var det = 'R$ ' + Number(a.preco).toFixed(2) + '/L · ' + tipo +
         (a.kmL !== null && a.kmL !== undefined ? ' · ' + Number(a.kmL).toFixed(1) + ' km/l real' : '');
       if (a.posto) det = 'Posto: ' + a.posto + (a.endereco ? ' · ' + a.endereco : '') + '\n' + det;
-      box.appendChild(linha('', dataDia(a.dia) + ' · ' + Number(a.litros).toFixed(1) + ' L', '', det));
+      var item = linha('', dataDia(a.dia) + ' · ' + Number(a.litros).toFixed(1) + ' L', '', det);
+      var acoes = document.createElement('div');
+      acoes.className = 'linha';
+      var bEd = botaoAj('Editar', 'feito', function () { abrirEdicao(a); });
+      var bAp = botaoAj('Apagar', 'feito', function () { apagarAbast(a.id, bAp); });
+      bEd.disabled = !parado;
+      bAp.disabled = !parado;
+      acoes.appendChild(bEd);
+      acoes.appendChild(bAp);
+      item.appendChild(acoes);
+      box.appendChild(item);
     });
   }
   var ultimoDiag = '';
@@ -991,7 +1074,7 @@
       .catch(function () { el('mapa-aviso').textContent = 'Sem resposta do multimídia.'; });
   }
   // Resultado da busca de música: fica na tela por alguns segundos (o texto padrão volta depois).
-  var toastTimer = null;
+  var toastTimer = null, avisoToastVisto = null;
   function toast(t) {
     var e = el('toast');
     e.textContent = t;
@@ -1071,7 +1154,14 @@
   }
   var avisoFixo = '', aguardandoConfirmacao = false, confirmacaoTimer = null, avisoAntes = '';
   function setAviso(t) { avisoFixo = t; el('ab-aviso').textContent = t; }
+  function mostrarPostoManual(m) {
+    el('posto-manual').style.display = m ? 'block' : 'none';
+    el('posto-manual-btn').style.display = m ? 'none' : 'block';
+  }
   function refreshParado() {
+    el('posto-nome').disabled = !parado;
+    el('posto-end').disabled = !parado;
+    document.querySelectorAll('#abast-lista button').forEach(function (b) { b.disabled = !parado; });
     el('ab-enviar').disabled = !parado;
     document.querySelectorAll('#teclado button').forEach(function (b) { b.disabled = !parado; });
     el('busca-btn').disabled = !parado;
@@ -1079,12 +1169,12 @@
     el('mapa-dest').disabled = !parado;
     el('busca-aviso').textContent = buscaFixo || (parado ? 'Pesquisa só com o carro parado.' : 'Com o carro andando, a pesquisa fica bloqueada.');
     if (parado) {
-      el('ab-aviso').textContent = confirmando ? 'Toque de novo para confirmar.' : 'Só com o carro parado. Depois de tocar, toque de novo para confirmar.';
+      el('ab-aviso').textContent = confirmando ? 'Toque de novo para confirmar.' : 'Só com o carro parado. Depois de tocar em Salvar, toque de novo para confirmar.';
     } else {
       el('ab-aviso').textContent = 'Com o carro andando, o abastecimento fica bloqueado.';
     }
     if (avisoFixo) el('ab-aviso').textContent = avisoFixo;
-    el('ab-enviar').textContent = confirmando ? 'Confirmar abastecimento' : 'Registrar abastecimento';
+    el('ab-enviar').textContent = confirmando ? 'Confirmar e salvar' : 'Salvar abastecimento';
   }
   var postoAtual = null, postoLocalAtual = null, mapaPostoObj = null, mapaPostoCamadas = null;
   // Ao tocar em Registrar: busca a localização agora e preenche o endereço sozinho.
@@ -1105,7 +1195,8 @@
     aguardandoTimer = setTimeout(function () {
       if (!aguardandoPosto) return;
       aguardandoPosto = false;
-      setAviso('Não consegui sua localização. Confira o GPS e toque de novo.');
+      mostrarPostoManual(true);
+      setAviso('Não achei o posto. Informe o nome do posto abaixo e toque em Salvar de novo.');
     }, 20000);
   }
   function paintPosto(p) {
@@ -1113,6 +1204,12 @@
     if (!p.ok) {
       postoAtual = null;
       el('posto-status').textContent = p.motivo || 'Não achei o posto.';
+      mostrarPostoManual(true);
+      if (aguardandoPosto) {
+        aguardandoPosto = false;
+        clearTimeout(aguardandoTimer);
+        setAviso('Não achei o posto. Informe o nome do posto abaixo e toque em Salvar de novo.');
+      }
       return;
     }
     if (postoAtual && postoAtual.lat === p.lat && postoAtual.lon === p.lon && postoAtual.endereco === p.endereco) return;
@@ -1120,7 +1217,6 @@
     if (aguardandoPosto) {
       aguardandoPosto = false;
       clearTimeout(aguardandoTimer);
-      postoRecente = true;
       setAviso('Endereço preenchido: ' + p.endereco);
       setTimeout(enviarAbastecimento, 200);
     }
@@ -1144,8 +1240,8 @@
     if (!confirmando) {
       var q = numCampo('ab-quant'), p = numCampo('ab-preco');
       if (!(q > 0) || !(p > 0)) { setAviso('Preencha a quantidade e o preço.'); return; }
-      if (!postoRecente) { buscarPostoParaRegistro(); return; }
-      postoRecente = false;
+      // Já tem o posto (achado ao abrir a tela ou digitado): só salva. Busca a localização apenas se não tiver nada.
+      if (!postoAtual && !el('posto-nome').value.trim()) { buscarPostoParaRegistro(); return; }
       avisoFixo = '';
       confirmando = true;
       refreshParado();
@@ -1155,14 +1251,20 @@
     }
     clearTimeout(confirmaTimer);
     confirmando = false;
-    if (!postoAtual) { postoRecente = false; buscarPostoParaRegistro(); return; }
+    if (!postoAtual && !el('posto-nome').value.trim()) { buscarPostoParaRegistro(); return; }
     var q2 = numCampo('ab-quant'), p2 = numCampo('ab-preco');
     var corpo = { acao: 'abastecer', preco: p2, cheio: escolha.tanque === 'cheio', etanol: escolha.comb === 'etanol' };
     if (escolha.modo === 'valor') corpo.valor = q2; else corpo.litros = q2;
-    corpo.lat = postoAtual.lat; corpo.lon = postoAtual.lon; corpo.endereco = postoAtual.endereco;
+    var nomePosto = el('posto-nome').value.trim();
+    if (nomePosto) corpo.posto = nomePosto;
+    if (postoAtual) { corpo.lat = postoAtual.lat; corpo.lon = postoAtual.lon; corpo.endereco = postoAtual.endereco; }
+    else if (el('posto-end').value.trim()) corpo.endereco = el('posto-end').value.trim();
     fetch('/comando', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(corpo) })
       .then(function () {
         el('ab-quant').value = '';
+        el('posto-nome').value = '';
+        el('posto-end').value = '';
+        mostrarPostoManual(false);
         atualizaPrevia();
         avisoAntes = el('abast-info').textContent;
         aguardandoConfirmacao = true;
@@ -1216,6 +1318,8 @@
     falarResposta(d);
     pendenteAtualId = d.pendenteId;
     if (d.aviso) el('abast-info').textContent = d.aviso;
+    if (avisoToastVisto !== null && d.aviso && d.aviso !== avisoToastVisto) toast(d.aviso);
+    avisoToastVisto = d.aviso || '';
     if (d.aviso && aguardandoConfirmacao && d.aviso !== avisoAntes) {
       aguardandoConfirmacao = false;
       clearTimeout(confirmacaoTimer);

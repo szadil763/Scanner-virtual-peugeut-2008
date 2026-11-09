@@ -499,7 +499,7 @@ class PainelServerActivity : Activity() {
         private val COMANDOS = setOf(
             "musica.playpause", "musica.next", "musica.prev",
             "radio.playpause", "radio.next", "radio.prev",
-            "abastecer", "musica.buscar", "manutencao.feito", "diag.lerFalhas", "ajuste.sol", "ajuste.direcao", "ajuste.combustivel", "ajuste.calibracao", "ajuste.preco", "ajuste.eficiencia", "ajuste.carro", "voz.ouvir", "pendente.cancelar", "mapa.abrir", "mapa.rota", "mapa.limpar", "posto.localizar", "nuvem.sincronizar",
+            "abastecer", "musica.buscar", "manutencao.feito", "diag.lerFalhas", "ajuste.sol", "ajuste.direcao", "ajuste.combustivel", "ajuste.calibracao", "ajuste.preco", "ajuste.eficiencia", "ajuste.carro", "voz.ouvir", "pendente.cancelar", "mapa.abrir", "mapa.rota", "mapa.limpar", "posto.localizar", "nuvem.sincronizar", "abastecimento.apagar", "abastecimento.editar",
         )
         /** Ajustes que mudam as preferências deste multimídia (mapa, música, voz, lugares, rádio ao ligar). */
         private val AJUSTES_LOCAIS = setOf(
@@ -524,7 +524,17 @@ class PainelServerActivity : Activity() {
             if (acao == "ajuste.direcao") return o.optString("valor") in setOf("AUTO", "ALWAYS_FULL", "ALWAYS_SIMPLE")
             if (acao == "manutencao.feito") return o.optString("id").isNotBlank() && o.optString("id").length <= 40
             if (acao == "musica.buscar") return o.optString("texto").isNotBlank() && o.optString("texto").length <= 100
+            if (acao == "abastecimento.apagar") return o.optLong("id") > 0
+            if (acao == "abastecimento.editar") {
+                val litros = o.optDouble("litros", Double.NaN)
+                val preco = o.optDouble("preco", Double.NaN)
+                return o.optLong("id") > 0 &&
+                    (o.isNull("litros") || !o.has("litros") || (litros.isFinite() && litros in 0.5..200.0)) &&
+                    (o.isNull("preco") || !o.has("preco") || (preco.isFinite() && preco in 1.0..30.0)) &&
+                    o.optString("posto").length <= 100
+            }
             if (acao != "abastecer") return true
+            if (o.optString("posto").length > 100 || o.optString("endereco").length > 200) return false
             val preco = o.optDouble("preco", Double.NaN)
             val litros = o.optDouble("litros", Double.NaN)
             val valor = o.optDouble("valor", Double.NaN)
