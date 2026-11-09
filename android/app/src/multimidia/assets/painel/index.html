@@ -136,6 +136,8 @@
   #status { min-height:70px; display:flex; align-items:center; }
   #status.on { font-size:15px; }
   #vozinfo:empty { display:none; }
+  /* Aviso rápido por cima de qualquer tela (resultado de botões como Buscar e tocar). */
+  #toast { position:fixed; left:12px; right:12px; bottom:96px; z-index:50; display:none; background:#0f1826; border:2px solid #7dd3fc; border-radius:16px; padding:14px 18px; font-size:22px; color:#fff; }
   /* Menu Mais em grade 3x2. */
   #t-mais .lista { display:grid !important; grid-template-columns:repeat(3,1fr); gap:12px; align-content:start; overflow-y:auto; }
   #t-mais .mbtn { min-height:120px; font-size:26px; text-align:center; padding:0 12px; }
@@ -156,6 +158,7 @@
 </head>
 <body>
 <button id="voz" onclick="ouvirVoz()">🎤</button>
+<div id="toast" role="status"></div>
 <div class="layout">
 <nav class="menu">
   <button class="aba sel" id="ab-painel" onclick="aba('painel')"><span class="ic">📊</span>Painel</button>
@@ -984,6 +987,14 @@
       .catch(function () { el('mapa-aviso').textContent = 'Sem resposta do multimídia.'; });
   }
   // Resultado da busca de música: fica na tela por alguns segundos (o texto padrão volta depois).
+  var toastTimer = null;
+  function toast(t) {
+    var e = el('toast');
+    e.textContent = t;
+    e.style.display = 'block';
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(function () { e.style.display = 'none'; }, 8000);
+  }
   var buscaFixo = '', buscaFixoTimer = null, avisoMusicaId = null;
   function setBusca(t) {
     buscaFixo = t;
@@ -994,15 +1005,21 @@
   function paintAvisoMusica(a) {
     if (!a) return;
     if (avisoMusicaId === null) { avisoMusicaId = a.id; return; }
-    if (a.id !== avisoMusicaId) { avisoMusicaId = a.id; if (a.texto) setBusca(a.texto); }
+    if (a.id !== avisoMusicaId) { avisoMusicaId = a.id; if (a.texto) { setBusca(a.texto); toast(a.texto); } }
   }
   function buscarMusica() {
-    if (!parado) { setBusca('Com o carro andando, a pesquisa fica bloqueada.'); return; }
+    if (!parado) { setBusca('Com o carro andando, a pesquisa fica bloqueada.'); toast('Com o carro andando, a pesquisa fica bloqueada.'); return; }
     var t = el('busca-txt').value.trim();
-    if (!t) { setBusca('Digite o nome da música ou do cantor.'); return; }
+    if (!t) { setBusca('Digite o nome da música ou do cantor.'); toast('Digite o nome da música ou do cantor.'); return; }
+    toast('Buscando "' + t + '"…');
     fetch('/comando', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ acao: 'musica.buscar', texto: t }) })
-      .then(function () { setBusca('Buscando "' + t + '"…'); })
-      .catch(function () { setBusca('Sem resposta do multimídia.'); });
+      .then(function (r) { return r.json().catch(function () { return {}; }); })
+      .then(function (j) {
+        var msg = (j && j.mensagem) ? j.mensagem : 'Pedido enviado.';
+        setBusca(msg);
+        toast(msg);
+      })
+      .catch(function () { setBusca('Sem resposta do multimídia.'); toast('Sem resposta do multimídia.'); });
   }
   var escolha = { modo: 'valor', comb: 'gasolina', tanque: 'cheio' };
   var parado = true;

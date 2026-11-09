@@ -161,9 +161,31 @@ class PainelServerActivity : Activity() {
                     method == "POST" && path == "/comando" -> {
                         val obj = try { JSONObject(String(body, Charsets.UTF_8)) } catch (_: Exception) { null }
                         val acaoLocal = obj?.optString("acao") ?: ""
+                        var respondido = false
                         if (acaoLocal == "posto.localizar") {
                             postoLocal = null
                             thread(isDaemon = true) { localizarNoMultimidia() }
+                        } else if (obj != null && acaoLocal == "musica.buscar") {
+                            // Busca de música: espera o resultado (até 3 s) e devolve o texto, para o painel
+                            // mostrar na hora o que o app fez (ou o erro) em vez de ficar sem resposta.
+                            val resultado = arrayOfNulls<String>(1)
+                            val trava = java.util.concurrent.CountDownLatch(1)
+                            val textoBusca = obj.optString("texto")
+                            runOnUiThread {
+                                try {
+                                    val ok = PainelLink.executarMidia(application, acaoLocal, textoBusca)
+                                    resultado[0] = if (ok) PainelLink.avisoMusica.second.ifBlank { "Pedido enviado." }
+                                    else "Este aparelho não controla música (falta o acesso às notificações)."
+                                } catch (e: Throwable) {
+                                    resultado[0] = "Erro ao buscar: ${e.message ?: e.javaClass.simpleName}"
+                                } finally {
+                                    trava.countDown()
+                                }
+                            }
+                            trava.await(3, java.util.concurrent.TimeUnit.SECONDS)
+                            val corpo = JSONObject().put("mensagem", resultado[0] ?: "O app não respondeu em 3 segundos.").toString()
+                            send(out, 200, "application/json; charset=utf-8", corpo.toByteArray(Charsets.UTF_8))
+                            respondido = true
                         } else if (obj != null && (acaoLocal.startsWith("musica.") || acaoLocal.startsWith("radio."))) {
                             // Música e rádio: tocam aqui, no multimídia (não passam pelo celular).
                             val texto = obj.optString("texto")
@@ -188,7 +210,7 @@ class PainelServerActivity : Activity() {
                             // Fila curta: se o celular não estiver ligado, não acumula comandos.
                             while (pending.size > 5) pending.poll()
                         }
-                        send(out, 204, "text/plain; charset=utf-8", ByteArray(0))
+                        if (!respondido) send(out, 204, "text/plain; charset=utf-8", ByteArray(0))
                     }
                     method == "GET" && path == "/estado" -> {
                         val age = if (latestAtMs == 0L) -1 else System.currentTimeMillis() - latestAtMs
