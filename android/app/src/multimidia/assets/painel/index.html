@@ -997,7 +997,7 @@
     if (a.id !== avisoMusicaId) { avisoMusicaId = a.id; if (a.texto) setBusca(a.texto); }
   }
   function buscarMusica() {
-    if (!parado) return;
+    if (!parado) { setBusca('Com o carro andando, a pesquisa fica bloqueada.'); return; }
     var t = el('busca-txt').value.trim();
     if (!t) { setBusca('Digite o nome da música ou do cantor.'); return; }
     fetch('/comando', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ acao: 'musica.buscar', texto: t }) })

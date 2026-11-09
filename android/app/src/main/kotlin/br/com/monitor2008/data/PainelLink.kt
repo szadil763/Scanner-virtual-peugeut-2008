@@ -605,18 +605,28 @@ object PainelLink {
             return
         }
         val nome = launcher.label(pkg)
-        if (media.playFromSearchQuietly(pkg, q)) {
-            avisarMusica("Pedi ao $nome para tocar \"$q\".")
-            return
-        }
+        // 1) Pedido de busca direto ao app (abre e toca): é o que o Spotify e outros aceitam de fato.
+        //    O pedido pela sessão de mídia é aceito mas muitas vezes ignorado, então fica como segunda chance.
         val erro = launcher.playFromSearch(pkg, q, null)
-        if (erro == null) {
-            avisarMusica("Pedi ao $nome para tocar \"$q\".")
+        if (erro == null || media.playFromSearchQuietly(pkg, q)) {
+            avisarMusica("Pedi ao $nome para tocar \"$q\"…")
+            conferirTocando(media, pkg, nome)
             return
         }
-        // O app não aceitou a busca: abre o app para o dono procurar por lá.
+        // 2) O app não aceitou a busca: abre o app para o dono procurar por lá.
         val aberto = launcher.openApp(pkg, null)
         avisarMusica(if (aberto == null) "$erro Abri o $nome para você buscar por lá." else "$erro $aberto")
+    }
+
+    /** 6 s depois do pedido, diz na tela se o app começou a tocar (para o dono saber onde parou). */
+    private fun conferirTocando(media: MediaWatcher, pkg: String, nome: String) {
+        android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+            val n = media.now.value
+            avisarMusica(
+                if (n != null && n.pkg == pkg && n.playing) "Tocando no $nome: ${n.title ?: "música"}."
+                else "O $nome recebeu a busca, mas ainda não começou a tocar. Toque em play no app.",
+            )
+        }, 6_000L)
     }
 
     /** Comandos vindos dos botões do painel. Música só com o acesso às notificações (multimídia). */
