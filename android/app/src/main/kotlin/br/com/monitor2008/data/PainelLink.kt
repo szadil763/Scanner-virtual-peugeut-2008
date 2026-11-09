@@ -67,6 +67,26 @@ object PainelLink {
     @Volatile private var pendenteId = 0
     /** Resultado do último abastecimento pelo painel (posto identificado ou o motivo de não ter achado). */
     @Volatile private var avisoAbastecimento = ""
+    /** Posto achado a pedido do multimídia (coordenadas e endereço), para mostrar antes de registrar. */
+    @Volatile private var postoAchado: JSONObject? = null
+
+    /** Acha o posto pelo GPS do celular e guarda para o multimídia mostrar. */
+    private fun localizarPosto(app: Application) {
+        scope.launch(Dispatchers.IO) {
+            val fix = PlaceFinder.current(app, timeoutMs = 10_000)
+            postoAchado = if (fix == null) {
+                JSONObject().apply { put("ok", false); put("motivo", "O GPS do celular não respondeu. Confira a localização ligada.") }
+            } else {
+                val endereco = PlaceFinder.address(app, fix.latitude, fix.longitude) ?: ""
+                JSONObject().apply {
+                    put("ok", true)
+                    put("lat", fix.latitude)
+                    put("lon", fix.longitude)
+                    put("endereco", endereco.ifBlank { "Endereço não encontrado" })
+                }
+            }
+        }
+    }
     /** Mapa no painel: posição do celular, destino e rota (OpenStreetMap no multimídia). */
     @Volatile private var meuLugar: Pair<Double, Double>? = null
     @Volatile private var meuLugarMs = 0L
@@ -316,6 +336,7 @@ object PainelLink {
             put("pendenteId", pendenteId)
             put("aviso", avisoAbastecimento)
             put("mapa", mapaJson())
+            put("posto", postoAchado ?: JSONObject.NULL)
             put("fala", falaTexto)
             put("ajustes", JSONObject().apply {
                 put("sol", Store(app).highContrast)
@@ -512,6 +533,12 @@ object PainelLink {
         val cheio = o.optBoolean("cheio", true)
         val etanol = o.optBoolean("etanol", false)
         // Posto pelo GPS do celular (como na tela de abastecimento). Sem GPS, registra sem posto.
+        // Posto que o multimídia mostrou (coordenadas enviadas no comando): não procura de novo.
+        if (o.has("lat") && o.has("lon")) {
+            val place = StationDraft(o.getDouble("lat"), o.getDouble("lon"), "", o.optString("endereco", ""))
+            MonitorEngine.get(app).registerRefuel(litros, preco, cheio, etanol, place)
+            return
+        }
         scope.launch {
             val fix = PlaceFinder.current(app, timeoutMs = 10_000)
             val endereco = fix?.let { PlaceFinder.address(app, it.latitude, it.longitude) ?: "" }
@@ -581,6 +608,10 @@ object PainelLink {
                 AppLauncher(app).routeTo(endereco, null)?.let { enviarFala(it) }
             }
             "mapa.limpar" -> limparMapa()
+            "posto.localizar" -> {
+                postoAchado = null
+                localizarPosto(app)
+            }
             "voz.ouvir" -> {
                 vozPainelAte = System.currentTimeMillis() + 60_000
                 VoiceAssistant.get(app).listen(beepWhenReady = true)

@@ -244,6 +244,13 @@
       <button class="op sel" id="op-cheio" onclick="escolhe('tanque','cheio')">Tanque cheio</button>
       <button class="op" id="op-parcial" onclick="escolhe('tanque','parcial')">Parcial</button>
     </div>
+    <div class="posto-bloco" style="margin-top:12px">
+      <div class="rotulo" style="font-size:15px;color:var(--dim)">Posto</div>
+      <div id="posto-status" style="font-size:18px;margin:4px 0">Localizando o posto…</div>
+      <div id="mapa-posto" style="height:220px;border-radius:14px;border:2px solid #222;display:none;margin:8px 0"></div>
+      <div id="posto-endereco" style="font-size:18px;margin-bottom:6px"></div>
+      <button class="feito" style="margin-top:0" onclick="localizarPosto()">Localizar de novo</button>
+    </div>
     <button class="enviar" id="ab-enviar" onclick="enviarAbastecimento()">Registrar no celular</button>
     <div class="aviso" id="ab-aviso">Só com o carro parado. Depois de tocar, toque de novo para confirmar.</div>
     <div class="aviso" id="abast-info" style="font-size:22px;color:var(--ok)"></div>
@@ -288,6 +295,7 @@
   function aba(nome) {
     abaAtual = nome;
     if (nome === 'mapa' && mapaObj) setTimeout(function () { mapaObj.invalidateSize(); }, 150);
+    if (nome === 'abastecer' && !postoAtual) localizarPosto();
     var grupo = MAIS.indexOf(nome) >= 0 ? 'mais' : nome;
     ['painel', 'tocador', 'saude', 'postos', 'abastecer', 'manutencao', 'consumo', 'diag', 'ajustes', 'mapa', 'ajuda', 'mais'].forEach(function (n) {
       el('t-' + n).classList.toggle('sel', n === nome);
@@ -723,8 +731,41 @@
     }
     el('ab-enviar').textContent = confirmando ? 'Confirmar abastecimento' : 'Registrar no celular';
   }
+  var postoAtual = null, mapaPostoObj = null, mapaPostoCamadas = null;
+  function localizarPosto() {
+    postoAtual = null;
+    el('posto-status').textContent = 'Localizando o posto…';
+    el('posto-endereco').textContent = '';
+    el('mapa-posto').style.display = 'none';
+    fetch('/comando', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ acao: 'posto.localizar' }) });
+  }
+  function paintPosto(p) {
+    if (!p) return;
+    if (!p.ok) {
+      postoAtual = null;
+      el('posto-status').textContent = p.motivo || 'Não achei o posto.';
+      return;
+    }
+    if (postoAtual && postoAtual.lat === p.lat && postoAtual.lon === p.lon && postoAtual.endereco === p.endereco) return;
+    postoAtual = p;
+    el('posto-status').textContent = 'Posto localizado pelo GPS do celular.';
+    el('posto-endereco').textContent = p.endereco;
+    el('mapa-posto').style.display = 'block';
+    if (typeof L !== 'undefined') {
+      if (!mapaPostoObj) {
+        mapaPostoObj = L.map('mapa-posto').setView([p.lat, p.lon], 17);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(mapaPostoObj);
+        mapaPostoCamadas = L.layerGroup().addTo(mapaPostoObj);
+      }
+      mapaPostoCamadas.clearLayers();
+      L.marker([p.lat, p.lon]).bindPopup(p.endereco).addTo(mapaPostoCamadas);
+      mapaPostoObj.setView([p.lat, p.lon], 17);
+      setTimeout(function () { mapaPostoObj.invalidateSize(); }, 150);
+    }
+  }
   function enviarAbastecimento() {
     if (!parado) return;
+    if (!postoAtual) { el('ab-aviso').textContent = 'Localize o posto antes de registrar.'; return; }
     if (!confirmando) {
       var q = parseFloat(el('ab-quant').value), p = parseFloat(el('ab-preco').value);
       if (!(q > 0) || !(p > 0)) { el('ab-aviso').textContent = 'Preencha a quantidade e o preço.'; return; }
@@ -739,6 +780,7 @@
     var q2 = parseFloat(el('ab-quant').value), p2 = parseFloat(el('ab-preco').value);
     var corpo = { acao: 'abastecer', preco: p2, cheio: escolha.tanque === 'cheio', etanol: escolha.comb === 'etanol' };
     if (escolha.modo === 'valor') corpo.valor = q2; else corpo.litros = q2;
+    corpo.lat = postoAtual.lat; corpo.lon = postoAtual.lon; corpo.endereco = postoAtual.endereco;
     fetch('/comando', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(corpo) })
       .then(function () {
         el('ab-quant').value = '';
@@ -776,6 +818,7 @@
     paintDiag(d.diagnostico);
     paintAjustes(d.ajustes);
     paintMapa(d.mapa || {});
+    paintPosto(d.posto);
     falarResposta(d);
     pendenteAtualId = d.pendenteId;
     if (d.aviso) el('abast-info').textContent = d.aviso;
