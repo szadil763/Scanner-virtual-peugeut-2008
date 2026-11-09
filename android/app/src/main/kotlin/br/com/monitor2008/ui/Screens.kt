@@ -1505,6 +1505,7 @@ private fun AjustesScreen(ui: UiState, vm: MonitorEngine) {
         VoiceSection(ui.moving)
         VoiceChoiceSection()
         PainelSection()
+        ContaSection()
         // Palavra "Monitor" pausada (Features.wakeWord): o som do carro acionava. Só o botão 🎤 Voz.
         if (Features.wakeWord) WakeWordSection()
         PlacesSection(ui.moving)
