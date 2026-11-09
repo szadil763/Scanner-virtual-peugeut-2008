@@ -29,6 +29,9 @@
   .grid { flex:1 1 auto; display:grid; grid-template-columns:repeat(5,1fr); grid-template-rows:1fr 1fr; gap:8px; padding:0 10px 8px; min-height:0; }
   @media (max-width: 900px) { .grid { grid-template-columns:repeat(3,1fr); grid-template-rows:repeat(4,1fr); } }
   .split { flex:1 1 auto; display:grid; grid-template-columns:1fr 1fr; gap:12px; padding:0 12px 8px; min-height:0; overflow-y:auto; }
+  .split .capa { width:auto; height:200px; max-width:200px; aspect-ratio:1 / 1; }
+  .split .tocador { gap:6px; }
+  .split .tit2 { font-size:26px; }
   @media (max-width: 900px) { .split { grid-template-columns:1fr; } }
   .seg2 { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
   .seg2 button.sel { background:var(--sel); border-color:#5b9be0; }
@@ -263,7 +266,26 @@
       <button class="opc" id="aj-d-ALWAYS_FULL" onclick="ajusteDirecao('ALWAYS_FULL')">Sempre completo</button>
     </div>
     <button class="opc" id="aj-d-ALWAYS_SIMPLE" onclick="ajusteDirecao('ALWAYS_SIMPLE')">Sempre simples</button>
-    <div class="aviso">Adaptador, janela flutuante e atualização do app ficam no celular.</div>
+    <div class="lbl">Conta Google e nuvem</div>
+    <div class="aviso" id="aj-conta">Conta: ver no celular</div>
+    <button class="enviar" onclick="cmdAjuste('nuvem.sincronizar')">Sincronizar este carro</button>
+    <div class="aviso">Convidar pessoa e sair da conta ficam no celular.</div>
+    <div class="lbl">Lugares salvos</div>
+    <div id="aj-lugares"></div>
+    <div class="aviso">Para salvar um lugar novo, use o celular (pede digitação).</div>
+    <div class="lbl">App de mapa</div>
+    <div class="linha" id="aj-mapas"></div>
+    <div class="lbl">App de música</div>
+    <div class="linha" id="aj-musicas"></div>
+    <div class="lbl">Voz do app</div>
+    <div id="aj-vozes"></div>
+    <div class="lbl">Velocidade da fala</div>
+    <div class="linha"><button class="opc" onclick="cmdAjuste('ajuste.velocidade',{valor:-1})">−</button><div class="v2" id="aj-vel">--</div><button class="opc" onclick="cmdAjuste('ajuste.velocidade',{valor:1})">+</button></div>
+    <div class="lbl">Tom da voz</div>
+    <div class="linha"><button class="opc" onclick="cmdAjuste('ajuste.tom',{valor:-1})">−</button><div class="v2" id="aj-tom">--</div><button class="opc" onclick="cmdAjuste('ajuste.tom',{valor:1})">+</button></div>
+    <div class="lbl">Ao ligar o carro</div>
+    <button class="opc" id="aj-cont" onclick="ajusteContinuar()">Continuar a rádio ou a música</button>
+    <div class="aviso">Adaptador, conexão automática e janela flutuante ficam no celular.</div>
   </div>
 </div>
 
@@ -698,6 +720,11 @@
       });
     }
     if (box) Array.prototype.forEach.call(box.children, function (b) { b.className = 'opc' + (b.dataset.id === a.carro ? ' sel' : ''); });
+    if (a.conta) {
+      el('aj-conta').textContent = a.conta.email
+        ? 'Conectado como: ' + a.conta.email + (a.conta.carro ? ' · carro deste aparelho: ' + a.conta.carro : '')
+        : 'Nenhuma conta conectada no celular.';
+    }
     sol = !!a.sol;
     direcao = a.direcao || 'AUTO';
     el('aj-sol').textContent = 'Tema sol forte: ' + (sol ? 'ligado' : 'desligado');
@@ -705,6 +732,78 @@
     ['AUTO', 'ALWAYS_FULL', 'ALWAYS_SIMPLE'].forEach(function (v) {
       el('aj-d-' + v).className = 'opc' + (direcao === v ? ' sel' : '');
     });
+  }
+  // Ajustes que dependem deste multimídia (mapa, música, voz, lugares, rádio ao ligar). Vêm em /midia.
+  var ajustesLocaisChave = '';
+  function botaoAj(texto, classe, aoClicar) {
+    var b = document.createElement('button');
+    b.className = classe;
+    b.textContent = texto;
+    b.onclick = aoClicar;
+    return b;
+  }
+  function paintAjustesLocais(a) {
+    if (!a) return;
+    var chave = JSON.stringify(a);
+    if (chave === ajustesLocaisChave) return;
+    ajustesLocaisChave = chave;
+
+    var lug = el('aj-lugares');
+    lug.textContent = '';
+    if (!a.lugares || a.lugares.length === 0) {
+      lug.appendChild(document.createElement('div')).className = 'aviso';
+      lug.lastChild.textContent = 'Nenhum lugar salvo.';
+    }
+    (a.lugares || []).forEach(function (l) {
+      var linha = document.createElement('div');
+      linha.className = 'linha';
+      linha.style.alignItems = 'center';
+      var txt = document.createElement('div');
+      txt.className = 'aviso';
+      txt.textContent = l.nome + ' · ' + l.endereco;
+      linha.appendChild(txt);
+      linha.appendChild(botaoAj('Remover', 'feito', function () { cmdAjuste('ajuste.lugarRemover', { valor: l.nome }); }));
+      lug.appendChild(linha);
+    });
+
+    function escolhas(box, lista, atual, acao) {
+      box.textContent = '';
+      (lista || []).forEach(function (o) {
+        box.appendChild(botaoAj(o.nome, 'opc' + (o.pkg === atual ? ' sel' : ''), function () { cmdAjuste(acao, { valor: o.pkg }); }));
+      });
+    }
+    escolhas(el('aj-mapas'), a.mapas, a.mapaApp, 'ajuste.mapa');
+    escolhas(el('aj-musicas'), a.musicas, a.musicaApp, 'ajuste.musica');
+
+    var vz = el('aj-vozes');
+    vz.textContent = '';
+    if (!a.vozes || a.vozes.length === 0) {
+      vz.appendChild(document.createElement('div')).className = 'aviso';
+      vz.lastChild.textContent = 'Vozes em português ainda não carregadas. Espere alguns segundos.';
+    }
+    (a.vozes || []).forEach(function (v) {
+      var linha = document.createElement('div');
+      linha.className = 'linha';
+      linha.style.alignItems = 'center';
+      var nome = document.createElement('div');
+      nome.className = 'aviso';
+      nome.style.flex = '1';
+      nome.textContent = (v.nome === a.vozAtual ? '✓ ' : '') + v.rotulo + ' · ' + v.detalhe;
+      linha.appendChild(nome);
+      linha.appendChild(botaoAj('Ouvir', 'opc', function () { cmdAjuste('ajuste.vozOuvir', { valor: v.nome }); }));
+      linha.appendChild(botaoAj('Usar', 'opc' + (v.nome === a.vozAtual ? ' sel' : ''), function () { cmdAjuste('ajuste.voz', { valor: v.nome }); }));
+      vz.appendChild(linha);
+    });
+
+    el('aj-vel').textContent = Number(a.velocidade).toFixed(1).replace('.', ',');
+    el('aj-tom').textContent = Number(a.tom).toFixed(1).replace('.', ',');
+    var cont = el('aj-cont');
+    cont.textContent = 'Continuar a rádio ou a música: ' + (a.continuar ? 'ligado' : 'desligado');
+    cont.className = 'opc' + (a.continuar ? ' sel' : '');
+  }
+  function ajusteContinuar() {
+    var ligado = el('aj-cont').classList.contains('sel');
+    cmdAjuste('ajuste.continuar', { valor: !ligado });
   }
   var vozTimer = null;
   function ouvirVoz() {
@@ -1028,6 +1127,7 @@
       .then(function (m) {
         paintMidia(m);
         paintRadios(m);
+        paintAjustesLocais(m.ajustes);
         paintTocador(m.musica || null);
       })
       .catch(function () {})

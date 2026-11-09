@@ -356,6 +356,10 @@ object PainelLink {
                 put("preco", Math.round(st.fuelPrice * 100) / 100.0)
                 put("eficiencia", Math.round(st.volumetricEfficiency * 100) / 100.0)
                 put("carro", st.vehicleId ?: "")
+                put("conta", JSONObject().apply {
+                    put("email", Conta.email() ?: "")
+                    put("carro", br.com.monitor2008.domain.Vehicles.byId(st.vehicleId)?.name ?: "")
+                })
                 put("carros", JSONArray().apply {
                     br.com.monitor2008.domain.Vehicles.all.forEach { v -> put(JSONObject().put("id", v.id).put("nome", v.name)) }
                 })
@@ -657,6 +661,7 @@ object PainelLink {
             "ajuste.carro" -> br.com.monitor2008.domain.Vehicles.byId(cmd.optString("valor"))?.let { MonitorEngine.get(app).setVehicle(it.id) }
             "radio.next" -> RadioPlayer.get(app).step(true)
             "radio.prev" -> RadioPlayer.get(app).step(false)
+            "nuvem.sincronizar" -> Nuvem.sincronizar(app, Store(app)) { _, msg -> enviarFala(msg) }
         }
     }
 }

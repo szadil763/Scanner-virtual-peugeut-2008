@@ -52,6 +52,7 @@ class PainelServerActivity : Activity() {
         fun falar(texto: String) {
             val engine = tts
             if (engine == null) { ttsStatus = "voz não iniciou"; return }
+            aplicarVoz()
             if (engine.speak(texto, TextToSpeech.QUEUE_FLUSH, null, "painel-voz") == TextToSpeech.ERROR) {
                 ttsStatus = "erro ao falar"
             }
@@ -177,6 +178,9 @@ class PainelServerActivity : Activity() {
                                 } catch (_: Exception) { "Não consegui abrir o mapa." }
                                 if (erro != null && comandoValido(obj)) pending.add(System.currentTimeMillis() to obj.toString())
                             }
+                        } else if (obj != null && acaoLocal in AJUSTES_LOCAIS) {
+                            // Ajustes deste multimídia: mudam as preferências daqui, não passam pelo celular.
+                            runOnUiThread { executarAjuste(obj) }
                         } else if (obj != null && comandoValido(obj)) {
                             pending.add(System.currentTimeMillis() to obj.toString())
                             // Fila curta: se o celular não estiver ligado, não acumula comandos.
@@ -202,6 +206,77 @@ class PainelServerActivity : Activity() {
             } catch (_: Exception) {
                 // Cliente cortou a conexão: nada a fazer.
             }
+        }
+    }
+
+    /** Vozes em português deste aparelho, na ordem de qualidade (vazia enquanto o leitor não iniciou). */
+    private fun vozesPt(): List<br.com.monitor2008.domain.TtsVoiceOption> {
+        val engine = tts ?: return emptyList()
+        val pt = try { engine.voices.orEmpty().filter { it.locale.language == "pt" } } catch (_: Exception) { emptyList() }
+        return br.com.monitor2008.domain.TtsVoices.options(pt.map {
+            br.com.monitor2008.domain.TtsVoiceInfo(it.name, it.quality, it.isNetworkConnectionRequired)
+        })
+    }
+
+    /** Aplica a voz escolhida (ou a guardada), a velocidade e o tom ao leitor deste aparelho. */
+    private fun aplicarVoz(nome: String? = null) {
+        val engine = tts ?: return
+        val s = Store(application)
+        engine.setSpeechRate(s.ttsRate)
+        engine.setPitch(s.ttsPitch)
+        (nome ?: s.ttsVoice)?.let { n -> engine.voices?.firstOrNull { it.name == n }?.let { engine.voice = it } }
+    }
+
+    /** Ajustes deste multimídia: o que a tela mostra e o que cada botão muda. */
+    private fun executarAjuste(o: JSONObject) {
+        val acao = o.optString("acao")
+        val valor = o.optString("valor")
+        if (valor.length > 200) return
+        val st = Store(application)
+        val lanc = AppLauncher(application)
+        when (acao) {
+            "ajuste.mapa" -> if (lanc.mapApps().any { it.pkg == valor }) lanc.mapPackage = valor
+            "ajuste.musica" -> if (lanc.musicApps().any { it.pkg == valor }) lanc.musicPackage = valor
+            "ajuste.voz" -> if (vozesPt().any { it.name == valor }) {
+                st.ttsVoice = valor
+                aplicarVoz()
+            }
+            "ajuste.vozOuvir" -> if (vozesPt().any { it.name == valor }) {
+                aplicarVoz(valor)
+                tts?.speak("Consumo de doze vírgula três quilômetros por litro.", TextToSpeech.QUEUE_FLUSH, null, "amostra")
+            }
+            "ajuste.velocidade" -> {
+                st.ttsRate = br.com.monitor2008.domain.TtsVoices.step(st.ttsRate, o.optInt("valor", 0) > 0)
+                aplicarVoz()
+            }
+            "ajuste.tom" -> {
+                st.ttsPitch = br.com.monitor2008.domain.TtsVoices.step(st.ttsPitch, o.optInt("valor", 0) > 0)
+                aplicarVoz()
+            }
+            "ajuste.continuar" -> st.resumeMedia = o.optBoolean("valor", true)
+            "ajuste.lugarRemover" -> st.savePlaces(st.places().filter { it.first != valor })
+        }
+    }
+
+    /** Lista de ajustes locais para o painel (mapa, música, voz, lugares e rádio ao ligar). */
+    private fun ajustesLocais(): JSONObject {
+        val st = Store(application)
+        val lanc = AppLauncher(application)
+        return JSONObject().apply {
+            put("mapas", JSONArray().apply { lanc.mapApps().forEach { put(JSONObject().put("pkg", it.pkg).put("nome", it.label)) } })
+            put("mapaApp", lanc.mapPackage ?: "")
+            put("musicas", JSONArray().apply { lanc.musicApps().forEach { put(JSONObject().put("pkg", it.pkg).put("nome", it.label)) } })
+            put("musicaApp", lanc.musicPackage ?: "")
+            put("vozes", JSONArray().apply {
+                vozesPt().forEach { put(JSONObject().put("nome", it.name).put("rotulo", it.label).put("detalhe", it.detail)) }
+            })
+            put("vozAtual", st.ttsVoice ?: "")
+            put("velocidade", Math.round(st.ttsRate * 10) / 10.0)
+            put("tom", Math.round(st.ttsPitch * 10) / 10.0)
+            put("continuar", st.resumeMedia)
+            put("lugares", JSONArray().apply {
+                st.places().forEach { put(JSONObject().put("nome", it.first).put("endereco", it.second)) }
+            })
         }
     }
 
@@ -272,6 +347,7 @@ class PainelServerActivity : Activity() {
             put("musica", musica)
             put("radio", radio)
             put("radios", lista)
+            put("ajustes", ajustesLocais())
             put("musicaDisponivel", Features.mediaControl)
         }.toString()
     }
@@ -353,7 +429,12 @@ class PainelServerActivity : Activity() {
         private val COMANDOS = setOf(
             "musica.playpause", "musica.next", "musica.prev",
             "radio.playpause", "radio.next", "radio.prev",
-            "abastecer", "musica.buscar", "manutencao.feito", "diag.lerFalhas", "ajuste.sol", "ajuste.direcao", "ajuste.combustivel", "ajuste.calibracao", "ajuste.preco", "ajuste.eficiencia", "ajuste.carro", "voz.ouvir", "pendente.cancelar", "mapa.abrir", "mapa.rota", "mapa.limpar", "posto.localizar",
+            "abastecer", "musica.buscar", "manutencao.feito", "diag.lerFalhas", "ajuste.sol", "ajuste.direcao", "ajuste.combustivel", "ajuste.calibracao", "ajuste.preco", "ajuste.eficiencia", "ajuste.carro", "voz.ouvir", "pendente.cancelar", "mapa.abrir", "mapa.rota", "mapa.limpar", "posto.localizar", "nuvem.sincronizar",
+        )
+        /** Ajustes que mudam as preferências deste multimídia (mapa, música, voz, lugares, rádio ao ligar). */
+        private val AJUSTES_LOCAIS = setOf(
+            "ajuste.mapa", "ajuste.musica", "ajuste.voz", "ajuste.vozOuvir", "ajuste.velocidade", "ajuste.tom",
+            "ajuste.continuar", "ajuste.lugarRemover",
         )
         private const val VALIDADE_MS = 20_000L
         /** Fila de comandos (instante, JSON) esperando o próximo envio do celular. */
@@ -363,7 +444,7 @@ class PainelServerActivity : Activity() {
         private fun comandoValido(o: JSONObject): Boolean {
             val acao = o.optString("acao")
             if (acao !in COMANDOS) return false
-            if (acao == "diag.lerFalhas" || acao == "pendente.cancelar" || acao == "mapa.abrir" || acao == "mapa.limpar") return true
+            if (acao == "diag.lerFalhas" || acao == "pendente.cancelar" || acao == "mapa.abrir" || acao == "mapa.limpar" || acao == "nuvem.sincronizar") return true
             if (acao == "mapa.rota") return o.optString("texto").isNotBlank() && o.optString("texto").length <= 150
             if (acao == "ajuste.sol" || acao == "voz.ouvir" || acao == "posto.localizar") return true
             if (acao == "ajuste.combustivel") return o.optString("valor") in setOf("E30", "E32", "ETANOL")
