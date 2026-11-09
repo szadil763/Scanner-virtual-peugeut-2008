@@ -731,7 +731,7 @@
     }
     el('ab-enviar').textContent = confirmando ? 'Confirmar abastecimento' : 'Registrar no celular';
   }
-  var postoAtual = null, mapaPostoObj = null, mapaPostoCamadas = null;
+  var postoAtual = null, postoLocalAtual = null, mapaPostoObj = null, mapaPostoCamadas = null;
   function localizarPosto() {
     postoAtual = null;
     el('posto-status').textContent = 'Localizando o posto…';
@@ -818,7 +818,7 @@
     paintDiag(d.diagnostico);
     paintAjustes(d.ajustes);
     paintMapa(d.mapa || {});
-    paintPosto(d.posto);
+    if (!postoLocalAtual) paintPosto(d.posto);
     falarResposta(d);
     pendenteAtualId = d.pendenteId;
     if (d.aviso) el('abast-info').textContent = d.aviso;
@@ -877,6 +877,8 @@
       .then(function (s) {
         vozStatus = s.vozMultimidia || '';
         mostraVoz();
+        postoLocalAtual = s.postoLocal || null;
+        if (postoLocalAtual) paintPosto(postoLocalAtual);
         if (s.dados && s.idadeMs >= 0 && s.idadeMs < 4000) {
           if (s.dados.ok === false) {
             st.textContent = 'O celular não está conectado ao carro. Confira se o adaptador está na tomada do carro, com a ignição ligada, e se o Bluetooth do celular está ligado.';

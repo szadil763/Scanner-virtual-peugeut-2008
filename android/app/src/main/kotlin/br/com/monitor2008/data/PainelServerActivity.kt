@@ -22,6 +22,7 @@ import org.json.JSONObject
 import java.util.concurrent.ConcurrentLinkedQueue
 import java.util.Collections
 import kotlin.concurrent.thread
+import kotlinx.coroutines.runBlocking
 
 /**
  * Painel no multimídia (só o APK do multimídia). Abre uma porta na rede e atende:
@@ -38,6 +39,8 @@ class PainelServerActivity : Activity() {
     @Volatile private var latestJson: String? = null
     @Volatile private var latestAtMs = 0L
     @Volatile private var capa: ByteArray? = null
+    /** Posto achado pelo GPS deste multimídia (tem prioridade sobre o do celular). */
+    @Volatile private var postoLocal: JSONObject? = null
     private var web: WebView? = null
     private var tts: TextToSpeech? = null
     /** Estado da voz deste aparelho, mostrado no painel (para saber por que a fala não sai). */
@@ -155,7 +158,10 @@ class PainelServerActivity : Activity() {
                     method == "POST" && path == "/comando" -> {
                         val obj = try { JSONObject(String(body, Charsets.UTF_8)) } catch (_: Exception) { null }
                         val acaoLocal = obj?.optString("acao") ?: ""
-                        if (obj != null && (acaoLocal.startsWith("musica.") || acaoLocal.startsWith("radio."))) {
+                        if (acaoLocal == "posto.localizar") {
+                            postoLocal = null
+                            thread(isDaemon = true) { localizarNoMultimidia() }
+                        } else if (obj != null && (acaoLocal.startsWith("musica.") || acaoLocal.startsWith("radio."))) {
                             // Música e rádio: tocam aqui, no multimídia (não passam pelo celular).
                             val texto = obj.optString("texto")
                             runOnUiThread { PainelLink.executarMidia(application, acaoLocal, texto) }
@@ -168,7 +174,7 @@ class PainelServerActivity : Activity() {
                     }
                     method == "GET" && path == "/estado" -> {
                         val age = if (latestAtMs == 0L) -1 else System.currentTimeMillis() - latestAtMs
-                        val json = "{\"idadeMs\":$age,\"dados\":${latestJson ?: "null"},\"vozMultimidia\":\"$ttsStatus\"}"
+                        val json = "{\"idadeMs\":$age,\"dados\":${latestJson ?: "null"},\"vozMultimidia\":\"$ttsStatus\",\"postoLocal\":${postoLocal?.toString() ?: "null"}}"
                         send(out, 200, "application/json; charset=utf-8", json.toByteArray(Charsets.UTF_8))
                     }
                     method == "GET" && path == "/midia" ->
@@ -188,6 +194,27 @@ class PainelServerActivity : Activity() {
     }
 
     private var capaLocalKey: String? = null
+
+    /**
+     * Posto pelo GPS deste multimídia. Se ele não achar, pede ao celular (que aparece no
+     * próximo envio do painel).
+     */
+    private fun localizarNoMultimidia() {
+        val fix = try { runBlocking { PlaceFinder.current(application, timeoutMs = 8_000) } } catch (_: Exception) { null }
+        if (fix == null) {
+            pending.add(System.currentTimeMillis() to JSONObject().put("acao", "posto.localizar").toString())
+            return
+        }
+        val achado = try { runBlocking { PlaceFinder.address(application, fix.latitude, fix.longitude) } } catch (_: Exception) { null }
+        val endereco = if (achado.isNullOrBlank()) "Endereço não encontrado" else achado
+        postoLocal = JSONObject().apply {
+            put("ok", true)
+            put("lat", fix.latitude)
+            put("lon", fix.longitude)
+            put("endereco", endereco)
+            put("origem", "multimídia")
+        }
+    }
 
     /** Música e rádio deste aparelho (o multimídia tem o próprio acesso às notificações). */
     private fun midiaLocal(): String {
