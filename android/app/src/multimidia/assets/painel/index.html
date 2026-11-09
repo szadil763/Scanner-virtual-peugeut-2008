@@ -138,6 +138,10 @@
   #vozinfo:empty { display:none; }
   /* Aviso rápido por cima de qualquer tela (resultado de botões como Buscar e tocar). */
   #toast { position:fixed; left:12px; right:12px; bottom:96px; z-index:50; display:none; background:#0f1826; border:2px solid #7dd3fc; border-radius:16px; padding:14px 18px; font-size:22px; color:#fff; }
+  /* Painel de consumo da aba Mídias: cabe sem rolar (velocidade em cima, seis números embaixo). */
+  #mid-consumo .metricas .card { min-height:0; padding:6px 10px !important; }
+  #mid-consumo .metricas .v2 { font-size:36px; line-height:1.05; }
+  #mid-consumo .metricas .unit { font-size:16px; }
   /* Menu Mais em grade 3x2. */
   #t-mais .lista { display:grid !important; grid-template-columns:repeat(3,1fr); gap:12px; align-content:start; overflow-y:auto; }
   #t-mais .mbtn { min-height:120px; font-size:26px; text-align:center; padding:0 12px; }
@@ -257,12 +261,13 @@
   <div class="card" id="mid-consumo" style="align-items:stretch;justify-content:flex-start;padding:12px;overflow-y:auto">
     <div class="lbl">Consumo do carro agora</div>
     <div class="metricas" style="grid-template-columns:1fr 1fr;margin-top:8px">
+      <div class="card" style="grid-column:1 / -1"><div class="lbl">Velocidade</div><div class="v2" id="mc-vel" style="font-size:64px;line-height:1">--</div><div class="unit">km/h</div></div>
       <div class="card"><div class="lbl">Consumo agora</div><div class="v2" id="mc-kml">--</div><div class="unit">km/l</div></div>
+      <div class="card"><div class="lbl">Média em movimento</div><div class="v2" id="mc-mov">--</div><div class="unit">km/l</div></div>
       <div class="card"><div class="lbl">Média com paradas</div><div class="v2" id="mc-media">--</div><div class="unit">km/l</div></div>
+      <div class="card"><div class="lbl">Combustível</div><div class="v2" id="mc-lph">--</div><div class="unit">L/h</div></div>
       <div class="card"><div class="lbl">Distância</div><div class="v2" id="mc-dist">--</div><div class="unit">km</div></div>
       <div class="card"><div class="lbl">Custo do trajeto</div><div class="v2" id="mc-custo">--</div><div class="unit">R$</div></div>
-      <div class="card"><div class="lbl">Média em movimento</div><div class="v2" id="mc-mov">--</div><div class="unit">km/l</div></div>
-      <div class="card"><div class="lbl">Combustível</div><div class="v2" id="mc-lph">--</div><div class="unit">L/h</div></div>
     </div>
   </div>
   </div>
@@ -1320,6 +1325,7 @@
     parado = !(d.speed > 0.5);
     refreshParado();
     el('speed').textContent = num(d.speed, 0);
+    el('mc-vel').textContent = num(d.speed, 0);
     el('rpm').textContent = num(d.rpm, 0);
     el('cool').textContent = num(d.coolant, 0);
     if (d.parado) {
