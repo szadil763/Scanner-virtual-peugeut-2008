@@ -26,7 +26,16 @@
   .aba.sel { background:var(--sel); border-color:#5b9be0; }
   .tela { flex:1 1 auto; min-height:0; display:none; }
   .tela.sel { display:flex; flex-direction:column; }
-  .grid { flex:1 1 auto; display:grid; grid-template-columns:repeat(3,1fr); grid-template-rows:1fr 1fr; gap:8px; padding:0 10px 8px; min-height:0; }
+  .grid { flex:1 1 auto; display:grid; grid-template-columns:repeat(5,1fr); grid-template-rows:1fr 1fr; gap:8px; padding:0 10px 8px; min-height:0; }
+  @media (max-width: 900px) { .grid { grid-template-columns:repeat(3,1fr); grid-template-rows:repeat(4,1fr); } }
+  .split { flex:1 1 auto; display:grid; grid-template-columns:1fr 1fr; gap:12px; padding:0 12px 8px; min-height:0; overflow-y:auto; }
+  @media (max-width: 900px) { .split { grid-template-columns:1fr; } }
+  .seg2 { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+  .seg2 button.sel { background:var(--sel); border-color:#5b9be0; }
+  .seg2 button { min-height:60px; font-size:22px; background:var(--btn); color:var(--fg); border:3px solid #3a4a5c; border-radius:12px; }
+  .lista-radio { display:grid; gap:8px; }
+  .lista-radio button { min-height:60px; font-size:20px; text-align:left; background:var(--btn); color:var(--fg); border:2px solid #3a4a5c; border-radius:12px; padding:0 12px; }
+  .lista-radio button.sel { border-color:#5b9be0; background:var(--sel); }
   .card { border:3px solid #333; border-radius:14px; padding:6px; display:flex; flex-direction:column; justify-content:center; align-items:center; min-height:0; }
   .card.warn { border-color:var(--warn); }
   .card.bad { border-color:var(--bad); }
@@ -144,11 +153,21 @@
     <div class="card" id="c-kml"><div class="lbl" id="kml-lbl">Consumo agora</div><div class="val" id="kml">--</div><div class="unit" id="kml-unit">km/l</div></div>
     <div class="card" id="c-avg"><div class="lbl">Média da viagem</div><div class="val" id="avg">--</div><div class="unit">km/l</div></div>
     <div class="card" id="c-bat"><div class="lbl">Bateria</div><div class="val" id="bat">--</div><div class="unit">V</div></div>
+    <div class="card" id="c-carga"><div class="lbl">Carga do motor</div><div class="val" id="carga">--</div><div class="unit">%</div></div>
+    <div class="card" id="c-pressao"><div class="lbl">Pressão no coletor</div><div class="val" id="pressao">--</div><div class="unit">kPa</div></div>
+    <div class="card" id="c-ar"><div class="lbl">Ar na admissão</div><div class="val" id="ar">--</div><div class="unit">°C</div></div>
+    <div class="card" id="c-borb"><div class="lbl">Borboleta</div><div class="val" id="borb">--</div><div class="unit">%</div></div>
   </div>
 </div>
 
 <div class="tela" id="t-tocador">
-  <div class="tocador">
+  <div class="seg2" style="padding:8px 12px 4px">
+    <button id="mid-b-musica" class="sel" onclick="modoMidia('musica')">🎵 Música</button>
+    <button id="mid-b-radio" onclick="modoMidia('radio')">📻 Rádio</button>
+  </div>
+  <div class="split">
+  <div id="mid-esq" style="min-width:0;display:flex;flex-direction:column">
+  <div class="tocador" id="mid-musica">
     <img class="capa" id="capa" alt="" style="display:none">
     <div class="capa vazia" id="capa-vazia">Sem capa</div>
     <div class="tit2" id="tc-tit">Nada tocando</div>
@@ -165,6 +184,31 @@
       <button id="busca-btn" onclick="buscarMusica()">Buscar e tocar</button>
     </div>
     <div class="aviso" id="busca-aviso">Pesquisa só com o carro parado.</div>
+  </div>
+  <div id="mid-radio" class="tocador" style="display:none">
+    <div class="tit2" id="rd-tit">Nenhuma rádio tocando</div>
+    <div class="art2" id="rd-sub">&nbsp;</div>
+    <div class="ctrl">
+      <button onclick="cmd('radio.prev')">⏮</button>
+      <button id="rd-play" onclick="cmd('radio.playpause')">▶</button>
+      <button onclick="cmd('radio.next')">⏭</button>
+    </div>
+    <div class="lbl" style="font-size:18px">Favoritas e mais ouvidas</div>
+    <div class="lista-radio" id="radio-lista" style="width:100%"></div>
+    <div class="aviso" id="radio-aviso">Toque numa rádio para ouvir. Precisa de internet do hotspot.</div>
+  </div>
+  </div>
+  <div class="card" id="mid-consumo" style="align-items:stretch;justify-content:flex-start;padding:12px;overflow-y:auto">
+    <div class="lbl">Consumo do carro agora</div>
+    <div class="metricas" style="grid-template-columns:1fr 1fr;margin-top:8px">
+      <div class="card"><div class="lbl">Consumo agora</div><div class="v2" id="mc-kml">--</div><div class="unit">km/l</div></div>
+      <div class="card"><div class="lbl">Média do trajeto</div><div class="v2" id="mc-media">--</div><div class="unit">km/l</div></div>
+      <div class="card"><div class="lbl">Distância</div><div class="v2" id="mc-dist">--</div><div class="unit">km</div></div>
+      <div class="card"><div class="lbl">Custo do trajeto</div><div class="v2" id="mc-custo">--</div><div class="unit">R$</div></div>
+      <div class="card"><div class="lbl">Vel. média</div><div class="v2" id="mc-vmed">--</div><div class="unit">km/h</div></div>
+      <div class="card"><div class="lbl">Combustível</div><div class="v2" id="mc-lph">--</div><div class="unit">L/h</div></div>
+    </div>
+  </div>
   </div>
 </div>
 
@@ -185,11 +229,11 @@
 <div class="tela" id="t-mapa">
   <div class="form">
     <div id="mapa-div" style="height:330px;border-radius:14px;border:2px solid #222;flex:0 0 auto"></div>
-    <div class="aviso" style="font-size:20px">Mapa: sua posição (azul), o destino e a rota. A navegação com as instruções fica no celular (Google Maps ou Waze).</div>
-    <button class="enviar" style="min-height:80px" onclick="mapaAbrir()">Abrir o mapa no celular</button>
+    <div class="aviso" style="font-size:20px">Abre o mapa do multimídia. Se ele não abrir, abre o do celular. As instruções de navegação ficam no app de mapa.</div>
+    <button class="enviar" style="min-height:80px" onclick="mapaAbrir()">Abrir o mapa</button>
     <div class="lbl">Para onde?</div>
     <input type="text" id="mapa-dest" maxlength="150" placeholder="Endereço ou lugar salvo (ex.: Casa)" style="font-size:28px;min-height:64px;background:#000;color:var(--fg);border:3px solid #3a4a5c;border-radius:12px;padding:0 12px">
-    <button class="enviar" id="mapa-ir" style="min-height:72px" onclick="mapaRota()">Traçar a rota no celular</button>
+    <button class="enviar" id="mapa-ir" style="min-height:72px" onclick="mapaRota()">Traçar a rota</button>
     <button class="feito" style="margin-top:0" onclick="mapaLimpar()">Limpar o destino</button>
     <div class="aviso" id="mapa-aviso">Digitar o destino só com o carro parado.</div>
   </div>
@@ -566,6 +610,13 @@
     el('c-dist').textContent = num(d.tripKm, 1);
     el('c-custo').textContent = num(c.custo, 2);
     el('c-vmed').textContent = num(c.velMedia, 0);
+    // Mesmos números no lado direito da aba Mídias.
+    el('mc-kml').textContent = num(d.kmL, 1);
+    el('mc-media').textContent = num(d.tripAvgKmL, 1);
+    el('mc-dist').textContent = num(d.tripKm, 1);
+    el('mc-custo').textContent = num(c.custo, 2);
+    el('mc-vmed').textContent = num(c.velMedia, 0);
+    el('mc-lph').textContent = num(d.lph, 1);
     var chave = JSON.stringify(c.abastecimentos);
     if (chave === ultimoAbast) return;
     ultimoAbast = chave;
@@ -737,7 +788,7 @@
   }
   function mapaAbrir() {
     fetch('/comando', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ acao: 'mapa.abrir' }) })
-      .then(function () { el('mapa-aviso').textContent = 'Abrindo o mapa no celular.'; })
+      .then(function () { el('mapa-aviso').textContent = 'Abrindo o mapa.'; })
       .catch(function () { el('mapa-aviso').textContent = 'Sem resposta do multimídia.'; });
   }
   function mapaRota() {
@@ -745,7 +796,7 @@
     var t = el('mapa-dest').value.trim();
     if (!t) { el('mapa-aviso').textContent = 'Digite o destino.'; return; }
     fetch('/comando', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ acao: 'mapa.rota', texto: t }) })
-      .then(function () { el('mapa-aviso').textContent = 'Traçando a rota para "' + t + '" no celular.'; })
+      .then(function () { el('mapa-aviso').textContent = 'Traçando a rota para "' + t + '".'; })
       .catch(function () { el('mapa-aviso').textContent = 'Sem resposta do multimídia.'; });
   }
   function buscarMusica() {
@@ -873,6 +924,10 @@
     if ((avg === null || avg === undefined) && d.tripAvgL100 > 0) avg = 100 / d.tripAvgL100;
     el('avg').textContent = num(avg, 1);
     el('bat').textContent = num(d.battery, 1);
+    el('carga').textContent = num(d.carga, 0);
+    el('pressao').textContent = num(d.pressaoKpa, 0);
+    el('ar').textContent = num(d.arAdmissao, 0);
+    el('borb').textContent = num(d.borboleta, 0);
     el('c-cool').className = 'card' + (d.coolant >= 110 ? ' bad' : d.coolant >= 100 ? ' warn' : '');
     el('c-bat').className = 'card' + (d.rpm > 400 && d.battery !== null && d.battery < 12.6 ? ' bad' : '');
     paintSaude(d.saude || []);
@@ -919,6 +974,49 @@
       el('r-play').textContent = '▶';
     }
   }
+  // Aba Mídias: Música ou Rádio (mesma escolha do celular).
+  function modoMidia(m) {
+    var radio = m === 'radio';
+    el('mid-musica').style.display = radio ? 'none' : 'flex';
+    el('mid-radio').style.display = radio ? 'flex' : 'none';
+    el('mid-b-musica').className = radio ? '' : 'sel';
+    el('mid-b-radio').className = radio ? 'sel' : '';
+  }
+  var radioEscolhida = '';
+  function paintRadios(m) {
+    var ra = m.radio;
+    if (ra) {
+      el('rd-tit').textContent = ra.nome || 'Rádio';
+      el('rd-sub').textContent = ra.titulo || (ra.tocando ? 'Tocando' : 'Pausada');
+      el('rd-play').textContent = ra.tocando ? '⏸' : '▶';
+    } else {
+      el('rd-tit').textContent = 'Nenhuma rádio tocando';
+      el('rd-sub').textContent = ' ';
+      el('rd-play').textContent = '▶';
+    }
+    var lista = m.radios || [];
+    var box = el('radio-lista');
+    var chave = JSON.stringify(lista);
+    if (box.dataset.chave === chave) return;
+    box.dataset.chave = chave;
+    box.textContent = '';
+    if (lista.length === 0) {
+      el('radio-aviso').textContent = 'Sem lista de rádios. Confira a internet do hotspot do celular.';
+      return;
+    }
+    el('radio-aviso').textContent = 'Toque numa rádio para ouvir.';
+    lista.forEach(function (r) {
+      var b = document.createElement('button');
+      b.textContent = (r.tocando ? '▶ ' : '') + r.nome + (r.assunto ? ' · ' + r.assunto : '');
+      b.className = r.tocando ? 'sel' : '';
+      b.onclick = function () { tocarRadio(r.id); };
+      box.appendChild(b);
+    });
+  }
+  function tocarRadio(id) {
+    fetch('/comando', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ acao: 'radio.tocar', texto: id }) })
+      .catch(function () { el('radio-aviso').textContent = 'Sem resposta do multimídia'; });
+  }
   function cmd(acao) {
     fetch('/comando', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ acao: acao }) })
       .catch(function () { el('status').textContent = 'Sem resposta do multimídia'; });
@@ -929,6 +1027,7 @@
       .then(function (r) { return r.json(); })
       .then(function (m) {
         paintMidia(m);
+        paintRadios(m);
         paintTocador(m.musica || null);
       })
       .catch(function () {})

@@ -325,6 +325,11 @@ object PainelLink {
             put("tripAvgL100", num(ui.tripAvgL100))
             put("tripKm", num(ui.tripKm))
             put("tripMin", ui.tripMinutes)
+            // Tempo real extra: carga, pressão no coletor, ar de admissão e borboleta (só o que o carro responde).
+            put("carga", num(s?.loadPct))
+            put("pressaoKpa", num(s?.mapKpa))
+            put("arAdmissao", num(s?.intakeC))
+            put("borboleta", num(s?.throttlePct))
             put("midia", midia(app))
             put("saude", saude(ui))
             put("postos", postos(ui))
@@ -585,9 +590,13 @@ object PainelLink {
     }
 
     /** Comandos vindos dos botões do painel. Música só com o acesso às notificações (multimídia). */
+    /** Rádios que o multimídia mostra na aba Mídias (favoritas e mais ouvidas), lidas da internet. */
+    @Volatile var radiosMultimidia: List<br.com.monitor2008.domain.RadioStation> = emptyList()
+
     /** Música e rádio: executa no aparelho onde o botão foi tocado (multimídia ou celular). */
     fun executarMidia(app: Application, acao: String, texto: String = ""): Boolean {
         when (acao) {
+            "radio.tocar" -> radiosMultimidia.firstOrNull { it.id == texto }?.let { RadioPlayer.get(app).play(it) }
             "musica.playpause" -> if (Features.mediaControl) MediaWatcher.get(app).playPause() else return false
             "musica.next" -> if (Features.mediaControl) MediaWatcher.get(app).next() else return false
             "musica.prev" -> if (Features.mediaControl) MediaWatcher.get(app).previous() else return false

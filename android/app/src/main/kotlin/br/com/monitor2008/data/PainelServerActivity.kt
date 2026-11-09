@@ -165,6 +165,18 @@ class PainelServerActivity : Activity() {
                             // Música e rádio: tocam aqui, no multimídia (não passam pelo celular).
                             val texto = obj.optString("texto")
                             runOnUiThread { PainelLink.executarMidia(application, acaoLocal, texto) }
+                        } else if (obj != null && (acaoLocal == "mapa.abrir" || acaoLocal == "mapa.rota")) {
+                            // Mapa: abre o do próprio multimídia; se não conseguir, pede ao celular.
+                            runOnUiThread {
+                                val erro = try {
+                                    if (acaoLocal == "mapa.abrir") AppLauncher(application).openMap(null)
+                                    else obj.optString("texto").trim().takeIf { it.isNotEmpty() }?.let { q ->
+                                        val endereco = br.com.monitor2008.domain.VoiceCommands.placeFor(q, Store(application).places()) ?: q
+                                        AppLauncher(application).routeTo(endereco, null)
+                                    } ?: "Digite o destino."
+                                } catch (_: Exception) { "Não consegui abrir o mapa." }
+                                if (erro != null && comandoValido(obj)) pending.add(System.currentTimeMillis() to obj.toString())
+                            }
                         } else if (obj != null && comandoValido(obj)) {
                             pending.add(System.currentTimeMillis() to obj.toString())
                             // Fila curta: se o celular não estiver ligado, não acumula comandos.
@@ -249,11 +261,37 @@ class PainelServerActivity : Activity() {
                 put("tocando", rs.playing)
             }
         } else JSONObject.NULL
+        // Lista de rádios: favoritas primeiro, depois as mais ouvidas do catálogo (busca em segundo plano).
+        if (!radiosBuscando && System.currentTimeMillis() - radiosTentativaMs > 30_000) buscarRadios()
+        val lista = JSONArray()
+        PainelLink.radiosMultimidia.forEach { r ->
+            lista.put(JSONObject().put("id", r.id).put("nome", r.name).put("assunto", r.subtitle)
+                .put("tocando", st?.id == r.id))
+        }
         return JSONObject().apply {
             put("musica", musica)
             put("radio", radio)
+            put("radios", lista)
             put("musicaDisponivel", Features.mediaControl)
         }.toString()
+    }
+
+    @Volatile private var radiosBuscando = false
+    @Volatile private var radiosTentativaMs = 0L
+
+    /** Favoritas e as mais ouvidas do catálogo (precisa de internet do hotspot). Tenta a cada 30 s no máximo. */
+    private fun buscarRadios() {
+        radiosBuscando = true
+        radiosTentativaMs = System.currentTimeMillis()
+        thread(isDaemon = true) {
+            try {
+                val favoritas = Store(application).radioFavorites()
+                val catalogo = try { runBlocking { br.com.monitor2008.data.RadioBrowser.search(limit = 30) } } catch (_: Exception) { emptyList() }
+                PainelLink.radiosMultimidia = (favoritas + catalogo).distinctBy { it.id }
+            } finally {
+                radiosBuscando = false
+            }
+        }
     }
 
     private fun asset(name: String): ByteArray = try {
