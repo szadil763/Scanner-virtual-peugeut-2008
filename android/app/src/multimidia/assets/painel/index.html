@@ -1173,7 +1173,8 @@
       .catch(function () { setBusca('Sem resposta do multimídia.'); toast('Sem resposta do multimídia.'); });
   }
   var escolha = { modo: 'valor', comb: 'gasolina', tanque: 'cheio' };
-  var parado = true;
+  var parado = true, ultimaVel = null, ultimoMovimentoMs = 0;
+  function leituraVel() { return (ultimaVel === null || ultimaVel === undefined) ? 'sem leitura de velocidade' : 'velocidade lida: ' + ultimaVel + ' km/h'; }
   var confirmando = false, confirmaTimer = null;
   function escolhe(grupo, valor) {
     escolha[grupo] = valor;
@@ -1221,7 +1222,7 @@
   // Zerar o trajeto: dois toques (o primeiro pede confirmação), só com o carro parado.
   var zerarConfirma = null, zerarTimer = null, zerarTexto = '';
   function zerarTrajeto(btn) {
-    if (!parado) { toast('Zerar o trajeto só com o carro parado.'); return; }
+    if (!parado) { toast('Zerar o trajeto só com o carro parado (' + leituraVel() + ').'); return; }
     if (zerarConfirma !== btn) {
       if (zerarConfirma) { zerarConfirma.textContent = zerarTexto; zerarConfirma.className = 'feito'; }
       zerarConfirma = btn;
@@ -1240,7 +1241,7 @@
     toast('Zerando o trajeto…');
   }
   function calibrarPeloCarro() {
-    if (!parado) { toast('Calibrar só com o carro parado.'); return; }
+    if (!parado) { toast('Calibrar só com o carro parado (' + leituraVel() + ').'); return; }
     var v = parseFloat((el('cal-carro').value || '').replace(',', '.'));
     if (!(v >= 2 && v <= 40)) { toast('Digite a média do painel do carro entre 2 e 40 km/l.'); return; }
     cmdAjuste('ajuste.calibrarPeloCarro', { valor: v });
@@ -1376,7 +1377,11 @@
     refreshParado();
   }
   function paint(d) {
-    parado = !(d.speed > 0.5);
+    // O celular manda "parado" já considerando leitura velha; sem ele (celular antigo), usa a velocidade.
+    ultimaVel = d.speed;
+    var movendo = (typeof d.parado === 'boolean') ? !d.parado : (d.speed > 0.5);
+    if (movendo) ultimoMovimentoMs = Date.now();
+    parado = !movendo;
     refreshParado();
     el('speed').textContent = num(d.speed, 0);
     el('mc-vel').textContent = num(d.speed, 0);
@@ -1548,6 +1553,8 @@
         } else {
           st.textContent = 'Sem dados do celular. Confira: 1) o hotspot do celular está ligado; 2) este multimídia está conectado nele; 3) o app Monitor está aberto no celular.';
           st.className = '';
+          // Sem dados não dá para saber a velocidade: depois de 15 s sem movimento visto, libera (não fica travado para sempre).
+          if (!parado && Date.now() - ultimoMovimentoMs > 15000) { parado = true; refreshParado(); }
         }
       })
       .catch(function () {

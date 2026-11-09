@@ -122,7 +122,9 @@ data class UiState(
      * simulação o carro de mentira "anda" e travava os Ajustes, inclusive a chave para sair dela
      * (foto do dono no C4, 0.1.33).
      */
-    val moving: Boolean get() = !simulated && (sample?.speedKmh ?: 0.0) > 0.5
+    val moving: Boolean get() = !simulated && sample?.let {
+        br.com.monitor2008.domain.MovingRules.isMoving(it.speedKmh, System.currentTimeMillis() - it.timeMs)
+    } == true
 }
 
 /** Posto informado no abastecimento: local do GPS, nome (editável) e endereço. */
@@ -662,6 +664,13 @@ class MonitorEngine private constructor(private val app: Application) {
     fun setFuelPrice(v: Double) { store.fuelPrice = v.coerceIn(1.0, 20.0); publish() }
 
     fun setEthanolFraction(f: Double) { store.ethanolFraction = f; publish() }
+    /** Texto para explicar um bloqueio por "carro andando": a velocidade lida e há quanto tempo. */
+    fun leituraDeVelocidade(): String {
+        val s = _ui.value.sample ?: return "sem leitura de velocidade"
+        val idade = (System.currentTimeMillis() - s.timeMs) / 1000
+        return String.format(java.util.Locale("pt", "BR"), "%.1f km/h há %d s", s.speedKmh ?: 0.0, idade)
+    }
+
     fun setCalibration(v: Double) { store.calibration = v.coerceIn(FuelCalc.MIN_FACTOR, FuelCalc.MAX_FACTOR); publish() }
 
     /**
@@ -670,7 +679,7 @@ class MonitorEngine private constructor(private val app: Application) {
      * para o aviso na tela.
      */
     fun calibrateByCar(carKmPerL: Double): String {
-        if (_ui.value.moving) return "Calibrar só com o carro parado."
+        if (_ui.value.moving) return "Calibrar só com o carro parado (o app leu ${leituraDeVelocidade()})."
         if (!(carKmPerL in 2.0..40.0)) return "O consumo do painel do carro deve estar entre 2 e 40 km/l."
         val ours = trip.avgKmPerL ?: return "O trajeto do app ainda não mediu consumo. Rode alguns km."
         if (trip.distanceKm < 5.0) return "Rode pelo menos 5 km com os dois trajetos zerados juntos."
@@ -777,7 +786,9 @@ class MonitorEngine private constructor(private val app: Application) {
             critical = if (store.useSimulated || conn.state != ConnState.CONNECTED) emptyList()
                 else lastSample?.let { CriticalAlerts.check(it.coolantC, it.batteryV, it.rpm) }.orEmpty(),
             odoCheckDue = OdometerReminder.due(System.currentTimeMillis(), store.odoCheckedMs, store.odoOffset != null,
-                moving = !store.useSimulated && (lastSample?.speedKmh ?: 0.0) > 0.5),
+                moving = !store.useSimulated && lastSample?.let {
+                    br.com.monitor2008.domain.MovingRules.isMoving(it.speedKmh, System.currentTimeMillis() - it.timeMs)
+                } == true),
             ethanolFraction = store.ethanolFraction,
             calibration = store.calibration,
             volumetricEfficiency = store.volumetricEfficiency,

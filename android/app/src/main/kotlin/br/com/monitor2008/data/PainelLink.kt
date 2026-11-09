@@ -782,7 +782,7 @@ object PainelLink {
             "trajeto.zerar" -> {
                 val motor = MonitorEngine.get(app)
                 if (motor.ui.value.moving) {
-                    avisoAbastecimento = "${horaAgora()} · Zerar o trajeto só com o carro parado."
+                    avisoAbastecimento = "${horaAgora()} · Zerar o trajeto só com o carro parado (o app leu ${motor.leituraDeVelocidade()})."
                 } else {
                     motor.resetTrip()
                     avisoAbastecimento = "${horaAgora()} · Trajeto zerado (média, distância, custo e velocidade média)."
