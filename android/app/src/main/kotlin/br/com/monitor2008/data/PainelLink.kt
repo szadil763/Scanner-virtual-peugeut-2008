@@ -324,6 +324,8 @@ object PainelLink {
             put("tripAvgKmL", num(ui.tripAvgKmPerL))
             put("tripAvgL100", num(ui.tripAvgL100))
             put("tripAvgMovKmL", num(ui.tripAvgKmPerLMoving))
+            // Versão deste app: o painel avisa se o celular e o multimídia estão em versões diferentes.
+            put("versao", Updater.get(app).installedCode)
             // Combustível estimado no tanque: só uma estimativa, a partir do último abastecimento cheio.
             put("tanque", JSONObject().apply {
                 put("capacidade", ui.tankCapacityL)

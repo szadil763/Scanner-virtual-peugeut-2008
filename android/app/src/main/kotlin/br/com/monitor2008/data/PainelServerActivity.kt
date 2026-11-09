@@ -470,6 +470,7 @@ class PainelServerActivity : Activity() {
             put("radios", lista)
             put("ajustes", ajustesLocais())
             put("atualizacao", atualizacaoLocal())
+            put("versaoMultimidia", Updater.get(application).installedCode)
             put("musicaAviso", JSONObject().put("id", PainelLink.avisoMusica.first).put("texto", PainelLink.avisoMusica.second))
             // Sem o acesso às notificações o painel não vê o que toca (o painel mostra como ativar).
             put("acessoNotificacoes", if (Features.mediaControl) MediaWatcher.get(application).allowed.value else true)

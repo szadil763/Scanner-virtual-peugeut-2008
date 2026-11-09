@@ -195,6 +195,7 @@
 </nav>
 <main class="main">
 <div id="status">Aguardando o celular…</div>
+<div id="versao-aviso" style="display:none;margin:0 10px 6px;padding:8px 12px;border:2px solid #ffcc33;border-radius:12px;color:#ffcc33;font-size:16px"></div>
 <div id="pend" style="display:none;margin:0 10px 8px;padding:12px;border:3px solid #5b9be0;border-radius:14px;background:#10243a">
   <div id="pend-txt" style="font-size:24px;font-weight:700;margin-bottom:10px"></div>
   <div class="linha">
@@ -1185,6 +1186,24 @@
   }
   var escolha = { modo: 'valor', comb: 'gasolina', tanque: 'cheio' };
   var parado = true, ultimaVel = null, ultimoMovimentoMs = 0;
+  // Celular e multimídia precisam estar na mesma versão: botões novos do painel dependem dos dois.
+  var versaoCelular, versaoMm = null, celularVisto = false;
+  function checarVersoes() {
+    var box = el('versao-aviso');
+    var msg = '';
+    if (celularVisto && versaoMm !== null) {
+      if (versaoCelular === undefined || versaoCelular === null) {
+        msg = 'O app do celular é antigo (não informa a versão) e este multimídia está na versão ' + versaoMm +
+          '. Atualize o app do celular: zerar trajeto, calibrar e outros botões novos só funcionam com os dois na mesma versão.';
+      } else if (versaoCelular !== versaoMm) {
+        msg = 'Celular na versão ' + versaoCelular + ' e multimídia na ' + versaoMm +
+          '. Atualize o que estiver mais antigo, senão alguns botões do painel não funcionam.';
+      }
+    }
+    box.textContent = msg;
+    box.style.display = msg ? 'block' : 'none';
+  }
+  var aguardandoZerar = false, avisoAntesZerar = '', zerarEsperaTimer = null;
   function leituraVel() { return (ultimaVel === null || ultimaVel === undefined) ? 'sem leitura de velocidade' : 'velocidade lida: ' + ultimaVel + ' km/h'; }
   var confirmando = false, confirmaTimer = null;
   function escolhe(grupo, valor) {
@@ -1248,8 +1267,16 @@
     btn.textContent = zerarTexto;
     btn.className = 'feito';
     zerarConfirma = null;
+    avisoAntesZerar = el('abast-info').textContent;
+    aguardandoZerar = true;
     cmdAjuste('trajeto.zerar');
     toast('Zerando o trajeto…');
+    clearTimeout(zerarEsperaTimer);
+    zerarEsperaTimer = setTimeout(function () {
+      if (!aguardandoZerar) return;
+      aguardandoZerar = false;
+      toast('O celular não respondeu ao pedido de zerar. Confira se o app do celular está aberto e na mesma versão deste multimídia.');
+    }, 8000);
   }
   function calibrarPeloCarro() {
     if (!parado) { toast('Calibrar só com o carro parado (' + leituraVel() + ').'); return; }
@@ -1390,6 +1417,10 @@
   function paint(d) {
     // O celular manda "parado" já considerando leitura velha; sem ele (celular antigo), usa a velocidade.
     ultimaVel = d.speed;
+    versaoCelular = d.versao;
+    celularVisto = true;
+    checarVersoes();
+    if (aguardandoZerar && d.aviso && d.aviso !== avisoAntesZerar) { aguardandoZerar = false; clearTimeout(zerarEsperaTimer); }
     var movendo = (typeof d.parado === 'boolean') ? !d.parado : (d.speed > 0.5);
     if (movendo) ultimoMovimentoMs = Date.now();
     parado = !movendo;
@@ -1544,6 +1575,7 @@
       .then(function (m) {
         paintMidia(m);
         paintRadios(m);
+        if (m.versaoMultimidia !== undefined) { versaoMm = m.versaoMultimidia; checarVersoes(); }
         paintAjustesLocais(m.ajustes);
         el('sem-acesso').style.display = (m.acessoNotificacoes === false) ? 'block' : 'none';
         var flM = m.ajustes && m.ajustes.flutuante;
