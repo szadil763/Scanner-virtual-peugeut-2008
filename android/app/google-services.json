@@ -1,0 +1,40 @@
+{
+  "project_info": {
+    "project_number": "769030573018",
+    "firebase_url": "https://virtual-scanner-1a164-default-rtdb.firebaseio.com",
+    "project_id": "virtual-scanner-1a164",
+    "storage_bucket": "virtual-scanner-1a164.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:769030573018:android:4d4c4e9e4256252f678ee3",
+        "android_client_info": {
+          "package_name": "br.com.monitor2008"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "769030573018-vgh74ks5d6l06n81utha9jrno16s9an1.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBNWovdCMYJELioe2KxE-n6jWsrEoj61yA"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "769030573018-vgh74ks5d6l06n81utha9jrno16s9an1.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
