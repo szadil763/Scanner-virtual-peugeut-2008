@@ -24,6 +24,7 @@ import br.com.monitor2008.domain.FuelBlend
 import br.com.monitor2008.domain.FuelCalc
 import br.com.monitor2008.domain.FuelQuality
 import br.com.monitor2008.domain.FuelStop
+import br.com.monitor2008.domain.FuelTank
 import br.com.monitor2008.domain.Station
 import br.com.monitor2008.domain.StationRating
 import br.com.monitor2008.domain.HealthItem
@@ -72,6 +73,10 @@ data class UiState(
     val tripAvgL100: Double? = null,
     /** Média só com o carro andando (sem o combustível gasto parado). */
     val tripAvgKmPerLMoving: Double? = null,
+    /** Combustível estimado no tanque (L), a capacidade e a autonomia na média do trajeto. Só uma estimativa. */
+    val tankEstimateL: Double? = null,
+    val tankCapacityL: Double = 50.0,
+    val rangeKm: Double? = null,
     val tripKm: Double = 0.0,
     val tripLiters: Double = 0.0,
     val tripAvgSpeed: Double = 0.0,
@@ -165,6 +170,8 @@ class MonitorEngine private constructor(private val app: Application) {
     private var odometerKm = store.odometerKm
     private var uncalLiters = store.uncalLiters
     private var kmSinceFull = store.kmSinceFull
+    private var tankEstimateL: Double? = store.tankEstimateL
+    private fun tankCapacityL(): Double = store.tankCapacityL.takeIf { it > 0 } ?: vehicle.tankL
     private var lastTimeMs = 0L
     private var lastSaveMs = 0L
 
@@ -284,7 +291,11 @@ class MonitorEngine private constructor(private val app: Application) {
         val lph = raw?.let { it.litersPerHour * store.calibration }
 
         // Só com o motor ligado (ou andando): parado com a ignição ligada não puxa a média para baixo.
-        if ((s.rpm ?: 0.0) > 400 || speed > 1) trip.add(dt, speed, lph)
+        if ((s.rpm ?: 0.0) > 400 || speed > 1) {
+            trip.add(dt, speed, lph)
+            // Desconta do tanque o que o app estima ter gasto (só depois de um abastecimento cheio).
+            if (lph != null) tankEstimateL = FuelTank.afterDriving(tankEstimateL, lph * dt / 3600.0)
+        }
         val km = speed * dt / 3600.0
         odometerKm += km
         kmSinceFull += km
@@ -487,6 +498,7 @@ class MonitorEngine private constructor(private val app: Application) {
         odometerKm = store.odometerKm
         uncalLiters = store.uncalLiters
         kmSinceFull = store.kmSinceFull
+        tankEstimateL = store.tankEstimateL
         realTrip.reset()
         store.loadTrip()?.let { a -> realTrip.restore(a[0], a[1], a[2], a[3], a.getOrElse(4) { a[1] }) }
         refuelList = store.refuels().asReversed()
@@ -547,6 +559,8 @@ class MonitorEngine private constructor(private val app: Application) {
         kmSinceFull = result.state.kmSinceFull
         store.fuelPrice = price
         if (full) store.tankIncomplete = false
+        tankEstimateL = FuelTank.afterRefuel(tankEstimateL, tankCapacityL(), liters, full)
+        store.tankEstimateL = tankEstimateL
         store.addRefuel(
             Refuel(
                 LocalDate.now().toEpochDay(), liters, price, full, odometerKm, result.realKmPerL,
@@ -671,6 +685,15 @@ class MonitorEngine private constructor(private val app: Application) {
         return String.format(java.util.Locale("pt", "BR"), "%.1f km/h há %d s", s.speedKmh ?: 0.0, idade)
     }
 
+    /** Capacidade do tanque (L). Se a estimativa ficar acima da nova capacidade, desce para ela. */
+    fun setTankCapacity(l: Double) {
+        val v = l.coerceIn(FuelTank.MIN_CAPACITY_L, FuelTank.MAX_CAPACITY_L)
+        store.tankCapacityL = v
+        tankEstimateL = tankEstimateL?.let { minOf(it, v) }
+        store.tankEstimateL = tankEstimateL
+        publish()
+    }
+
     fun setCalibration(v: Double) { store.calibration = v.coerceIn(FuelCalc.MIN_FACTOR, FuelCalc.MAX_FACTOR); publish() }
 
     /**
@@ -738,6 +761,7 @@ class MonitorEngine private constructor(private val app: Application) {
     /** Grava o progresso (odômetro, acumuladores e trajeto). Chamado a cada 20 s e quando o app sai da tela. */
     fun saveNow() {
         store.saveProgress(odometerKm, uncalLiters, kmSinceFull)
+        store.tankEstimateL = tankEstimateL
         realTrip.let { store.saveTrip(it.distanceKm, it.liters, it.seconds, it.kmWithFuel, it.litersMoving) }
     }
 
@@ -771,6 +795,9 @@ class MonitorEngine private constructor(private val app: Application) {
             tripAvgKmPerL = trip.avgKmPerL,
             tripAvgL100 = trip.avgLPer100Km,
             tripAvgKmPerLMoving = trip.avgKmPerLMoving,
+            tankEstimateL = tankEstimateL,
+            tankCapacityL = tankCapacityL(),
+            rangeKm = FuelTank.rangeKm(tankEstimateL, trip.avgKmPerL),
             tripKm = trip.distanceKm,
             tripLiters = trip.liters,
             tripAvgSpeed = trip.avgSpeedKmh,

@@ -212,6 +212,16 @@ const fator = (litrosReais, litrosEstimados) => Math.min(1.5, Math.max(0.25, lit
 near(fator(38, 34.5), 1.1014, 1e-3, 'Fator de calibração 38 L / 34,5 L');
 near(fator(4, 10), 0.4, 1e-9, 'Fator de calibração 4 L / 10 L (limite de baixo é 0,25)');
 near(fator(1, 10), 0.25, 1e-9, 'Fator de calibração limitado em 0,25');
+// Combustível estimado no tanque (mesmos números de FuelTankTest.kt)
+const tanqueAposAbastecer = (atual, cap, litros, cheio) => cheio ? cap : (atual === null ? null : Math.min(cap, atual + litros));
+const tanqueAposRodar = (atual, gasto) => atual === null ? null : Math.max(0, atual - Math.max(0, gasto));
+near(tanqueAposAbastecer(null, 50, 32, true), 50, 1e-9, 'Tanque: abastecimento cheio vai à capacidade');
+near(tanqueAposAbastecer(20, 50, 10, false), 30, 1e-9, 'Tanque: parcial soma os litros');
+near(tanqueAposAbastecer(45, 50, 30, false), 50, 1e-9, 'Tanque: parcial não passa da capacidade');
+near(tanqueAposRodar(50, 1.5), 48.5, 1e-9, 'Tanque: rodar desconta o gasto');
+near(tanqueAposRodar(1, 3), 0, 1e-9, 'Tanque: nunca abaixo de zero');
+near(Math.floor(31 / 50 * 100), 62, 0, 'Tanque: 31 de 50 L = 62%');
+near(31 * 10, 310, 1e-9, 'Tanque: autonomia = litros x média (31 L a 10 km/l = 310 km)');
 // Calibração pelo consumo médio do painel do carro (zerado junto com o trajeto do app)
 const fatorPeloCarro = (fatorAtual, nossoKmL, carroKmL) => Math.min(1.5, Math.max(0.25, fatorAtual * nossoKmL / carroKmL));
 near(fatorPeloCarro(1.0, 5.1, 12.8), 0.3984, 1e-3, 'Fator pelo painel do carro: app 5,1 km/l, carro 12,8 km/l');

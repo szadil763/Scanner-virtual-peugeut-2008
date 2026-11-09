@@ -142,6 +142,10 @@
   #mid-consumo .metricas .card { min-height:0; padding:6px 10px !important; }
   #mid-consumo .metricas .v2 { font-size:36px; line-height:1.05; }
   #mid-consumo .metricas .unit { font-size:16px; }
+  /* Combustível estimado no tanque (faixa embaixo do Painel). */
+  #tanque-faixa { flex:0 0 auto; margin:0 10px 8px; padding:10px 16px; border-radius:16px; background:#0f1826; font-size:20px; }
+  #tanque-faixa .barra-tq { height:10px; background:#222; border-radius:5px; overflow:hidden; margin-top:8px; }
+  #tanque-faixa .barra-tq div { height:100%; width:0; background:#3ddc6b; }
   /* Menu Mais em grade 3x2. */
   #t-mais .lista { display:grid !important; grid-template-columns:repeat(3,1fr); gap:12px; align-content:start; overflow-y:auto; }
   #t-mais .mbtn { min-height:120px; font-size:26px; text-align:center; padding:0 12px; }
@@ -209,6 +213,10 @@
     <div class="card" id="c-kml"><div class="lbl" id="kml-lbl">Consumo agora</div><div class="val" id="kml">--</div><div class="unit" id="kml-unit">km/l</div></div>
     <div class="card" id="c-avg"><div class="lbl">Média da viagem</div><div class="val" id="avg">--</div><div class="unit">km/l</div><div class="unit" id="avg-mov" style="font-size:18px"></div></div>
     <div class="card" id="c-bat"><div class="lbl">Bateria</div><div class="val" id="bat">--</div><div class="unit">V</div></div>
+  </div>
+  <div id="tanque-faixa">
+    <div id="tq-texto">⛽ Combustível estimado: salve um abastecimento com tanque cheio para começar.</div>
+    <div class="barra-tq"><div id="tq-barra"></div></div>
   </div>
 </div>
 
@@ -325,6 +333,9 @@
     <div class="linha"><button class="opc" onclick="ajusteAjuste('ajuste.eficiencia',-1)">−</button><div class="v2" id="aj-ef">--</div><button class="opc" onclick="ajusteAjuste('ajuste.eficiencia',1)">+</button></div>
     <div class="lbl">Carro</div>
     <div id="aj-carros"></div>
+    <div class="lbl">Capacidade do tanque</div>
+    <div class="linha"><button class="opc" onclick="cmdAjuste('ajuste.tanque',{valor:-1})">−</button><div class="v2" id="aj-tanque">--</div><button class="opc" onclick="cmdAjuste('ajuste.tanque',{valor:1})">+</button></div>
+    <div class="aviso">Confira no manual do carro. A estimativa de combustível parte desse valor a cada abastecimento de tanque cheio e vai descontando o que o app estima ter gasto.</div>
     <div class="lbl">Calibrar pelo painel do carro</div>
     <div class="aviso">Zere o trajeto do carro e o do app juntos, rode uns 5 km ou mais e digite aqui a média que o painel do carro mostra. Só com o carro parado.</div>
     <label class="campo">Média do painel do carro (km/l)
@@ -1402,6 +1413,18 @@
     el('avg').textContent = num(avg, 1);
     el('bat').textContent = num(d.battery, 1);
     el('avg-mov').textContent = (d.tripAvgMovKmL !== null && d.tripAvgMovKmL !== undefined) ? 'em movimento: ' + num(d.tripAvgMovKmL, 1) : '';
+    var tq = d.tanque;
+    if (tq && tq.litros !== null && tq.litros !== undefined) {
+      var pct = tq.percentual || 0;
+      el('tq-texto').textContent = '⛽ ~' + num(tq.litros, 0) + ' L no tanque (' + pct + '%)' +
+        (tq.autonomiaKm ? ' · autonomia ≈ ' + num(tq.autonomiaKm, 0) + ' km' : '') + ' · só uma estimativa';
+      el('tq-barra').style.width = pct + '%';
+      el('tq-barra').style.background = pct < 15 ? '#f87171' : (pct < 30 ? '#ffcc33' : '#3ddc6b');
+    } else {
+      el('tq-texto').textContent = '⛽ Combustível estimado: salve um abastecimento com tanque cheio para começar.';
+      el('tq-barra').style.width = '0%';
+    }
+    if (tq) el('aj-tanque').textContent = num(tq.capacidade, 0) + ' L';
     el('sg-carga').textContent = num(d.carga, 0);
     el('sg-pressao').textContent = num(d.pressaoKpa, 0);
     el('sg-ar').textContent = num(d.arAdmissao, 0);

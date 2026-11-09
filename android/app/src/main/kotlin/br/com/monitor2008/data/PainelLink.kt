@@ -324,6 +324,13 @@ object PainelLink {
             put("tripAvgKmL", num(ui.tripAvgKmPerL))
             put("tripAvgL100", num(ui.tripAvgL100))
             put("tripAvgMovKmL", num(ui.tripAvgKmPerLMoving))
+            // Combustível estimado no tanque: só uma estimativa, a partir do último abastecimento cheio.
+            put("tanque", JSONObject().apply {
+                put("capacidade", ui.tankCapacityL)
+                put("litros", num(ui.tankEstimateL))
+                put("percentual", ui.tankEstimateL?.let { br.com.monitor2008.domain.FuelTank.percent(it, ui.tankCapacityL) } ?: JSONObject.NULL)
+                put("autonomiaKm", num(ui.rangeKm))
+            })
             put("tripKm", num(ui.tripKm))
             put("tripMin", ui.tripMinutes)
             // Tempo real extra: carga, pressão no coletor, ar de admissão e borboleta (só o que o carro responde).
@@ -357,6 +364,7 @@ object PainelLink {
                 put("preco", Math.round(st.fuelPrice * 100) / 100.0)
                 put("eficiencia", Math.round(st.volumetricEfficiency * 100) / 100.0)
                 put("carro", st.vehicleId ?: "")
+                put("capacidadeTanque", ui.tankCapacityL)
                 put("conta", JSONObject().apply {
                     put("email", Conta.email() ?: "")
                     put("carro", br.com.monitor2008.domain.Vehicles.byId(st.vehicleId)?.name ?: "")
@@ -779,6 +787,9 @@ object PainelLink {
             "radio.next" -> RadioPlayer.get(app).step(true)
             "radio.prev" -> RadioPlayer.get(app).step(false)
             "nuvem.sincronizar" -> Nuvem.sincronizar(app, Store(app)) { _, msg -> enviarFala(msg) }
+            "ajuste.tanque" -> MonitorEngine.get(app).let { m ->
+                m.setTankCapacity(m.ui.value.tankCapacityL + (if (cmd.optInt("valor", 0) > 0) 1.0 else -1.0))
+            }
             "trajeto.zerar" -> {
                 val motor = MonitorEngine.get(app)
                 if (motor.ui.value.moving) {

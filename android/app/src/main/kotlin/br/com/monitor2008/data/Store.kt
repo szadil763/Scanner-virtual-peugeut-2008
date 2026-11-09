@@ -129,6 +129,14 @@ class Store(context: Context) {
     var calibration: Double
         get() = d("calibration", 1.0)
         set(v) { p.edit().putFloat("calibration", v.toFloat()).apply() }
+    /** Capacidade do tanque informada pelo dono (L); 0 = usa a do perfil do carro. */
+    var tankCapacityL: Double
+        get() = d("tankCapacityL", 0.0)
+        set(v) { p.edit().putFloat("tankCapacityL", v.toFloat()).apply() }
+    /** Combustível estimado no tanque (L); nulo = ainda não se sabe (falta um abastecimento de tanque cheio). */
+    var tankEstimateL: Double?
+        get() = p.getString("tankEstimateL", null)?.toDoubleOrNull()
+        set(v) { if (v == null) p.edit().remove("tankEstimateL").apply() else p.edit().putString("tankEstimateL", v.toString()).apply() }
     var volumetricEfficiency: Double
         get() = d("ve", 0.80)
         set(v) { p.edit().putFloat("ve", v.toFloat()).apply() }

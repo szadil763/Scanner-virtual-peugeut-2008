@@ -30,6 +30,8 @@ data class Vehicle(
     val periodicTip: String,
     /** Correia dentada (troca por km); false = corrente de comando, que não tem troca programada. */
     val timingBelt: Boolean = true,
+    /** Capacidade do tanque em litros (confira no manual; o dono pode ajustar em Ajustes). */
+    val tankL: Double = 50.0,
 ) {
     /** "Peugeot 2008 1.6 16V flex (EC5)". */
     val fullName: String get() = "$name $engine"
@@ -52,6 +54,7 @@ object Vehicles {
         gearbox = "automático de 4 marchas (família AL4)",
         brand = "Peugeot",
         displacementL = 1.598,
+        tankL = 50.0,
         highConsumptionGasoline = 8.0,
         highConsumptionEthanol = 5.5,
         notes = common + mapOf(
@@ -73,6 +76,7 @@ object Vehicles {
         gearbox = "automático",
         brand = "Citroën",
         displacementL = 1.997,
+        tankL = 60.0,
         highConsumptionGasoline = 7.0,
         highConsumptionEthanol = 5.0,
         notes = common + mapOf(
@@ -95,6 +99,7 @@ object Vehicles {
         gearbox = "manual de 6 marchas ou automático de 4 marchas",
         brand = "Nissan",
         displacementL = 1.798,
+        tankL = 52.0,
         highConsumptionGasoline = 7.5,
         highConsumptionEthanol = 5.2,
         timingBelt = false,
