@@ -302,6 +302,14 @@ class PainelServerActivity : Activity() {
             "ajuste.lugarRemover" -> st.savePlaces(st.places().filter { it.first != valor })
             "sistema.notificacoes" -> SystemSettings.notificationAccess(this)
             "sistema.sobrepor" -> SystemSettings.overlay(this)
+            // Teste da miniatura: sem a permissão, abre a tela para liberar; com ela, mostra a miniatura por 8 s.
+            "ajuste.flutuanteTestar" -> if (!android.provider.Settings.canDrawOverlays(this)) {
+                SystemSettings.overlay(this)
+            } else {
+                st.floatMode = "MONITOR"
+                FloatingPanel.show(this, PainelServerActivity::class.java)
+                android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({ FloatingPanel.hide(this) }, 8_000L)
+            }
             "ajuste.flutuante" -> if (valor == "MONITOR" || valor == "ANDROID") {
                 st.floatMode = valor
                 if (valor == "ANDROID") FloatingPanel.hide(this)
@@ -540,7 +548,7 @@ class PainelServerActivity : Activity() {
         private val AJUSTES_LOCAIS = setOf(
             "ajuste.mapa", "ajuste.musica", "ajuste.voz", "ajuste.vozOuvir", "ajuste.velocidade", "ajuste.tom",
             "ajuste.continuar", "ajuste.lugarRemover", "atualizacao.verificar", "atualizacao.instalar",
-            "sistema.notificacoes", "sistema.sobrepor", "ajuste.flutuante", "ajuste.flutuanteItem", "ajuste.flutuanteTamanho",
+            "sistema.notificacoes", "sistema.sobrepor", "ajuste.flutuante", "ajuste.flutuanteItem", "ajuste.flutuanteTamanho", "ajuste.flutuanteTestar",
         )
         private const val VALIDADE_MS = 20_000L
         /** Fila de comandos (instante, JSON) esperando o próximo envio do celular. */

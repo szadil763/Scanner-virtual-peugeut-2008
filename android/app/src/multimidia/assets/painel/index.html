@@ -349,7 +349,9 @@
     <div class="lbl">Miniatura do Monitor sobre outros apps</div>
     <div class="aviso" id="fl-texto">Ao abrir o Spotify, o Monitor fica por cima em miniatura.</div>
     <button class="opc" id="fl-modo" onclick="flutuanteModo()">Miniatura do Monitor: ligada</button>
-    <button class="enviar" id="fl-perm" style="display:none" onclick="cmdAjuste('sistema.sobrepor')">Liberar "sobrepor a outros apps"</button>
+    <div class="aviso" id="fl-status">Permissão "sobrepor a outros apps": verificando…</div>
+    <button class="enviar" id="fl-perm" onclick="cmdAjuste('sistema.sobrepor')">Liberar "sobrepor a outros apps"</button>
+    <button class="opc" onclick="cmdAjuste('ajuste.flutuanteTestar')">Testar a miniatura agora (8 segundos)</button>
     <div class="aviso">Números na miniatura</div>
     <div class="linha" id="fl-itens"></div>
     <div class="aviso">Tamanho da miniatura</div>
@@ -979,7 +981,9 @@
       var ligada = fl.modo === 'MONITOR';
       el('fl-modo').textContent = 'Miniatura do Monitor: ' + (ligada ? 'ligada' : 'desligada');
       el('fl-modo').className = 'opc' + (ligada ? ' sel' : '');
-      el('fl-perm').style.display = (ligada && !fl.permissao) ? 'block' : 'none';
+      el('fl-status').textContent = 'Permissão "sobrepor a outros apps": ' + (fl.permissao ? 'liberada ✓' : 'NÃO liberada');
+      el('fl-status').style.color = fl.permissao ? '#3ddc6b' : '#ffcc33';
+      el('fl-perm').textContent = fl.permissao ? 'Abrir a tela da permissão no Android' : 'Liberar "sobrepor a outros apps"';
       el('fl-texto').textContent = !ligada
         ? 'Desligada: o Android usa a janela dele, que é menor.'
         : (fl.permissao
