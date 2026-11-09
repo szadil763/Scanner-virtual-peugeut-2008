@@ -15,6 +15,14 @@
       },
       "oauth_client": [
         {
+          "client_id": "769030573018-9lh1hqfd43k1hi3stej52c2se6e4ibs7.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "br.com.monitor2008",
+            "certificate_hash": "b28fec90d115c72d6cdbf19160f533a599ea53af"
+          }
+        },
+        {
           "client_id": "769030573018-vgh74ks5d6l06n81utha9jrno16s9an1.apps.googleusercontent.com",
           "client_type": 3
         }
