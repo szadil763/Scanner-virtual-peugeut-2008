@@ -81,9 +81,21 @@ object FuelCalc {
     fun kmPerL(speedKmh: Double, litersPerHour: Double): Double? =
         if (litersPerHour > 0.05 && speedKmh >= 3.0) min(speedKmh / litersPerHour, 50.0) else null
 
-    /** Fator = litros reais / litros estimados, limitado entre 0,5 e 1,5. */
+    /** Limites do fator de calibração. O de baixo é 0,25 porque o método MAP pode estimar bem mais do que o carro gasta. */
+    const val MIN_FACTOR = 0.25
+    const val MAX_FACTOR = 1.5
+
+    /** Fator = litros reais / litros estimados, limitado entre [MIN_FACTOR] e [MAX_FACTOR]. */
     fun calibrationFactor(realLiters: Double, estimatedLiters: Double): Double =
-        max(0.5, min(1.5, realLiters / estimatedLiters))
+        max(MIN_FACTOR, min(MAX_FACTOR, realLiters / estimatedLiters))
+
+    /**
+     * Fator novo a partir do consumo médio do painel do carro, zerado junto com o trajeto do app:
+     * o app gastou [ourKmPerL] e o carro [carKmPerL] nos mesmos km, então os litros do app valem
+     * [ourKmPerL] / [carKmPerL] dos do carro. Multiplica o fator que já estava em uso.
+     */
+    fun factorFromCarComputer(currentFactor: Double, ourKmPerL: Double, carKmPerL: Double): Double =
+        max(MIN_FACTOR, min(MAX_FACTOR, currentFactor * ourKmPerL / carKmPerL))
 
     /** Aplica um abastecimento ao estado de calibração. Só tanques cheios consecutivos recalibram. */
     fun applyRefuel(s: RefuelState, liters: Double, full: Boolean): RefuelResult {

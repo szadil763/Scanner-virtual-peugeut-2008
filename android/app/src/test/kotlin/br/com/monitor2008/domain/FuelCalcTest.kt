@@ -31,7 +31,17 @@ class FuelCalcTest {
     @Test fun calibrationFactor() {
         assertEquals(1.1014, FuelCalc.calibrationFactor(38.0, 34.5), 1e-3)
         assertEquals(1.5, FuelCalc.calibrationFactor(100.0, 10.0), 1e-9)
-        assertEquals(0.5, FuelCalc.calibrationFactor(1.0, 10.0), 1e-9)
+        assertEquals(0.25, FuelCalc.calibrationFactor(1.0, 10.0), 1e-9)
+        assertEquals(0.4, FuelCalc.calibrationFactor(4.0, 10.0), 1e-9) // antes ficava preso em 0,5
+    }
+
+    @Test fun factorFromCarComputer() {
+        // App estimou 5,1 km/l, o painel do carro mostra 12,8: os litros do app estavam 2,5 vezes altos.
+        assertEquals(0.3984, FuelCalc.factorFromCarComputer(1.0, 5.1, 12.8), 1e-3)
+        // Já estava calibrado em 0,8 e ainda ficou 20% alto: 0,8 * 10 / 12,5 = 0,64.
+        assertEquals(0.64, FuelCalc.factorFromCarComputer(0.8, 10.0, 12.5), 1e-9)
+        assertEquals(1.5, FuelCalc.factorFromCarComputer(1.2, 12.0, 6.0), 1e-9)   // limite de cima
+        assertEquals(0.25, FuelCalc.factorFromCarComputer(0.3, 3.0, 12.0), 1e-9)  // limite de baixo
     }
 
     @Test fun estimatePrefersFuelRateThenMafThenMap() {

@@ -325,6 +325,13 @@
     <div class="linha"><button class="opc" onclick="ajusteAjuste('ajuste.eficiencia',-1)">−</button><div class="v2" id="aj-ef">--</div><button class="opc" onclick="ajusteAjuste('ajuste.eficiencia',1)">+</button></div>
     <div class="lbl">Carro</div>
     <div id="aj-carros"></div>
+    <div class="lbl">Calibrar pelo painel do carro</div>
+    <div class="aviso">Zere o trajeto do carro e o do app juntos, rode uns 5 km ou mais e digite aqui a média que o painel do carro mostra. Só com o carro parado.</div>
+    <label class="campo">Média do painel do carro (km/l)
+      <input type="text" id="cal-carro" inputmode="decimal" placeholder="Ex.: 12,8">
+    </label>
+    <div class="aviso" id="cal-app">Trajeto do app: --</div>
+    <button class="enviar" id="cal-btn" onclick="calibrarPeloCarro()">Calibrar pelo painel do carro</button>
     </div>
     <div class="gr-aj" id="gr-tela">
     <div class="lbl">Tela</div>
@@ -1208,11 +1215,20 @@
   }
   var avisoFixo = '', aguardandoConfirmacao = false, confirmacaoTimer = null, avisoAntes = '';
   function setAviso(t) { avisoFixo = t; el('ab-aviso').textContent = t; }
+  function calibrarPeloCarro() {
+    if (!parado) { toast('Calibrar só com o carro parado.'); return; }
+    var v = parseFloat((el('cal-carro').value || '').replace(',', '.'));
+    if (!(v >= 2 && v <= 40)) { toast('Digite a média do painel do carro entre 2 e 40 km/l.'); return; }
+    cmdAjuste('ajuste.calibrarPeloCarro', { valor: v });
+    toast('Calibrando…');
+  }
   function mostrarPostoManual(m) {
     el('posto-manual').style.display = m ? 'block' : 'none';
     el('posto-manual-btn').style.display = m ? 'none' : 'block';
   }
   function refreshParado() {
+    el('cal-carro').disabled = !parado;
+    el('cal-btn').disabled = !parado;
     el('posto-nome').disabled = !parado;
     el('posto-end').disabled = !parado;
     document.querySelectorAll('#abast-lista button').forEach(function (b) { b.disabled = !parado; });
@@ -1338,6 +1354,7 @@
     refreshParado();
     el('speed').textContent = num(d.speed, 0);
     el('mc-vel').textContent = num(d.speed, 0);
+    el('cal-app').textContent = 'Trajeto do app: ' + num(d.tripAvgKmL, 1) + ' km/l com paradas, em ' + num(d.tripKm, 1) + ' km';
     el('rpm').textContent = num(d.rpm, 0);
     el('cool').textContent = num(d.coolant, 0);
     if (d.parado) {

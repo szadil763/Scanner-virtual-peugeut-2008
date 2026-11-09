@@ -39,6 +39,12 @@ class TripAccumulator {
         this.litersMoving = litersMoving
     }
 
+    /** Corrige o combustível já somado quando a calibração muda (a média do trajeto passa a refletir o novo fator). */
+    fun scaleFuel(factor: Double) {
+        liters *= factor
+        litersMoving *= factor
+    }
+
     fun reset() {
         distanceKm = 0.0; liters = 0.0; seconds = 0.0; kmWithFuel = 0.0; litersMoving = 0.0
     }

@@ -662,7 +662,30 @@ class MonitorEngine private constructor(private val app: Application) {
     fun setFuelPrice(v: Double) { store.fuelPrice = v.coerceIn(1.0, 20.0); publish() }
 
     fun setEthanolFraction(f: Double) { store.ethanolFraction = f; publish() }
-    fun setCalibration(v: Double) { store.calibration = v.coerceIn(0.5, 1.5); publish() }
+    fun setCalibration(v: Double) { store.calibration = v.coerceIn(FuelCalc.MIN_FACTOR, FuelCalc.MAX_FACTOR); publish() }
+
+    /**
+     * Calibra pelo consumo médio do painel do carro (zerado junto com o trajeto do app): ajusta o fator e
+     * corrige o combustível já somado, então a média do trajeto passa a bater com a do carro. Devolve o texto
+     * para o aviso na tela.
+     */
+    fun calibrateByCar(carKmPerL: Double): String {
+        if (_ui.value.moving) return "Calibrar só com o carro parado."
+        if (!(carKmPerL in 2.0..40.0)) return "O consumo do painel do carro deve estar entre 2 e 40 km/l."
+        val ours = trip.avgKmPerL ?: return "O trajeto do app ainda não mediu consumo. Rode alguns km."
+        if (trip.distanceKm < 5.0) return "Rode pelo menos 5 km com os dois trajetos zerados juntos."
+        val before = store.calibration
+        val next = FuelCalc.factorFromCarComputer(before, ours, carKmPerL)
+        store.calibration = next
+        trip.scaleFuel(next / before)
+        saveNow()
+        publish()
+        val nova = trip.avgKmPerL
+        return String.format(
+            java.util.Locale("pt", "BR"),
+            "Calibrado: fator %.2f (era %.2f). A média do trajeto agora é %.1f km/l.", next, before, nova ?: carKmPerL,
+        )
+    }
     fun setVolumetricEfficiency(v: Double) { store.volumetricEfficiency = v.coerceIn(0.5, 1.0); publish() }
     fun setAdapterName(name: String) {
         if (store.adapterName == name) return

@@ -766,7 +766,8 @@ object PainelLink {
                 st.ethanolFraction = when (cmd.optString("valor")) { "ETANOL" -> 0.95; "E32" -> 0.32; else -> 0.30 }
             }
             "ajuste.calibracao" -> Store(app).let { st ->
-                st.calibration = (st.calibration + (if (cmd.optInt("valor", 0) > 0) 0.05 else -0.05)).coerceIn(0.5, 1.5)
+                st.calibration = (st.calibration + (if (cmd.optInt("valor", 0) > 0) 0.05 else -0.05))
+                    .coerceIn(br.com.monitor2008.domain.FuelCalc.MIN_FACTOR, br.com.monitor2008.domain.FuelCalc.MAX_FACTOR)
             }
             "ajuste.preco" -> Store(app).let { st ->
                 st.fuelPrice = (st.fuelPrice + (if (cmd.optInt("valor", 0) > 0) 0.05 else -0.05)).coerceIn(1.0, 30.0)
@@ -778,6 +779,9 @@ object PainelLink {
             "radio.next" -> RadioPlayer.get(app).step(true)
             "radio.prev" -> RadioPlayer.get(app).step(false)
             "nuvem.sincronizar" -> Nuvem.sincronizar(app, Store(app)) { _, msg -> enviarFala(msg) }
+            "ajuste.calibrarPeloCarro" -> {
+                avisoAbastecimento = "${horaAgora()} · " + MonitorEngine.get(app).calibrateByCar(cmd.optDouble("valor", Double.NaN))
+            }
             "abastecimento.apagar" -> {
                 MonitorEngine.get(app).deleteRefuel(cmd.optLong("id"))
                 avisoAbastecimento = "${horaAgora()} · Abastecimento apagado."

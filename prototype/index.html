@@ -503,7 +503,7 @@ seg('srcSeg', (b) => {
   $('chipText').textContent = live ? 'Adaptador (não conectado)' : 'Dados simulados';
 });
 document.querySelectorAll('[data-cal]').forEach((b) => b.addEventListener('click', () => {
-  st.cal = Math.max(0.5, Math.min(1.5, +(st.cal + +b.dataset.cal).toFixed(2))); $('cal').textContent = fmt(st.cal, 2);
+  st.cal = Math.max(0.25, Math.min(1.5, +(st.cal + +b.dataset.cal).toFixed(2))); $('cal').textContent = fmt(st.cal, 2);
 }));
 document.querySelectorAll('[data-ve]').forEach((b) => b.addEventListener('click', () => {
   st.ve = Math.max(0.5, Math.min(1.0, +(st.ve + +b.dataset.ve).toFixed(2))); $('ve').textContent = fmt(st.ve, 2);

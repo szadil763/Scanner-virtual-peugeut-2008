@@ -208,8 +208,16 @@ const b95 = blend(0.95);
 near(b95.afr, 9.285, 1e-9, 'AFR etanol (f=0,95)');
 
 // Calibração tanque cheio a tanque cheio
-const fator = (litrosReais, litrosEstimados) => Math.min(1.5, Math.max(0.5, litrosReais / litrosEstimados));
+const fator = (litrosReais, litrosEstimados) => Math.min(1.5, Math.max(0.25, litrosReais / litrosEstimados));
 near(fator(38, 34.5), 1.1014, 1e-3, 'Fator de calibração 38 L / 34,5 L');
+near(fator(4, 10), 0.4, 1e-9, 'Fator de calibração 4 L / 10 L (limite de baixo é 0,25)');
+near(fator(1, 10), 0.25, 1e-9, 'Fator de calibração limitado em 0,25');
+// Calibração pelo consumo médio do painel do carro (zerado junto com o trajeto do app)
+const fatorPeloCarro = (fatorAtual, nossoKmL, carroKmL) => Math.min(1.5, Math.max(0.25, fatorAtual * nossoKmL / carroKmL));
+near(fatorPeloCarro(1.0, 5.1, 12.8), 0.3984, 1e-3, 'Fator pelo painel do carro: app 5,1 km/l, carro 12,8 km/l');
+near(fatorPeloCarro(0.8, 10, 12.5), 0.64, 1e-9, 'Fator pelo painel do carro: já calibrado em 0,8');
+near(fatorPeloCarro(1.2, 12, 6), 1.5, 1e-9, 'Fator pelo painel do carro: limite de cima');
+near(fatorPeloCarro(0.3, 3, 12), 0.25, 1e-9, 'Fator pelo painel do carro: limite de baixo')
 near(fator(100, 10), 1.5, 1e-9, 'Fator limitado em 1,5');
 
 // Troca de óleo

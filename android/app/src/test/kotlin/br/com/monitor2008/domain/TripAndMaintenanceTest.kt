@@ -44,6 +44,15 @@ class TripAndMaintenanceTest {
         assertEquals(velho.avgKmPerL!!, velho.avgKmPerLMoving!!, 1e-6)
     }
 
+    @Test fun scalingFuelMakesTheAverageFollowTheNewCalibration() {
+        val a = TripAccumulator()
+        repeat(3600) { a.add(1.0, 30.0, 6.0) } // 30 km gastando 6 L: 5 km/l
+        assertEquals(5.0, a.avgKmPerL!!, 1e-9)
+        a.scaleFuel(0.4)                      // calibrou pelo painel do carro: os litros eram 2,5 vezes altos
+        assertEquals(12.5, a.avgKmPerL!!, 1e-9)
+        assertEquals(12.5, a.avgKmPerLMoving!!, 1e-9)
+    }
+
     @Test fun tripResets() {
         val t = TripAccumulator()
         t.add(10.0, 50.0, 4.0)
