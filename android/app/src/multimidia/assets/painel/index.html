@@ -346,6 +346,8 @@
     <div class="linha" id="aj-musicas"></div>
     <div class="lbl">Ao ligar o carro</div>
     <button class="opc" id="aj-cont" onclick="ajusteContinuar()">Continuar a rádio ou a música</button>
+    <button class="opc" id="aj-contmapa" onclick="ajusteContinuarMapa()">Voltar ao mapa onde estava</button>
+    <div class="aviso">Ao ligar o carro, o mapa volta no mesmo destino. Se o carro desligou a menos de 300 m do destino, a viagem terminou e o mapa não abre.</div>
     <div class="lbl">Miniatura do Monitor sobre outros apps</div>
     <div class="aviso" id="fl-texto">Ao abrir o Spotify, o Monitor fica por cima em miniatura.</div>
     <button class="opc" id="fl-modo" onclick="flutuanteModo()">Miniatura do Monitor: ligada</button>
@@ -976,6 +978,9 @@
     var cont = el('aj-cont');
     cont.textContent = 'Continuar a rádio ou a música: ' + (a.continuar ? 'ligado' : 'desligado');
     cont.className = 'opc' + (a.continuar ? ' sel' : '');
+    var contMapa = el('aj-contmapa');
+    contMapa.textContent = 'Voltar ao mapa onde estava: ' + (a.continuarMapa ? 'ligado' : 'desligado');
+    contMapa.className = 'opc' + (a.continuarMapa ? ' sel' : '');
     var fl = a.flutuante;
     if (fl) {
       var ligada = fl.modo === 'MONITOR';
@@ -1018,6 +1023,9 @@
   }
   function flutuanteModo() {
     cmdAjuste('ajuste.flutuante', { valor: el('fl-modo').classList.contains('sel') ? 'ANDROID' : 'MONITOR' });
+  }
+  function ajusteContinuarMapa() {
+    cmdAjuste('ajuste.continuarMapa', { valor: !el('aj-contmapa').classList.contains('sel') });
   }
   function ajusteContinuar() {
     var ligado = el('aj-cont').classList.contains('sel');

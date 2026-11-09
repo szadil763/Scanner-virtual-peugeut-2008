@@ -44,6 +44,7 @@ class MainActivity : ComponentActivity() {
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        SessionResume.capture(application) // guarda o que ficou na frente da última vez, antes de esta tela mudar isso
         super.onCreate(savedInstanceState)
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
 
@@ -106,8 +107,9 @@ class MainActivity : ComponentActivity() {
         MicService.update(this, renew = true)
         // Ao voltar da tela de "acesso a notificações", o mini player já começa a mostrar a música.
         MediaWatcher.get(application).start()
-        // Primeira tela depois de ligar o carro: continua a rádio ou a música que tocava.
+        // Primeira tela depois de ligar o carro: continua a rádio ou a música e volta ao mapa, como estavam.
         SessionResume.resumeOnce(application)
+        SessionResume.markPanelFront(application)
     }
 
     override fun onStart() {

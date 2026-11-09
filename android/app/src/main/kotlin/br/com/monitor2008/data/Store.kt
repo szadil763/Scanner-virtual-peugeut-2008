@@ -280,6 +280,33 @@ class Store(context: Context) {
     var resumeMedia: Boolean
         get() = app.getBoolean("resumeMedia", true)
         set(v) { app.edit().putBoolean("resumeMedia", v).apply() }
+    /** Voltar ao mapa (mesmo destino) ao ligar o carro, se o mapa era o app da frente quando desligou. */
+    var resumeMap: Boolean
+        get() = app.getBoolean("resumeMap", true)
+        set(v) { app.edit().putBoolean("resumeMap", v).apply() }
+    /** Qual tela estava na frente por último: "PAINEL" (o Monitor), "MAPA" ou "MUSICA". */
+    var lastFront: String?
+        get() = app.getString("lastFront", null)
+        set(v) { app.edit().putString("lastFront", v).apply() }
+    var lastFrontAtMs: Long
+        get() = app.getLong("lastFrontAtMs", 0L)
+        set(v) { app.edit().putLong("lastFrontAtMs", v).apply() }
+    /** Último destino aberto no mapa, a hora e (quando achou) as coordenadas, para saber se o carro já chegou. */
+    val lastRouteAddress: String? get() = app.getString("lastRouteAddress", null)
+    val lastRouteAtMs: Long get() = app.getLong("lastRouteAtMs", 0L)
+    val lastRouteLat: Double? get() = app.getString("lastRouteLat", null)?.toDoubleOrNull()
+    val lastRouteLon: Double? get() = app.getString("lastRouteLon", null)?.toDoubleOrNull()
+    fun setLastRoute(address: String, lat: Double?, lon: Double?) {
+        app.edit().putString("lastRouteAddress", address).putLong("lastRouteAtMs", System.currentTimeMillis())
+            .putString("lastRouteLat", lat?.toString()).putString("lastRouteLon", lon?.toString()).apply()
+    }
+    /** Coordenadas achadas depois: só valem se o destino ainda for o mesmo. */
+    fun setLastRouteCoords(address: String, lat: Double, lon: Double) {
+        if (lastRouteAddress == address) app.edit().putString("lastRouteLat", lat.toString()).putString("lastRouteLon", lon.toString()).apply()
+    }
+    fun clearLastRoute() {
+        app.edit().remove("lastRouteAddress").remove("lastRouteAtMs").remove("lastRouteLat").remove("lastRouteLon").apply()
+    }
     /** Abastecimento: o dono informa o valor pago (true) ou os litros (false). Lembra a última escolha. */
     var refuelByMoney: Boolean
         get() = app.getBoolean("refuelByMoney", false)
@@ -463,7 +490,7 @@ class Store(context: Context) {
 
 /** Chaves de preferências que são do aparelho (não mudam ao trocar de carro). */
 private val CHAVES_DO_APARELHO = setOf(
-    "highContrast", "driveMode", "ttsVoice", "ttsRate", "ttsPitch", "wakeWord", "backgroundReading", "floatMode", "floatSize", "floatItems", "floatX", "floatY", "lastTab", "mapPackage", "musicPackage", "mediaMode", "radioFavorites", "lastRadio", "places", "refuelByMoney", "updateChannel", "updateCheckedMs", "autoOpen", "resumeMedia", "pipOnLeave", "painelAddress", "useSimulated", "vehicleId", "lastPlayingAtMs", "lastPlayingPkg", "aliveAtMs"
+    "highContrast", "driveMode", "ttsVoice", "ttsRate", "ttsPitch", "wakeWord", "backgroundReading", "floatMode", "floatSize", "floatItems", "floatX", "floatY", "lastTab", "mapPackage", "musicPackage", "mediaMode", "radioFavorites", "lastRadio", "places", "refuelByMoney", "updateChannel", "updateCheckedMs", "autoOpen", "resumeMedia", "pipOnLeave", "painelAddress", "useSimulated", "vehicleId", "lastPlayingAtMs", "lastPlayingPkg", "aliveAtMs", "resumeMap", "lastFront", "lastFrontAtMs", "lastRouteAddress", "lastRouteAtMs", "lastRouteLat", "lastRouteLon"
 )
 
 /** Arquivo de preferências de cada carro: o 2008 segue no arquivo de sempre (não perde o histórico). */

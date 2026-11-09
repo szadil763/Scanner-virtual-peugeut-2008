@@ -60,6 +60,7 @@ class PainelServerActivity : Activity() {
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        SessionResume.capture(application) // estado da sessão anterior, antes de esta tela mudar o que está na frente
         super.onCreate(savedInstanceState)
         val info = TextView(this).apply {
             textSize = 18f
@@ -120,6 +121,10 @@ class PainelServerActivity : Activity() {
         super.onResume()
         if (Features.mediaControl) MediaWatcher.get(application).start()
         FloatingPanel.hide(this) // de volta ao painel: a miniatura some
+        // Ligar o carro: continua a música e volta ao mapa. O batimento também detecta o multimídia acordando.
+        SessionResume.startHeartbeat(application)
+        SessionResume.resumeOnce(application)
+        SessionResume.markPanelFront(application)
     }
 
     override fun onDestroy() {
@@ -183,6 +188,7 @@ class PainelServerActivity : Activity() {
                         val obj = try { JSONObject(String(body, Charsets.UTF_8)) } catch (_: Exception) { null }
                         val acaoLocal = obj?.optString("acao") ?: ""
                         var respondido = false
+                        if (acaoLocal == "mapa.limpar") Store(application).clearLastRoute() // destino limpo: não retoma
                         if (acaoLocal == "posto.localizar") {
                             postoLocal = null
                             thread(isDaemon = true) { localizarNoMultimidia() }
@@ -303,6 +309,7 @@ class PainelServerActivity : Activity() {
                 aplicarVoz()
             }
             "ajuste.continuar" -> st.resumeMedia = o.optBoolean("valor", true)
+            "ajuste.continuarMapa" -> st.resumeMap = o.optBoolean("valor", true)
             "ajuste.lugarRemover" -> st.savePlaces(st.places().filter { it.first != valor })
             "sistema.notificacoes" -> SystemSettings.notificationAccess(this)
             "sistema.sobrepor" -> SystemSettings.overlay(this)
@@ -376,6 +383,7 @@ class PainelServerActivity : Activity() {
             put("velocidade", Math.round(st.ttsRate * 10) / 10.0)
             put("tom", Math.round(st.ttsPitch * 10) / 10.0)
             put("continuar", st.resumeMedia)
+            put("continuarMapa", st.resumeMap)
             put("flutuante", JSONObject().apply {
                 put("modo", st.floatMode)
                 put("permissao", android.provider.Settings.canDrawOverlays(this@PainelServerActivity))
@@ -552,7 +560,7 @@ class PainelServerActivity : Activity() {
         private val AJUSTES_LOCAIS = setOf(
             "ajuste.mapa", "ajuste.musica", "ajuste.voz", "ajuste.vozOuvir", "ajuste.velocidade", "ajuste.tom",
             "ajuste.continuar", "ajuste.lugarRemover", "atualizacao.verificar", "atualizacao.instalar",
-            "sistema.notificacoes", "sistema.sobrepor", "ajuste.flutuante", "ajuste.flutuanteItem", "ajuste.flutuanteTamanho", "ajuste.flutuanteTestar",
+            "sistema.notificacoes", "sistema.sobrepor", "ajuste.flutuante", "ajuste.flutuanteItem", "ajuste.flutuanteTamanho", "ajuste.flutuanteTestar", "ajuste.continuarMapa",
         )
         private const val VALIDADE_MS = 20_000L
         /** Fila de comandos (instante, JSON) esperando o próximo envio do celular. */

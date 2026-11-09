@@ -80,7 +80,9 @@ class AppLauncher(private val context: Context) {
         val uri = Uri.parse("geo:$lat,$lon?q=$lat,$lon(${Uri.encode(name)})")
         val intent = Intent(Intent.ACTION_VIEW, uri)
         mapPackage?.let { pkg -> if (pm.getLaunchIntentForPackage(pkg) != null) intent.setPackage(pkg) }
-        return start(intent, "mapa", activity)
+        val erro = start(intent, "mapa", activity)
+        if (erro == null) registrarRota(name, lat, lon)
+        return erro
     }
 
     /**
@@ -96,7 +98,21 @@ class AppLauncher(private val context: Context) {
             else -> Intent(Intent.ACTION_VIEW, Uri.parse("geo:0,0?q=$q"))
         }
         pkg?.let { intent.setPackage(it) }
-        return start(intent, "mapa", activity)
+        val erro = start(intent, "mapa", activity)
+        if (erro == null) registrarRota(address, null, null)
+        return erro
+    }
+
+    /** Guarda o destino para retomar a rota ao ligar o carro; sem coordenadas, acha em segundo plano. */
+    private fun registrarRota(address: String, lat: Double?, lon: Double?) {
+        store.setLastRoute(address, lat, lon)
+        if (lat != null && lon != null) return
+        Thread {
+            val achado = try {
+                android.location.Geocoder(context, java.util.Locale("pt", "BR")).getFromLocationName(address, 1)?.firstOrNull()
+            } catch (_: Exception) { null }
+            if (achado != null) store.setLastRouteCoords(address, achado.latitude, achado.longitude)
+        }.start()
     }
 
     /** App de música para a busca falada: o pedido ("no Spotify"), o escolhido em Ajustes ou o primeiro instalado. */
@@ -138,6 +154,9 @@ class AppLauncher(private val context: Context) {
         }
         return try {
             (activity ?: context).startActivity(intent)
+            // Lembra qual app ficou na frente: ao ligar o carro, o mapa volta se era ele.
+            store.lastFront = if (what == "mapa") "MAPA" else "MUSICA"
+            store.lastFrontAtMs = System.currentTimeMillis()
             null
         } catch (e: Exception) {
             "Não foi possível abrir o app de $what."

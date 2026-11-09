@@ -4,7 +4,7 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.provider.Settings
-import br.com.monitor2008.MainActivity
+import android.app.Application
 
 /**
  * O multimídia liga junto com o carro: se o dono ativou "Abrir sozinho ao ligar o carro", abre o app.
@@ -14,14 +14,19 @@ import br.com.monitor2008.MainActivity
  */
 class BootReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
+        val app = context.applicationContext as Application
+        SessionResume.capture(app) // antes de qualquer tela mudar o que estava na frente
         val store = Store(context)
         // Leitura em segundo plano desde que o multimídia liga, mesmo sem abrir o app: assim a viagem é
         // gravada (velocidade, km, consumo) quando o dono esquece de abrir o Monitor.
         if (store.backgroundReading && !store.useSimulated) ReadingService.update(context, enabled = true)
+        // Mesmo sem abrir nenhuma tela, a música e o mapa voltam como estavam.
+        SessionResume.startHeartbeat(app)
+        SessionResume.resumeOnce(app)
         if (!store.autoOpen || !Settings.canDrawOverlays(context)) return
         try {
             context.startActivity(
-                Intent(context, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP),
+                Intent(context, PainelServerActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP),
             )
         } catch (e: Exception) {
             // O Android recusou: o app abre quando o dono tocar no ícone, já na mesma aba.
