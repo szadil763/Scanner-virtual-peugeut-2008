@@ -779,6 +779,15 @@ object PainelLink {
             "radio.next" -> RadioPlayer.get(app).step(true)
             "radio.prev" -> RadioPlayer.get(app).step(false)
             "nuvem.sincronizar" -> Nuvem.sincronizar(app, Store(app)) { _, msg -> enviarFala(msg) }
+            "trajeto.zerar" -> {
+                val motor = MonitorEngine.get(app)
+                if (motor.ui.value.moving) {
+                    avisoAbastecimento = "${horaAgora()} · Zerar o trajeto só com o carro parado."
+                } else {
+                    motor.resetTrip()
+                    avisoAbastecimento = "${horaAgora()} · Trajeto zerado (média, distância, custo e velocidade média)."
+                }
+            }
             "ajuste.calibrarPeloCarro" -> {
                 avisoAbastecimento = "${horaAgora()} · " + MonitorEngine.get(app).calibrateByCar(cmd.optDouble("valor", Double.NaN))
             }

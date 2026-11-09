@@ -331,6 +331,7 @@
       <input type="text" id="cal-carro" inputmode="decimal" placeholder="Ex.: 12,8">
     </label>
     <div class="aviso" id="cal-app">Trajeto do app: --</div>
+    <button class="feito" id="zerar-2" onclick="zerarTrajeto(this)">Zerar trajeto do app agora</button>
     <button class="enviar" id="cal-btn" onclick="calibrarPeloCarro()">Calibrar pelo painel do carro</button>
     </div>
     <div class="gr-aj" id="gr-tela">
@@ -426,6 +427,8 @@
       <div class="card"><div class="lbl">Custo do trajeto</div><div class="v2" id="c-custo">--</div><div class="unit">R$</div></div>
       <div class="card"><div class="lbl">Vel. média</div><div class="v2" id="c-vmed">--</div><div class="unit">km/h</div></div>
     </div>
+    <button class="feito" id="zerar-1" onclick="zerarTrajeto(this)">Zerar trajeto</button>
+    <div class="aviso">Zera a média, a distância, o custo e a velocidade média do trajeto. Os abastecimentos e a Saúde não são apagados. Só com o carro parado.</div>
     <div class="lbl">Últimos abastecimentos</div>
     <div class="lista" id="abast-lista" style="padding:0"></div>
   </div>
@@ -1215,6 +1218,27 @@
   }
   var avisoFixo = '', aguardandoConfirmacao = false, confirmacaoTimer = null, avisoAntes = '';
   function setAviso(t) { avisoFixo = t; el('ab-aviso').textContent = t; }
+  // Zerar o trajeto: dois toques (o primeiro pede confirmação), só com o carro parado.
+  var zerarConfirma = null, zerarTimer = null, zerarTexto = '';
+  function zerarTrajeto(btn) {
+    if (!parado) { toast('Zerar o trajeto só com o carro parado.'); return; }
+    if (zerarConfirma !== btn) {
+      if (zerarConfirma) { zerarConfirma.textContent = zerarTexto; zerarConfirma.className = 'feito'; }
+      zerarConfirma = btn;
+      zerarTexto = btn.textContent;
+      btn.textContent = 'Toque de novo para zerar o trajeto';
+      btn.className = 'feito conf';
+      clearTimeout(zerarTimer);
+      zerarTimer = setTimeout(function () { btn.textContent = zerarTexto; btn.className = 'feito'; zerarConfirma = null; }, 6000);
+      return;
+    }
+    clearTimeout(zerarTimer);
+    btn.textContent = zerarTexto;
+    btn.className = 'feito';
+    zerarConfirma = null;
+    cmdAjuste('trajeto.zerar');
+    toast('Zerando o trajeto…');
+  }
   function calibrarPeloCarro() {
     if (!parado) { toast('Calibrar só com o carro parado.'); return; }
     var v = parseFloat((el('cal-carro').value || '').replace(',', '.'));
@@ -1228,6 +1252,8 @@
   }
   function refreshParado() {
     el('cal-carro').disabled = !parado;
+    el('zerar-1').disabled = !parado;
+    el('zerar-2').disabled = !parado;
     el('cal-btn').disabled = !parado;
     el('posto-nome').disabled = !parado;
     el('posto-end').disabled = !parado;
