@@ -14,13 +14,13 @@
   #voz { position:fixed; top:4px; right:10px; z-index:5; font-size:30px; min-width:92px; min-height:64px; background:#1d5c33; color:var(--fg); border:3px solid #3ddc6b; border-radius:14px; }
   #voz:disabled { background:#222; border-color:#444; color:#777; }
   #status.on { color:var(--ok); }
-  .layout { display:flex; height:100vh; min-height:0; }
-  .menu { flex:0 0 190px; display:flex; flex-direction:column; gap:6px; padding:8px; overflow-y:auto; border-right:2px solid #1a2330; }
-  .menu .aba { min-height:72px; text-align:left; padding:0 14px; font-size:22px; }
+  .layout { display:flex; flex-direction:column; height:100vh; min-height:0; }
+  .menu { order:2; flex:0 0 auto; display:flex; flex-direction:row; gap:6px; padding:6px; border-top:2px solid #1a2330; background:#05080c; }
+  .menu .aba { flex:1 1 0; min-height:74px; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:4px; font-size:18px; border-radius:12px; }
+  .menu .aba .ic { font-size:26px; line-height:1.1; }
   .mbtn { font-size:28px; min-height:84px; width:100%; text-align:left; padding:0 22px; background:var(--btn); color:var(--fg); border:3px solid #3a4a5c; border-radius:14px; }
   .mbtn:active { background:#2d3a4b; }
-  .menu .aba b { color:var(--dim); font-weight:400; margin-right:8px; }
-  .main { flex:1 1 auto; display:flex; flex-direction:column; min-width:0; min-height:0; }
+  .main { order:1; flex:1 1 auto; display:flex; flex-direction:column; min-width:0; min-height:0; }
   .abas { display:none; }
   .aba { font-size:16px; min-height:56px; background:var(--btn); color:var(--fg); border:2px solid #3a4a5c; border-radius:12px; }
   .aba.sel { background:var(--sel); border-color:#5b9be0; }
@@ -91,11 +91,12 @@
 <button id="voz" onclick="ouvirVoz()">🎤</button>
 <div class="layout">
 <nav class="menu">
-  <button class="aba sel" id="ab-painel" onclick="aba('painel')"><b>1</b>📊 Painel</button>
-  <button class="aba" id="ab-tocador" onclick="aba('tocador')"><b>2</b>🎵 Mídia</button>
-  <button class="aba" id="ab-mapa" onclick="aba('mapa')"><b>3</b>🗺️ Mapa</button>
-  <button class="aba" id="ab-abastecer" onclick="aba('abastecer')"><b>4</b>⛽ Abastecer</button>
-  <button class="aba" id="ab-mais" onclick="aba('mais')"><b>5</b>☰ Mais</button>
+  <button class="aba sel" id="ab-painel" onclick="aba('painel')"><span class="ic">📊</span>Painel</button>
+  <button class="aba" id="ab-tocador" onclick="aba('tocador')"><span class="ic">🎵</span>Mídias</button>
+  <button class="aba" id="ab-saude" onclick="aba('saude')"><span class="ic">❤️</span>Saúde</button>
+  <button class="aba" id="ab-consumo" onclick="aba('consumo')"><span class="ic">📈</span>Consumo</button>
+  <button class="aba" id="ab-diag" onclick="aba('diag')"><span class="ic">🩺</span>Diagnóstico</button>
+  <button class="aba" id="ab-mais" onclick="aba('mais')"><span class="ic">☰</span>Mais</button>
 </nav>
 <main class="main">
 <div id="status">Aguardando o celular…</div>
@@ -184,11 +185,10 @@
 
 <div class="tela" id="t-mais">
   <div class="lista" style="gap:12px">
-    <button class="mbtn" onclick="aba('consumo')">📈 Consumo</button>
-    <button class="mbtn" onclick="aba('saude')">❤️ Saúde</button>
+    <button class="mbtn" onclick="aba('mapa')">🗺️ Mapa</button>
+    <button class="mbtn" onclick="aba('abastecer')">⛽ Abastecer</button>
     <button class="mbtn" onclick="aba('postos')">📍 Postos</button>
     <button class="mbtn" onclick="aba('manutencao')">🔧 Manutenção</button>
-    <button class="mbtn" onclick="aba('diag')">🩺 Diagnóstico</button>
     <button class="mbtn" onclick="aba('ajustes')">⚙️ Ajustes</button>
     <button class="mbtn" onclick="aba('ajuda')">❓ Como conectar</button>
   </div>
@@ -284,7 +284,7 @@
     return m + ':' + ('0' + (s % 60)).slice(-2);
   }
   var abaAtual = 'painel';
-  var MAIS = ['saude', 'postos', 'consumo', 'manutencao', 'diag', 'ajustes', 'ajuda'];
+  var MAIS = ['postos', 'manutencao', 'ajustes', 'ajuda', 'mapa', 'abastecer'];
   function aba(nome) {
     abaAtual = nome;
     if (nome === 'mapa' && mapaObj) setTimeout(function () { mapaObj.invalidateSize(); }, 150);
@@ -292,7 +292,7 @@
     ['painel', 'tocador', 'saude', 'postos', 'abastecer', 'manutencao', 'consumo', 'diag', 'ajustes', 'mapa', 'ajuda', 'mais'].forEach(function (n) {
       el('t-' + n).classList.toggle('sel', n === nome);
     });
-    ['painel', 'tocador', 'mapa', 'abastecer', 'mais'].forEach(function (n) {
+    ['painel', 'tocador', 'saude', 'consumo', 'diag', 'mais'].forEach(function (n) {
       el('ab-' + n).classList.toggle('sel', n === grupo);
     });
   }
