@@ -85,6 +85,32 @@
   .botoes { display:grid; grid-template-columns:1fr 1.4fr 1fr; gap:8px; margin-top:4px; }
   button.c { font-size:26px; min-height:56px; background:var(--btn); color:var(--fg); border:2px solid #3a4a5c; border-radius:12px; }
   button.c:active { background:#2d3a4b; }
+
+  /* Visual igual ao app do celular (fotos): cartões escuros sem borda, rótulos em maiúsculas,
+     botões em pílula com contorno azul e barra de baixo com o item atual destacado. */
+  body { background: #000 !important; font-family: Roboto, system-ui, -apple-system, "Segoe UI", sans-serif; }
+  .card, .item, .painel, .grafico, .folha, .faixa { background: #0f1826 !important; border: none !important; border-radius: 20px !important; }
+  .card { padding: 16px !important; }
+  .item { border-left: 6px solid transparent !important; padding: 14px 16px !important; }
+  .item.ok, .item.boa { border-left-color: #3ddc6b !important; }
+  .item.warn, .item.atencao { border-left-color: #ffcc33 !important; }
+  .item.alerta, .item.suspeita { border-left-color: #ff5555 !important; }
+  .rotulo, .lbl { font-size: 14px !important; letter-spacing: .08em; text-transform: uppercase; color: #a9b4c4 !important; font-weight: 600; }
+  .item .t { font-size: 20px !important; font-weight: 700; }
+  .item .d { font-size: 16px !important; color: #a9b4c4 !important; }
+  .feito, .botao, .op, .mbtn, .local, .enviar, .opc, button.c {
+    background: transparent !important; color: #7dd3fc !important; border: 2px solid #6b7280 !important;
+    border-radius: 30px !important; font-weight: 600;
+  }
+  .op.sel, .opc.sel, .botao.azul { border-color: #7dd3fc !important; }
+  .enviar { border-color: #3ddc6b !important; color: #3ddc6b !important; }
+  .enviar:disabled, .feito:disabled { border-color: #444 !important; color: #6b7280 !important; background: transparent !important; }
+  .menu { background: #1d1d24 !important; border-top: none !important; height: 84px; padding: 0 6px !important; align-items: center; }
+  .menu .aba { background: transparent !important; border: none !important; color: #c5ccd6 !important; font-size: 14px !important; min-height: 64px !important; }
+  .menu .aba .ic { font-size: 24px !important; }
+  .menu .aba.sel { color: #fff !important; font-weight: 700; }
+  .menu .aba.sel .ic { background: #7dd3fc; border-radius: 22px; padding: 4px 22px; color: #000; }
+  .abas { display: none !important; }
 </style>
 </head>
 <body>
