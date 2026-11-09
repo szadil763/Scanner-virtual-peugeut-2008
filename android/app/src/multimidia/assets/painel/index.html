@@ -122,6 +122,23 @@
   .menu .aba.sel { color: #fff !important; font-weight: 700; }
   .menu .aba.sel .ic { background: #7dd3fc; border-radius: 22px; padding: 4px 22px; color: #000; }
   .abas { display: none !important; }
+
+  /* Barra de mídia compacta: só aparece com algo tocando e some na aba Mídias. */
+  .midia { display:none !important; padding:0 10px 8px; gap:8px; grid-template-columns:repeat(auto-fit,minmax(300px,1fr)); }
+  .midia.tem { display:grid !important; }
+  body.na-midia .midia { display:none !important; }
+  .faixa { display:flex; align-items:center; gap:10px; padding:4px 10px !important; border-radius:16px !important; }
+  .faixa .tit { flex:1 1 auto; min-width:0; font-size:18px; }
+  .faixa .sub { display:none; }
+  .faixa .botoes { flex:0 0 auto; margin-top:0; display:flex; gap:6px; }
+  .faixa button.c { min-height:46px; min-width:56px; font-size:22px; }
+  /* Topo: espaço reservado para o botão de voz e status discreto. */
+  #status { min-height:70px; display:flex; align-items:center; }
+  #status.on { font-size:15px; }
+  #vozinfo:empty { display:none; }
+  /* Menu Mais em grade 3x2. */
+  #t-mais .lista { display:grid !important; grid-template-columns:repeat(3,1fr); gap:12px; align-content:start; overflow-y:auto; }
+  #t-mais .mbtn { min-height:120px; font-size:26px; text-align:center; padding:0 12px; }
 </style>
 </head>
 <body>
@@ -372,7 +389,7 @@
 </div>
 
 <div class="midia">
-  <div class="faixa">
+  <div class="faixa" id="fx-musica">
     <div class="tit" id="m-tit">Música: nada tocando</div>
     <div class="sub" id="m-sub">&nbsp;</div>
     <div class="botoes">
@@ -381,7 +398,7 @@
       <button class="c" onclick="cmd('musica.next')">⏭</button>
     </div>
   </div>
-  <div class="faixa">
+  <div class="faixa" id="fx-radio">
     <div class="tit" id="r-tit">Rádio: nenhuma tocando</div>
     <div class="sub" id="r-sub">&nbsp;</div>
     <div class="botoes">
@@ -408,6 +425,7 @@
   var MAIS = ['postos', 'manutencao', 'ajustes', 'ajuda', 'mapa', 'abastecer'];
   function aba(nome) {
     abaAtual = nome;
+    document.body.classList.toggle('na-midia', nome === 'tocador');
     if (nome === 'mapa' && mapaObj) setTimeout(function () { mapaObj.invalidateSize(); }, 150);
     if (nome === 'abastecer' && !postoAtual) localizarPosto();
     var grupo = MAIS.indexOf(nome) >= 0 ? 'mais' : nome;
@@ -832,7 +850,10 @@
   }
   var ultimaFala = null, ultimoFalaTxt = '', vozStatus = '';
   function mostraVoz() {
-    el('vozinfo').textContent = 'Voz deste multimídia: ' + (vozStatus || '…') + (ultimoFalaTxt ? ' · última resposta: ' + ultimoFalaTxt : '');
+    var partes = [];
+    if (vozStatus && vozStatus !== 'pronta') partes.push('Voz deste multimídia: ' + vozStatus);
+    if (ultimoFalaTxt) partes.push('Última resposta: ' + ultimoFalaTxt);
+    el('vozinfo').textContent = partes.join(' · ');
   }
   function falarResposta(d) {
     if (d.falaId === undefined) return;
@@ -1103,6 +1124,12 @@
       el('m-play').textContent = '▶';
     }
     var ra = m.radio;
+    // Barra compacta: só mostra o que tem algo (música ou rádio) e some se nada está ativo.
+    var temMusica = !!mu && m.musicaDisponivel !== false;
+    var temRadio = !!ra;
+    el('fx-musica').style.display = temMusica ? '' : 'none';
+    el('fx-radio').style.display = temRadio ? '' : 'none';
+    document.querySelector('.midia').classList.toggle('tem', temMusica || temRadio);
     if (ra) {
       el('r-tit').textContent = ra.nome || 'Rádio';
       el('r-sub').textContent = ra.titulo || (ra.tocando ? 'Tocando' : 'Pausada');
