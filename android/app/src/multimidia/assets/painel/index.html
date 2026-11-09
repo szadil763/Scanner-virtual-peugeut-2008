@@ -365,7 +365,7 @@
       <div id="posto-endereco" style="font-size:18px;margin-bottom:6px"></div>
       <button class="feito" style="margin-top:0" onclick="localizarPosto()">Localizar de novo</button>
     </div>
-    <button class="enviar" id="ab-enviar" onclick="enviarAbastecimento()">Registrar no celular</button>
+    <button class="enviar" id="ab-enviar" onclick="enviarAbastecimento()">Registrar abastecimento</button>
     <div class="aviso" id="ab-aviso">Só com o carro parado. Depois de tocar, toque de novo para confirmar.</div>
     <div class="aviso" id="abast-info" style="font-size:22px;color:var(--ok)"></div>
   </div>
@@ -958,15 +958,29 @@
     } else {
       el('ab-aviso').textContent = 'Com o carro andando, o abastecimento fica bloqueado.';
     }
-    el('ab-enviar').textContent = confirmando ? 'Confirmar abastecimento' : 'Registrar no celular';
+    el('ab-enviar').textContent = confirmando ? 'Confirmar abastecimento' : 'Registrar abastecimento';
   }
   var postoAtual = null, postoLocalAtual = null, mapaPostoObj = null, mapaPostoCamadas = null;
+  // Ao tocar em Registrar: busca a localização agora e preenche o endereço sozinho.
+  var aguardandoPosto = false, aguardandoTimer = null, postoAntesKey = '', ultimoPostoPhone = null, postoRecente = false;
   function localizarPosto() {
     postoAtual = null;
+    postoAntesKey = JSON.stringify(ultimoPostoPhone);
     el('posto-status').textContent = 'Localizando o posto…';
     el('posto-endereco').textContent = '';
     el('mapa-posto').style.display = 'none';
     fetch('/comando', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ acao: 'posto.localizar' }) });
+  }
+  function buscarPostoParaRegistro() {
+    aguardandoPosto = true;
+    el('ab-aviso').textContent = 'Buscando sua localização…';
+    localizarPosto();
+    clearTimeout(aguardandoTimer);
+    aguardandoTimer = setTimeout(function () {
+      if (!aguardandoPosto) return;
+      aguardandoPosto = false;
+      el('ab-aviso').textContent = 'Não consegui sua localização. Confira o GPS e toque de novo.';
+    }, 20000);
   }
   function paintPosto(p) {
     if (!p) return;
@@ -977,7 +991,14 @@
     }
     if (postoAtual && postoAtual.lat === p.lat && postoAtual.lon === p.lon && postoAtual.endereco === p.endereco) return;
     postoAtual = p;
-    el('posto-status').textContent = 'Posto localizado pelo GPS do celular.';
+    if (aguardandoPosto) {
+      aguardandoPosto = false;
+      clearTimeout(aguardandoTimer);
+      postoRecente = true;
+      el('ab-aviso').textContent = 'Endereço preenchido: ' + p.endereco;
+      setTimeout(enviarAbastecimento, 200);
+    }
+    el('posto-status').textContent = 'Posto localizado pelo GPS.';
     el('posto-endereco').textContent = p.endereco;
     el('mapa-posto').style.display = 'block';
     if (typeof L !== 'undefined') {
@@ -994,10 +1015,11 @@
   }
   function enviarAbastecimento() {
     if (!parado) return;
-    if (!postoAtual) { el('ab-aviso').textContent = 'Localize o posto antes de registrar.'; return; }
     if (!confirmando) {
       var q = parseFloat(el('ab-quant').value), p = parseFloat(el('ab-preco').value);
       if (!(q > 0) || !(p > 0)) { el('ab-aviso').textContent = 'Preencha a quantidade e o preço.'; return; }
+      if (!postoRecente) { buscarPostoParaRegistro(); return; }
+      postoRecente = false;
       confirmando = true;
       refreshParado();
       clearTimeout(confirmaTimer);
@@ -1006,6 +1028,7 @@
     }
     clearTimeout(confirmaTimer);
     confirmando = false;
+    if (!postoAtual) { postoRecente = false; buscarPostoParaRegistro(); return; }
     var q2 = parseFloat(el('ab-quant').value), p2 = parseFloat(el('ab-preco').value);
     var corpo = { acao: 'abastecer', preco: p2, cheio: escolha.tanque === 'cheio', etanol: escolha.comb === 'etanol' };
     if (escolha.modo === 'valor') corpo.valor = q2; else corpo.litros = q2;
@@ -1051,7 +1074,9 @@
     paintDiag(d.diagnostico);
     paintAjustes(d.ajustes);
     paintMapa(d.mapa || {});
-    if (!postoLocalAtual) paintPosto(d.posto);
+    ultimoPostoPhone = d.posto || null;
+    // Enquanto busca, o posto antigo do celular não conta: só aceita um posto novo.
+    if (!postoLocalAtual && (!aguardandoPosto || JSON.stringify(ultimoPostoPhone) !== postoAntesKey)) paintPosto(d.posto);
     falarResposta(d);
     pendenteAtualId = d.pendenteId;
     if (d.aviso) el('abast-info').textContent = d.aviso;
