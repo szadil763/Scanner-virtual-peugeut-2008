@@ -608,7 +608,14 @@ object PainelLink {
         // 1) Pedido de busca direto ao app (abre e toca): é o que o Spotify e outros aceitam de fato.
         //    O pedido pela sessão de mídia é aceito mas muitas vezes ignorado, então fica como segunda chance.
         val erro = launcher.playFromSearch(pkg, q, null)
-        if (erro == null || media.playFromSearchQuietly(pkg, q)) {
+        if (erro == null) {
+            // O app abre na frente para aceitar a busca; assim que ele toca, o painel volta para a frente
+            // e a música aparece no tocador do multimídia.
+            avisarMusica("Pedi ao $nome para tocar \"$q\"…")
+            voltarAoPainel(app, media, pkg, nome)
+            return
+        }
+        if (media.playFromSearchQuietly(pkg, q)) {
             avisarMusica("Pedi ao $nome para tocar \"$q\"…")
             conferirTocando(media, pkg, nome)
             return
@@ -616,6 +623,38 @@ object PainelLink {
         // 2) O app não aceitou a busca: abre o app para o dono procurar por lá.
         val aberto = launcher.openApp(pkg, null)
         avisarMusica(if (aberto == null) "$erro Abri o $nome para você buscar por lá." else "$erro $aberto")
+    }
+
+    /**
+     * Depois de pedir a busca ao app de música (que abre na frente), espera ele tocar e traz o painel de
+     * volta. Confere a cada 0,5 s por até 10 s: se não tocar, deixa o app na frente para o dono resolver
+     * (login, permissão) em vez de esconder o problema.
+     */
+    private fun voltarAoPainel(app: Application, media: MediaWatcher, pkg: String, nome: String) {
+        val h = android.os.Handler(android.os.Looper.getMainLooper())
+        var tentativas = 0
+        val volta = object : Runnable {
+            override fun run() {
+                tentativas++
+                val n = media.now.value
+                if (n != null && n.pkg == pkg && n.playing) {
+                    try {
+                        app.startActivity(
+                            android.content.Intent(app, PainelServerActivity::class.java)
+                                .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK or android.content.Intent.FLAG_ACTIVITY_REORDER_TO_FRONT),
+                        )
+                    } catch (_: Exception) {
+                        // O Android pode recusar trazer o painel de volta; a música segue tocando.
+                    }
+                    avisarMusica("Tocando no $nome: ${n.title ?: "música"}.")
+                } else if (tentativas < 20) {
+                    h.postDelayed(this, 500L)
+                } else {
+                    avisarMusica("O $nome recebeu a busca, mas ainda não começou a tocar. Toque em play no app.")
+                }
+            }
+        }
+        h.postDelayed(volta, 1_500L)
     }
 
     /** 6 s depois do pedido, diz na tela se o app começou a tocar (para o dono saber onde parou). */
