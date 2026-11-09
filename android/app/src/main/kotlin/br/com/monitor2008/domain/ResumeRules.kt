@@ -7,11 +7,14 @@ package br.com.monitor2008.domain
  * a de "tocando" ficou para trás.
  */
 object ResumeRules {
-    /** Folga entre as marcas: o intervalo de gravação (30 s) com sobra. */
-    const val MAX_GAP_MS = 90_000L
+    /**
+     * A última mídia volta ao ligar o carro se tocou nas 12 h antes de o multimídia desligar, mesmo que tenha sido
+     * pausada antes (pedido do dono: ligar o carro e a última música voltar). Mais velha que isso, não volta.
+     */
+    const val MEDIA_MAX_AGE_MS = 12 * 3_600_000L
 
     fun shouldResume(aliveAtMs: Long, lastPlayingAtMs: Long, lastPlayingPkg: String?): Boolean =
-        lastPlayingPkg != null && lastPlayingAtMs > 0 && aliveAtMs - lastPlayingAtMs in 0..MAX_GAP_MS
+        lastPlayingPkg != null && lastPlayingAtMs > 0 && aliveAtMs - lastPlayingAtMs in 0..MEDIA_MAX_AGE_MS
 
     /** O mapa só volta se foi o último app aberto e há menos de 12 h (depois disso a rota já é velha). */
     const val MAP_MAX_AGE_MS = 12 * 3_600_000L

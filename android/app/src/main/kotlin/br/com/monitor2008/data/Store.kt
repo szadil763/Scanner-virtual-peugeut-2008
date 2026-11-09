@@ -280,6 +280,10 @@ class Store(context: Context) {
         get() = app.getLong("aliveAtMs", 0L)
         set(v) { app.edit().putLong("aliveAtMs", v).apply() }
     val lastPlayingPkg: String? get() = app.getString("lastPlayingPkg", null)
+    /** Nome da última música (ou rádio) tocada, para mostrar e para o botão Tocar de novo. */
+    var lastPlayingTitle: String?
+        get() = app.getString("lastPlayingTitle", null)
+        set(v) { app.edit().putString("lastPlayingTitle", v).apply() }
     val lastPlayingAtMs: Long get() = app.getLong("lastPlayingAtMs", 0L)
     fun saveLastPlaying(pkg: String, atMs: Long) {
         app.edit().putString("lastPlayingPkg", pkg).putLong("lastPlayingAtMs", atMs).apply()
@@ -498,7 +502,7 @@ class Store(context: Context) {
 
 /** Chaves de preferências que são do aparelho (não mudam ao trocar de carro). */
 private val CHAVES_DO_APARELHO = setOf(
-    "highContrast", "driveMode", "ttsVoice", "ttsRate", "ttsPitch", "wakeWord", "backgroundReading", "floatMode", "floatSize", "floatItems", "floatX", "floatY", "lastTab", "mapPackage", "musicPackage", "mediaMode", "radioFavorites", "lastRadio", "places", "refuelByMoney", "updateChannel", "updateCheckedMs", "autoOpen", "resumeMedia", "pipOnLeave", "painelAddress", "useSimulated", "vehicleId", "lastPlayingAtMs", "lastPlayingPkg", "aliveAtMs", "resumeMap", "lastFront", "lastFrontAtMs", "lastRouteAddress", "lastRouteAtMs", "lastRouteLat", "lastRouteLon"
+    "highContrast", "driveMode", "ttsVoice", "ttsRate", "ttsPitch", "wakeWord", "backgroundReading", "floatMode", "floatSize", "floatItems", "floatX", "floatY", "lastTab", "mapPackage", "musicPackage", "mediaMode", "radioFavorites", "lastRadio", "places", "refuelByMoney", "updateChannel", "updateCheckedMs", "autoOpen", "resumeMedia", "pipOnLeave", "painelAddress", "useSimulated", "vehicleId", "lastPlayingAtMs", "lastPlayingPkg", "aliveAtMs", "lastPlayingTitle", "resumeMap", "lastFront", "lastFrontAtMs", "lastRouteAddress", "lastRouteAtMs", "lastRouteLat", "lastRouteLon"
 )
 
 /** Arquivo de preferências de cada carro: o 2008 segue no arquivo de sempre (não perde o histórico). */

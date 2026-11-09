@@ -471,6 +471,14 @@ class PainelServerActivity : Activity() {
             put("ajustes", ajustesLocais())
             put("atualizacao", atualizacaoLocal())
             put("versaoMultimidia", Updater.get(application).installedCode)
+            // Última mídia tocada: o painel oferece "Tocar de novo" quando nada está tocando.
+            val st0 = Store(application)
+            st0.lastPlayingPkg?.let { pkg ->
+                put("ultima", JSONObject().apply {
+                    put("app", if (pkg == application.packageName) "Rádio" else AppLauncher(application).label(pkg))
+                    put("titulo", st0.lastPlayingTitle ?: "")
+                })
+            }
             put("musicaAviso", JSONObject().put("id", PainelLink.avisoMusica.first).put("texto", PainelLink.avisoMusica.second))
             // Sem o acesso às notificações o painel não vê o que toca (o painel mostra como ativar).
             put("acessoNotificacoes", if (Features.mediaControl) MediaWatcher.get(application).allowed.value else true)

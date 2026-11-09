@@ -66,12 +66,22 @@ object SessionResume {
                     try { resumeSession(app, store.lastFront, store.lastFrontAtMs) } finally { holdBeat = false }
                 }
                 if (!holdBeat) {
-                    playingPkg(app)?.let { store.saveLastPlaying(it, now) }
+                    playingPkg(app)?.let { pkg ->
+                        store.saveLastPlaying(pkg, now)
+                        store.lastPlayingTitle = playingTitle(app, pkg)
+                    }
                     store.aliveAtMs = now
                 }
                 delay(BEAT_MS)
             }
         }
+    }
+
+    /** Nome do que toca agora: "música · cantor" ou a rádio. Guardado para mostrar a última mídia e tocar de novo. */
+    private fun playingTitle(app: Application, pkg: String): String? {
+        if (pkg == app.packageName) return RadioPlayer.get(app).state.value.station?.name
+        val n = MediaWatcher.get(app).now.value?.takeIf { it.pkg == pkg } ?: return null
+        return listOfNotNull(n.title, n.artist).filter { it.isNotBlank() }.joinToString(" · ").ifBlank { null }
     }
 
     private fun playingPkg(app: Application): String? {
@@ -92,15 +102,53 @@ object SessionResume {
         // Música e rádio: no thread principal (o player da rádio exige).
         if (store.resumeMedia) {
             val pkg = store.lastPlayingPkg
-            if (ResumeRules.shouldResume(store.aliveAtMs, store.lastPlayingAtMs, pkg)) {
-                Handler(Looper.getMainLooper()).post {
-                    MediaWatcher.get(app).start()
-                    if (pkg == app.packageName) RadioPlayer.get(app).resume()
-                    else if (pkg != null) MediaWatcher.get(app).resumeQuietly(pkg)
-                }
-            }
+            if (pkg != null && ResumeRules.shouldResume(store.aliveAtMs, store.lastPlayingAtMs, pkg)) retomarMidia(app, pkg, front)
         }
         if (store.resumeMap && ResumeRules.shouldResumeMap(front, frontAtMs, System.currentTimeMillis())) retomarMapa(app, store)
+    }
+
+    /** Botão "Tocar de novo" da aba Mídias: volta a tocar a última mídia. */
+    fun playLast(app: Application) {
+        val pkg = Store(app).lastPlayingPkg ?: return
+        retomarMidia(app, pkg, null)
+    }
+
+    /**
+     * Volta a tocar [pkg]. A rádio do próprio app retoma direto. Em outro app (Spotify...), tenta a sessão ou a
+     * tecla "tocar" e, se em 3 s nada tocar, abre o app (ele só aceita tocar depois de aberto). Se o app abriu na
+     * frente e o Monitor era a tela da frente, o painel volta assim que a música toca.
+     */
+    private fun retomarMidia(app: Application, pkg: String, front: String?) {
+        Handler(Looper.getMainLooper()).post {
+            val media = MediaWatcher.get(app)
+            media.start()
+            if (pkg == app.packageName) {
+                RadioPlayer.get(app).resume()
+            } else {
+                media.playOn(pkg, null)
+                if (front != "MUSICA" && front != "MAPA") voltarAoPainelQuandoTocar(app, pkg)
+            }
+        }
+    }
+
+    private fun voltarAoPainelQuandoTocar(app: Application, pkg: String) {
+        val handler = Handler(Looper.getMainLooper())
+        var tentativas = 0
+        val volta = object : Runnable {
+            override fun run() {
+                tentativas++
+                val tocando = MediaWatcher.get(app).now.value?.let { it.pkg == pkg && it.playing } == true
+                if (tocando) {
+                    try {
+                        app.startActivity(
+                            android.content.Intent(app, PainelServerActivity::class.java)
+                                .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK or android.content.Intent.FLAG_ACTIVITY_REORDER_TO_FRONT),
+                        )
+                    } catch (_: Exception) { }
+                } else if (tentativas < 20) handler.postDelayed(this, 1_000L)
+            }
+        }
+        handler.postDelayed(volta, 4_000L)
     }
 
     /**

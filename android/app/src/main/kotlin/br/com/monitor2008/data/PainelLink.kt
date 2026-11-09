@@ -726,6 +726,7 @@ object PainelLink {
     /** Música e rádio: executa no aparelho onde o botão foi tocado (multimídia ou celular). */
     fun executarMidia(app: Application, acao: String, texto: String = ""): Boolean {
         when (acao) {
+            "musica.retomar" -> SessionResume.playLast(app)
             "radio.tocar" -> radiosMultimidia.firstOrNull { it.id == texto }?.let { RadioPlayer.get(app).play(it) }
             "musica.playpause" -> if (Features.mediaControl) MediaWatcher.get(app).playPause() else return false
             "musica.next" -> if (Features.mediaControl) MediaWatcher.get(app).next() else return false

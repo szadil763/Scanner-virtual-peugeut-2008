@@ -10,8 +10,14 @@ class ResumeRulesTest {
     @Test fun playingUntilTheCarWasTurnedOff() =
         assertTrue(ResumeRules.shouldResume(aliveAtMs = t, lastPlayingAtMs = t - 20_000, lastPlayingPkg = "com.spotify.music"))
 
-    @Test fun pausedLongBeforeTurningOff() =
-        assertFalse(ResumeRules.shouldResume(aliveAtMs = t, lastPlayingAtMs = t - 10 * 60_000, lastPlayingPkg = "com.spotify.music"))
+    @Test fun pausedBeforeTurningOffStillComesBack() {
+        // Pediu o dono: ligou o carro, a última música volta, mesmo que tenha pausado antes de desligar.
+        assertTrue(ResumeRules.shouldResume(aliveAtMs = t, lastPlayingAtMs = t - 10 * 60_000, lastPlayingPkg = "com.spotify.music"))
+        assertTrue(ResumeRules.shouldResume(aliveAtMs = t, lastPlayingAtMs = t - 5 * 3_600_000L, lastPlayingPkg = "com.spotify.music"))
+    }
+
+    @Test fun veryOldMediaDoesNotComeBack() =
+        assertFalse(ResumeRules.shouldResume(aliveAtMs = t, lastPlayingAtMs = t - 13 * 3_600_000L, lastPlayingPkg = "com.spotify.music"))
 
     @Test fun nothingEverPlayed() {
         assertFalse(ResumeRules.shouldResume(aliveAtMs = t, lastPlayingAtMs = 0, lastPlayingPkg = null))

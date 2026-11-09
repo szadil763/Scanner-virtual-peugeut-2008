@@ -233,6 +233,10 @@
       Para mostrar e controlar a música aqui, ative o acesso às notificações do Monitor 2008.
       <button class="feito" onclick="cmdAjuste('sistema.notificacoes')">Ativar o acesso às notificações</button>
     </div>
+    <div id="ultima-musica" style="display:none;width:100%;border:2px solid #7dd3fc;border-radius:16px;padding:12px;font-size:18px;color:#7dd3fc">
+      <span id="ultima-texto"></span>
+      <button class="feito" onclick="cmd('musica.retomar')">Tocar de novo</button>
+    </div>
     <div id="sem-sobrepor" style="display:none;width:100%;border:2px solid #ffcc33;border-radius:16px;padding:12px;font-size:18px;color:#ffcc33">
       Para o Monitor ficar em miniatura sobre o Spotify, libere "sobrepor a outros apps". Na tela que abrir, escolha o Monitor 2008 e ative a permissão.
       <button class="feito" onclick="cmdAjuste('sistema.sobrepor')">Ativar a miniatura sobre outros apps</button>
@@ -1576,6 +1580,10 @@
         paintMidia(m);
         paintRadios(m);
         if (m.versaoMultimidia !== undefined) { versaoMm = m.versaoMultimidia; checarVersoes(); }
+        var nadaToca = !m.musica && !(m.radio && m.radio.tocando);
+        var ult = m.ultima;
+        el('ultima-musica').style.display = (nadaToca && ult) ? 'block' : 'none';
+        if (ult) el('ultima-texto').textContent = 'Última tocada: ' + (ult.titulo ? ult.titulo + ' · ' : '') + ult.app;
         paintAjustesLocais(m.ajustes);
         el('sem-acesso').style.display = (m.acessoNotificacoes === false) ? 'block' : 'none';
         var flM = m.ajustes && m.ajustes.flutuante;
