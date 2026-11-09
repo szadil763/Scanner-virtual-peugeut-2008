@@ -839,6 +839,8 @@
     }
     escolhas(el('aj-mapas'), a.mapas, a.mapaApp, 'ajuste.mapa');
     escolhas(el('aj-musicas'), a.musicas, a.musicaApp, 'ajuste.musica');
+    var escolhido = (a.musicas || []).filter(function (o) { return o.pkg === a.musicaApp; })[0];
+    el('busca-btn').textContent = 'Buscar e tocar' + (escolhido ? ' no ' + escolhido.nome : '');
 
     var vz = el('aj-vozes');
     vz.textContent = '';
@@ -981,13 +983,26 @@
       .then(function () { el('mapa-aviso').textContent = 'Traçando a rota para "' + t + '".'; })
       .catch(function () { el('mapa-aviso').textContent = 'Sem resposta do multimídia.'; });
   }
+  // Resultado da busca de música: fica na tela por alguns segundos (o texto padrão volta depois).
+  var buscaFixo = '', buscaFixoTimer = null, avisoMusicaId = null;
+  function setBusca(t) {
+    buscaFixo = t;
+    el('busca-aviso').textContent = t;
+    clearTimeout(buscaFixoTimer);
+    buscaFixoTimer = setTimeout(function () { buscaFixo = ''; }, 10000);
+  }
+  function paintAvisoMusica(a) {
+    if (!a) return;
+    if (avisoMusicaId === null) { avisoMusicaId = a.id; return; }
+    if (a.id !== avisoMusicaId) { avisoMusicaId = a.id; if (a.texto) setBusca(a.texto); }
+  }
   function buscarMusica() {
     if (!parado) return;
     var t = el('busca-txt').value.trim();
-    if (!t) { el('busca-aviso').textContent = 'Digite o nome da música ou do cantor.'; return; }
+    if (!t) { setBusca('Digite o nome da música ou do cantor.'); return; }
     fetch('/comando', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ acao: 'musica.buscar', texto: t }) })
-      .then(function () { el('busca-aviso').textContent = 'Buscando "' + t + '" no app de música do celular.'; })
-      .catch(function () { el('busca-aviso').textContent = 'Sem resposta do multimídia.'; });
+      .then(function () { setBusca('Buscando "' + t + '"…'); })
+      .catch(function () { setBusca('Sem resposta do multimídia.'); });
   }
   var escolha = { modo: 'valor', comb: 'gasolina', tanque: 'cheio' };
   var parado = true;
@@ -1041,7 +1056,7 @@
     el('busca-btn').disabled = !parado;
     el('mapa-ir').disabled = !parado;
     el('mapa-dest').disabled = !parado;
-    el('busca-aviso').textContent = parado ? 'Pesquisa só com o carro parado.' : 'Com o carro andando, a pesquisa fica bloqueada.';
+    el('busca-aviso').textContent = buscaFixo || (parado ? 'Pesquisa só com o carro parado.' : 'Com o carro andando, a pesquisa fica bloqueada.');
     if (parado) {
       el('ab-aviso').textContent = confirmando ? 'Toque de novo para confirmar.' : 'Só com o carro parado. Depois de tocar, toque de novo para confirmar.';
     } else {
@@ -1280,6 +1295,7 @@
         paintRadios(m);
         paintAjustesLocais(m.ajustes);
         paintAtualizacao(m.atualizacao);
+        paintAvisoMusica(m.musicaAviso);
         paintTocador(m.musica || null);
       })
       .catch(function () {})

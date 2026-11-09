@@ -585,13 +585,38 @@ object PainelLink {
     }
 
     /** Busca de música ou cantor no app que está tocando (ou no app de música padrão). */
+    /** Último resultado da busca de música (número, texto): o painel mostra o texto quando o número muda. */
+    @Volatile var avisoMusica: Pair<Int, String> = 0 to ""
+    private fun avisarMusica(texto: String) { avisoMusica = (avisoMusica.first + 1) to texto }
+
+    /**
+     * Busca e toca no app de música ESCOLHIDO em Ajustes (e só se não houver escolha, no que já toca).
+     * Ordem: sessão de mídia do app; pedido de busca ao app; abrir o app para buscar à mão. O resultado
+     * volta para o painel em [avisoMusica], porque antes o botão não mostrava nada.
+     */
     private fun buscar(app: Application, texto: String) {
         val q = texto.trim().take(100)
         if (q.isEmpty()) return
         val media = MediaWatcher.get(app)
         val launcher = AppLauncher(app)
-        val pkg = media.now.value?.pkg ?: launcher.musicFor(null) ?: return
-        if (!media.playFromSearchQuietly(pkg, q)) launcher.playFromSearch(pkg, q, null)
+        val pkg = launcher.musicFor(null) ?: media.now.value?.pkg
+        if (pkg == null) {
+            avisarMusica("Nenhum app de música instalado neste multimídia.")
+            return
+        }
+        val nome = launcher.label(pkg)
+        if (media.playFromSearchQuietly(pkg, q)) {
+            avisarMusica("Pedi ao $nome para tocar \"$q\".")
+            return
+        }
+        val erro = launcher.playFromSearch(pkg, q, null)
+        if (erro == null) {
+            avisarMusica("Pedi ao $nome para tocar \"$q\".")
+            return
+        }
+        // O app não aceitou a busca: abre o app para o dono procurar por lá.
+        val aberto = launcher.openApp(pkg, null)
+        avisarMusica(if (aberto == null) "$erro Abri o $nome para você buscar por lá." else "$erro $aberto")
     }
 
     /** Comandos vindos dos botões do painel. Música só com o acesso às notificações (multimídia). */

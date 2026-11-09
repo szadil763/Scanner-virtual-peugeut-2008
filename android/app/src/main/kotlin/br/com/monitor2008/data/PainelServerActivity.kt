@@ -383,6 +383,7 @@ class PainelServerActivity : Activity() {
             put("radios", lista)
             put("ajustes", ajustesLocais())
             put("atualizacao", atualizacaoLocal())
+            put("musicaAviso", JSONObject().put("id", PainelLink.avisoMusica.first).put("texto", PainelLink.avisoMusica.second))
             put("musicaDisponivel", Features.mediaControl)
         }.toString()
     }
