@@ -132,6 +132,12 @@ class MediaWatcher private constructor(private val app: Application) {
             existing.transportControls.play()
             return
         }
+        // Bluetooth do celular: a sessão só aparece quando o celular reconecta (demora um pouco depois de ligar).
+        // Não há app para abrir: espera até 2 min e manda "tocar" (o celular retoma a mesma música).
+        if (isBluetoothSource(pkg)) {
+            playWhenSession(pkg, maxSeconds = 120, maxPlays = 6)
+            return
+        }
         // App fechado (carro desligado): a tecla "tocar" e a conexão no serviço de mídia do app (a mesma que o
         // Android usa para "retomar a última música") costumam bastar, sem abrir o app.
         val sent = sendPlayKey(pkg)
@@ -178,8 +184,14 @@ class MediaWatcher private constructor(private val app: Application) {
         } catch (e: Exception) { false }
     }
 
-    /** Espera a sessão do app [pkg] aparecer (até 25 s) e dá play nela, se não estiver tocando. */
-    private fun playWhenSession(pkg: String) {
+    private fun isBluetoothSource(pkg: String): Boolean {
+        if (pkg.contains("bluetooth", ignoreCase = true) || pkg.contains("btmusic", ignoreCase = true)) return true
+        val label = try { app.packageManager.getApplicationLabel(app.packageManager.getApplicationInfo(pkg, 0)).toString() } catch (e: Exception) { "" }
+        return label.contains("bluetooth", ignoreCase = true)
+    }
+
+    /** Espera a sessão do app [pkg] aparecer (até [maxSeconds]) e dá play nela, se não estiver tocando. */
+    private fun playWhenSession(pkg: String, maxSeconds: Int = 25, maxPlays: Int = 3) {
         var tries = 0
         var played = 0
         val check = object : Runnable {
@@ -188,8 +200,8 @@ class MediaWatcher private constructor(private val app: Application) {
                 val n = _now.value
                 if (n != null && n.pkg == pkg && n.playing) return
                 val s = try { msm?.getActiveSessions(component) } catch (e: SecurityException) { null }?.firstOrNull { it.packageName == pkg }
-                if (s != null && played < 3 && tries % 3 == 1) { s.transportControls.play(); played++ }
-                if (tries < 25) handler.postDelayed(this, 1_000L)
+                if (s != null && played < maxPlays && tries % 3 == 1) { s.transportControls.play(); played++ }
+                if (tries < maxSeconds) handler.postDelayed(this, 1_000L)
             }
         }
         handler.postDelayed(check, 2_000L)
