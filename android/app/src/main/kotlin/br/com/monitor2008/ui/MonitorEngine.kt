@@ -294,6 +294,7 @@ class MonitorEngine private constructor(private val app: Application) {
         tankEstimateL = FuelTank.litersFromPercent(percent, tankCapacityL())
         store.tankEstimateL = tankEstimateL
         recordTank("ajuste", force = true)
+        br.com.monitor2008.data.Nuvem.mudou(app, store)
         publish()
     }
 
@@ -477,6 +478,7 @@ class MonitorEngine private constructor(private val app: Application) {
     fun registerMaintDone(id: String) {
         if (_ui.value.moving) return
         store.setMaintDone(id, odometerKm, LocalDate.now().toEpochDay())
+        br.com.monitor2008.data.Nuvem.mudou(app, store)
         publish()
     }
 
@@ -484,6 +486,7 @@ class MonitorEngine private constructor(private val app: Application) {
     fun registerMaintAt(id: String, carKm: Double?, epochDay: Long) {
         if (_ui.value.moving) return
         store.setMaintDone(id, appKmOf(carKm), epochDay)
+        br.com.monitor2008.data.Nuvem.mudou(app, store)
         publish()
     }
 
@@ -552,6 +555,7 @@ class MonitorEngine private constructor(private val app: Application) {
                 ),
             )
             try { br.com.monitor2008.data.Nuvem.enviarTrajetos(store) } catch (_: Exception) { }
+            br.com.monitor2008.data.Nuvem.mudou(app, store)
         }
         trip.reset(); history.clear()
         if (!store.useSimulated) store.tripSinceDay = LocalDate.now().toEpochDay()
@@ -604,6 +608,7 @@ class MonitorEngine private constructor(private val app: Application) {
         )
         store.saveProgress(odometerKm, uncalLiters, kmSinceFull)
         refuelList = store.refuels().asReversed()
+        br.com.monitor2008.data.Nuvem.mudou(app, store)
         publish()
     }
 
@@ -625,6 +630,7 @@ class MonitorEngine private constructor(private val app: Application) {
         if (_ui.value.moving) return
         store.saveRefuels(store.refuels().filter { it.timeMs != timeMs })
         refuelList = store.refuels().asReversed()
+        br.com.monitor2008.data.Nuvem.mudou(app, store)
         publish()
     }
 
@@ -651,6 +657,7 @@ class MonitorEngine private constructor(private val app: Application) {
         }
         store.saveRefuels(all.toMutableList().also { it[i] = r })
         refuelList = store.refuels().asReversed()
+        br.com.monitor2008.data.Nuvem.mudou(app, store)
         publish()
     }
 
@@ -798,6 +805,7 @@ class MonitorEngine private constructor(private val app: Application) {
         store.saveProgress(odometerKm, uncalLiters, kmSinceFull)
         store.tankEstimateL = tankEstimateL
         recordTank("rodando")
+        if (!store.useSimulated) br.com.monitor2008.data.Nuvem.auto(app, store)
         realTrip.let { store.saveTrip(it.distanceKm, it.liters, it.seconds, it.kmWithFuel, it.litersMoving) }
     }
 

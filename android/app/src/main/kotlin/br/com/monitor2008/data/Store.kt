@@ -186,6 +186,14 @@ class Store(context: Context) {
         p.edit().putString("tankHistory", keep.toString()).apply()
     }
 
+    /** Este aparelho já entrou no carro na nuvem (depois disso o envio é automático). */
+    var nuvemPronta: Boolean
+        get() = p.getBoolean("nuvemPronta", false)
+        set(v) { p.edit().putBoolean("nuvemPronta", v).apply() }
+
+    /** Traz o histórico do tanque da nuvem (aparelho novo para este carro). */
+    fun importTankHistory(raw: String) { p.edit().putString("tankHistory", raw).apply() }
+
     // Trajetos guardados cada vez que o dono zera o trajeto (para estudar a soma de todos).
     fun tripArchiveJson(): String = p.getString("tripArchive", "[]") ?: "[]"
 

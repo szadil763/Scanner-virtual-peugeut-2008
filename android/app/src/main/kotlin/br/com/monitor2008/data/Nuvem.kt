@@ -27,7 +27,12 @@ object Nuvem {
         val uid = uid() ?: return depois(false, "Entre com a conta Google primeiro.")
         val id = store.carKey
         carro(id).child("membros").child(uid).setValue(true)
-            .addOnSuccessListener { receber(ctx, store, id, depois) }
+            .addOnSuccessListener {
+                receber(ctx, store, id) { ok, msg ->
+                    if (ok) { store.nuvemPronta = true; ultimoEnvioMs = System.currentTimeMillis(); sujo = false }
+                    depois(ok, msg)
+                }
+            }
             .addOnFailureListener { depois(false, "Não consegui entrar no carro na nuvem: ${it.message ?: "sem permissão"}") }
     }
 
@@ -44,6 +49,7 @@ object Nuvem {
                     val tudo = snap.child("tudo").getValue(String::class.java)
                     val viagens = snap.child("viagensSaude").getValue(String::class.java)
                     val trajetos = snap.child("trajetos").getValue(String::class.java)
+                    val tanqueRaw = snap.child("tanque").getValue(String::class.java)
 
                     // Aparelho novo para este carro: traz tudo (configurações, calibração, óleo e viagens da Saúde).
                     if (!store.carroTemDados() && !tudo.isNullOrBlank()) {
@@ -56,6 +62,19 @@ object Nuvem {
                         store.importTripArchive(trajetos)
                         trouxe = true
                     }
+
+                    // Histórico e nível do tanque: só se este aparelho ainda não tem.
+                    if (!tanqueRaw.isNullOrBlank()) try {
+                        val t = JSONObject(tanqueRaw)
+                        if (store.tankHistory().isEmpty() && t.optJSONArray("historico")?.length() ?: 0 > 0) {
+                            store.importTankHistory(t.getJSONArray("historico").toString())
+                            trouxe = true
+                        }
+                        if (store.tankEstimateL == null && t.has("nivelL") && !t.isNull("nivelL")) {
+                            store.tankEstimateL = t.getDouble("nivelL")
+                            trouxe = true
+                        }
+                    } catch (_: Exception) { }
 
                     if (store.refuels().isEmpty()) {
                         for (i in 0 until abast.length()) {
@@ -102,6 +121,44 @@ object Nuvem {
                 enviar(ctx, store, id, depois)
             }
             .addOnFailureListener { depois(false, "Não consegui ler o carro na nuvem: ${it.message ?: "sem permissão"}") }
+    }
+
+    // Envio automático: ao mudar algo importante (abastecer, zerar trajeto, corrigir o tanque) e de tempos em tempos.
+    private const val INTERVALO_MUDANCA_MS = 15_000L
+    private const val INTERVALO_PERIODICO_MS = 30 * 60_000L
+    private const val ENVIO_PRESO_MS = 5 * 60_000L
+    @Volatile private var ultimoEnvioMs = 0L
+    @Volatile private var sujo = false
+    @Volatile private var enviandoDesde = 0L
+    @Volatile private var entrando = false
+
+    /** Algo do carro mudou: envia logo (no máximo uma vez a cada 15 s). */
+    fun mudou(ctx: Context, store: Store) { sujo = true; auto(ctx, store) }
+
+    /**
+     * Chamar de tempos em tempos (a cada 20 s, pelo motor). Em silêncio: sem conta Google ou sem internet não faz
+     * nada e tenta de novo depois. Envia a cada 30 min mesmo sem mudança. No celular, a primeira vez entra no carro
+     * sozinha (no multimídia continua sendo pelo botão, para não sobrescrever a nuvem com dados velhos).
+     */
+    fun auto(ctx: Context, store: Store) {
+        try {
+            if (uid() == null) return
+            val agora = System.currentTimeMillis()
+            if (!store.nuvemPronta) {
+                if (Features.mediaControl || entrando) return
+                entrando = true
+                sincronizar(ctx, store) { _, _ -> entrando = false }
+                return
+            }
+            if (enviandoDesde != 0L && agora - enviandoDesde < ENVIO_PRESO_MS) return
+            val vencido = agora - ultimoEnvioMs >= INTERVALO_PERIODICO_MS
+            if (!vencido && !(sujo && agora - ultimoEnvioMs >= INTERVALO_MUDANCA_MS)) return
+            enviandoDesde = agora
+            enviar(ctx, store, store.carKey) { ok, _ ->
+                enviandoDesde = 0L
+                if (ok) { sujo = false; ultimoEnvioMs = System.currentTimeMillis() } else ultimoEnvioMs = System.currentTimeMillis() - INTERVALO_PERIODICO_MS + 60_000L
+            }
+        } catch (_: Exception) { enviandoDesde = 0L; entrando = false }
     }
 
     /** Envia só os trajetos guardados (ao zerar o trajeto). Em silêncio: sem conta ou sem sincronizar o carro antes, não faz nada. */
@@ -159,6 +216,10 @@ object Nuvem {
             "tudo" to store.exportarCarro().toString(),
             "viagensSaude" to HealthStore(ctx, id).rawJson(),
             "trajetos" to store.tripArchiveJson(),
+            "tanque" to JSONObject().apply {
+                put("nivelL", store.tankEstimateL ?: JSONObject.NULL)
+                put("historico", JSONArray(store.tankHistoryJson()))
+            }.toString(),
             "atualizadoEm" to ServerValue.TIMESTAMP,
         )
         carro(id).updateChildren(dados)
