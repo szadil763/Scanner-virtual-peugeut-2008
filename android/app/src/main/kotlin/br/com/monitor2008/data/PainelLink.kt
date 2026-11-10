@@ -336,6 +336,8 @@ object PainelLink {
                 put("litros", num(ui.tankEstimateL))
                 put("percentual", ui.tankEstimateL?.let { br.com.monitor2008.domain.FuelTank.percent(it, ui.tankCapacityL) } ?: JSONObject.NULL)
                 put("autonomiaKm", num(ui.rangeKm))
+                put("alerta", br.com.monitor2008.domain.FuelTank.reserveAlert(ui.tankEstimateL, ui.tankCapacityL, ui.rangeKm)?.text ?: JSONObject.NULL)
+                put("historico", historicoTanque(app))
             })
             put("tripKm", num(ui.tripKm))
             put("tripMin", ui.tripMinutes)
@@ -426,6 +428,21 @@ object PainelLink {
         })
         put("pendentes", JSONArray(ui.pendingDtcs ?: emptyList<String>()))
         put("registro", JSONArray(MonitorEngine.get(app).diagnosticLog().takeLast(60)))
+    }
+
+    @Volatile private var historicoCache: Pair<String, JSONArray>? = null
+
+    /** Pontos [hora, litros, tipo] do nível estimado do tanque, no máximo 150 (refaz só quando o histórico muda). */
+    private fun historicoTanque(app: Application): JSONArray {
+        val st = Store(app)
+        val raw = st.tankHistoryJson()
+        historicoCache?.takeIf { it.first == raw }?.let { return it.second }
+        val arr = JSONArray()
+        br.com.monitor2008.domain.TankHistory.downsample(st.tankHistory(), 150).forEach {
+            arr.put(JSONArray().put(it.timeMs).put(r1(it.liters)).put(it.kind))
+        }
+        historicoCache = raw to arr
+        return arr
     }
 
     @Volatile private var trajetosCache: Pair<String, JSONObject>? = null
@@ -828,6 +845,7 @@ object PainelLink {
             "radio.next" -> RadioPlayer.get(app).step(true)
             "radio.prev" -> RadioPlayer.get(app).step(false)
             "nuvem.sincronizar" -> Nuvem.sincronizar(app, Store(app)) { _, msg -> enviarFala(msg) }
+            "ajuste.nivelTanque" -> MonitorEngine.get(app).setTankLevelPercent(cmd.optDouble("percentual", Double.NaN).takeIf { it.isFinite() } ?: return)
             "ajuste.tanque" -> MonitorEngine.get(app).let { m ->
                 m.setTankCapacity(m.ui.value.tankCapacityL + (if (cmd.optInt("valor", 0) > 0) 1.0 else -1.0))
             }

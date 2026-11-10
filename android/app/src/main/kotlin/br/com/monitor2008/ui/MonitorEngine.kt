@@ -266,12 +266,35 @@ class MonitorEngine private constructor(private val app: Application) {
     private fun speakCritical(s: Sample) {
         if (store.useSimulated) return
         val now = System.currentTimeMillis()
-        CriticalAlerts.check(s.coolantC, s.batteryV, s.rpm).forEach { a ->
+        (CriticalAlerts.check(s.coolantC, s.batteryV, s.rpm) + listOfNotNull(tankAlert())).forEach { a ->
             if (CriticalAlerts.shouldSpeak(a.id, now, alertSpoken)) {
                 alertSpoken[a.id] = now
                 VoiceAssistant.get(app).say(a.spoken)
             }
         }
+    }
+
+    private fun tankAlert() =
+        FuelTank.reserveAlert(tankEstimateL, tankCapacityL(), FuelTank.rangeKm(tankEstimateL, trip.avgKmPerL))
+
+    private var lastTankPoint: br.com.monitor2008.domain.TankPoint? = store.tankHistory().lastOrNull()
+
+    /** Guarda o nível estimado no histórico (gráfico). [force]: abastecimento ou ajuste, grava sempre. */
+    private fun recordTank(kind: String, force: Boolean = false) {
+        val l = tankEstimateL ?: return
+        val now = System.currentTimeMillis()
+        if (!force && !br.com.monitor2008.domain.TankHistory.shouldRecord(lastTankPoint, l, now)) return
+        val pt = br.com.monitor2008.domain.TankPoint(now, l, kind)
+        store.addTankPoint(pt)
+        lastTankPoint = pt
+    }
+
+    /** O dono corrige o nível à mão (ex.: "agora tem meio tanque"). */
+    fun setTankLevelPercent(percent: Double) {
+        tankEstimateL = FuelTank.litersFromPercent(percent, tankCapacityL())
+        store.tankEstimateL = tankEstimateL
+        recordTank("ajuste", force = true)
+        publish()
     }
 
     /** Motor girando na amostra anterior: ao ligar o motor, a escuta da palavra "Monitor" volta. */
@@ -572,6 +595,7 @@ class MonitorEngine private constructor(private val app: Application) {
         if (full) store.tankIncomplete = false
         tankEstimateL = FuelTank.afterRefuel(tankEstimateL, tankCapacityL(), liters, full)
         store.tankEstimateL = tankEstimateL
+        recordTank("abasteceu", force = true)
         store.addRefuel(
             Refuel(
                 LocalDate.now().toEpochDay(), liters, price, full, odometerKm, result.realKmPerL,
@@ -773,6 +797,7 @@ class MonitorEngine private constructor(private val app: Application) {
     fun saveNow() {
         store.saveProgress(odometerKm, uncalLiters, kmSinceFull)
         store.tankEstimateL = tankEstimateL
+        recordTank("rodando")
         realTrip.let { store.saveTrip(it.distanceKm, it.liters, it.seconds, it.kmWithFuel, it.litersMoving) }
     }
 
@@ -822,7 +847,7 @@ class MonitorEngine private constructor(private val app: Application) {
             },
             driveMode = driveSetting(),
             critical = if (store.useSimulated || conn.state != ConnState.CONNECTED) emptyList()
-                else lastSample?.let { CriticalAlerts.check(it.coolantC, it.batteryV, it.rpm) }.orEmpty(),
+                else lastSample?.let { CriticalAlerts.check(it.coolantC, it.batteryV, it.rpm) }.orEmpty() + listOfNotNull(tankAlert()),
             odoCheckDue = OdometerReminder.due(System.currentTimeMillis(), store.odoCheckedMs, store.odoOffset != null,
                 moving = !store.useSimulated && lastSample?.let {
                     br.com.monitor2008.domain.MovingRules.isMoving(it.speedKmh, System.currentTimeMillis() - it.timeMs)

@@ -594,7 +594,7 @@ class PainelServerActivity : Activity() {
         private val COMANDOS = setOf(
             "musica.playpause", "musica.next", "musica.prev",
             "radio.playpause", "radio.next", "radio.prev",
-            "abastecer", "musica.buscar", "manutencao.feito", "diag.lerFalhas", "ajuste.sol", "ajuste.direcao", "ajuste.combustivel", "ajuste.calibracao", "ajuste.preco", "ajuste.eficiencia", "ajuste.carro", "voz.ouvir", "pendente.cancelar", "mapa.abrir", "mapa.rota", "mapa.limpar", "posto.localizar", "nuvem.sincronizar", "abastecimento.apagar", "abastecimento.editar", "ajuste.calibrarPeloCarro", "trajeto.zerar", "ajuste.tanque",
+            "abastecer", "musica.buscar", "manutencao.feito", "diag.lerFalhas", "ajuste.sol", "ajuste.direcao", "ajuste.combustivel", "ajuste.calibracao", "ajuste.preco", "ajuste.eficiencia", "ajuste.carro", "voz.ouvir", "pendente.cancelar", "mapa.abrir", "mapa.rota", "mapa.limpar", "posto.localizar", "nuvem.sincronizar", "abastecimento.apagar", "abastecimento.editar", "ajuste.calibrarPeloCarro", "trajeto.zerar", "ajuste.tanque", "ajuste.nivelTanque",
         )
         /** Ajustes que mudam as preferências deste multimídia (mapa, música, voz, lugares, rádio ao ligar). */
         private val AJUSTES_LOCAIS = setOf(
@@ -620,6 +620,7 @@ class PainelServerActivity : Activity() {
             if (acao == "manutencao.feito") return o.optString("id").isNotBlank() && o.optString("id").length <= 40
             if (acao == "musica.buscar") return o.optString("texto").isNotBlank() && o.optString("texto").length <= 100
             if (acao == "ajuste.calibrarPeloCarro") return o.optDouble("valor", Double.NaN).let { it.isFinite() && it in 2.0..40.0 }
+            if (acao == "ajuste.nivelTanque") return o.optDouble("percentual", Double.NaN).let { it.isFinite() && it in 0.0..100.0 }
             if (acao == "abastecimento.apagar") return o.optLong("id") > 0
             if (acao == "abastecimento.editar") {
                 val litros = o.optDouble("litros", Double.NaN)

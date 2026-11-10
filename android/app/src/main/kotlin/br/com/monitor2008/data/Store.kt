@@ -167,6 +167,25 @@ class Store(context: Context) {
         p.edit().putString("trip", "$distanceKm;$liters;$seconds;$kmWithFuel;$litersMoving").apply()
     }
 
+    // Histórico do nível estimado do tanque (gráfico). Últimos TankHistory.MAX_POINTS pontos.
+    fun tankHistoryJson(): String = p.getString("tankHistory", "[]") ?: "[]"
+
+    fun tankHistory(): List<br.com.monitor2008.domain.TankPoint> = try {
+        val arr = JSONArray(tankHistoryJson())
+        (0 until arr.length()).map { i ->
+            val o = arr.getJSONObject(i)
+            br.com.monitor2008.domain.TankPoint(o.getLong("t"), o.getDouble("l"), o.optString("k", "rodando"))
+        }
+    } catch (e: Exception) { emptyList() }
+
+    fun addTankPoint(pt: br.com.monitor2008.domain.TankPoint) {
+        val arr = JSONArray(tankHistoryJson())
+        arr.put(JSONObject().put("t", pt.timeMs).put("l", pt.liters).put("k", pt.kind))
+        val keep = JSONArray()
+        for (i in maxOf(0, arr.length() - br.com.monitor2008.domain.TankHistory.MAX_POINTS) until arr.length()) keep.put(arr.get(i))
+        p.edit().putString("tankHistory", keep.toString()).apply()
+    }
+
     // Trajetos guardados cada vez que o dono zera o trajeto (para estudar a soma de todos).
     fun tripArchiveJson(): String = p.getString("tripArchive", "[]") ?: "[]"
 
