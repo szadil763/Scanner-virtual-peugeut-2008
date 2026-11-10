@@ -144,6 +144,23 @@ class PainelServerActivity : Activity() {
         } catch (_: Exception) { false }
     }
 
+    // Só um celular alimenta o painel por vez. Outro aparelho com o app aberto (sem o adaptador, com trajeto antigo)
+    // fazia os números alternarem. Vale quem está conectado ao carro; entre iguais, o que já estava mandando.
+    private var fonteIp: String? = null
+    private var fonteAtMs = 0L
+    private var fonteConectada = false
+
+    @Synchronized
+    private fun fonteAceita(a: java.net.InetAddress?, body: ByteArray): Boolean {
+        val ip = a?.hostAddress ?: return true
+        val conectada = try { JSONObject(String(body, Charsets.UTF_8)).optBoolean("ok", false) } catch (_: Exception) { false }
+        val agora = System.currentTimeMillis()
+        val livre = fonteIp == null || fonteIp == ip || agora - fonteAtMs > 6_000L || (conectada && !fonteConectada)
+        if (!livre) return false
+        fonteIp = ip; fonteAtMs = agora; fonteConectada = conectada
+        return true
+    }
+
     private fun handle(client: Socket) {
         client.use { sock ->
             try {
@@ -161,6 +178,8 @@ class PainelServerActivity : Activity() {
                 when {
                     // O próprio multimídia não é fonte de dados (só o celular): descarta o que vier daqui mesmo.
                     method == "POST" && path == "/estado" && esteAparelho(sock.inetAddress) ->
+                        send(out, 200, "application/json; charset=utf-8", "{\"comandos\":[]}".toByteArray(Charsets.UTF_8))
+                    method == "POST" && path == "/estado" && !fonteAceita(sock.inetAddress, body) ->
                         send(out, 200, "application/json; charset=utf-8", "{\"comandos\":[]}".toByteArray(Charsets.UTF_8))
                     method == "POST" && path == "/estado" -> {
                         latestJson = String(body, Charsets.UTF_8)
