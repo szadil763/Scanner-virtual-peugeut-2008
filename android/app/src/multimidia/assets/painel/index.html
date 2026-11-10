@@ -147,9 +147,6 @@
   #tanque-faixa { flex:0 0 auto; margin:0 10px 8px; padding:10px 16px; border-radius:16px; background:#0f1826; font-size:20px; }
   #tanque-faixa .barra-tq { height:10px; background:#222; border-radius:5px; overflow:hidden; margin-top:8px; }
   #tanque-faixa .barra-tq div { height:100%; width:0; background:#3ddc6b; }
-  /* Menu Mais em grade 3x2. */
-  #t-mais .lista { display:grid !important; grid-template-columns:repeat(3,1fr); gap:12px; align-content:start; overflow-y:auto; }
-  #t-mais .mbtn { min-height:120px; font-size:26px; text-align:center; padding:0 12px; }
   /* Ponto vermelho: versão nova disponível. */
   .menu .aba, .mbtn, .seg-aj .opc { position:relative; }
   .aba.novo::after, .mbtn.novo::after, .seg-aj .opc.novo::after { content:''; position:absolute; top:8px; right:calc(50% - 30px); width:14px; height:14px; border-radius:50%; background:#f87171; }
@@ -163,6 +160,32 @@
   .teclado { display:grid; grid-template-columns:repeat(4,1fr); gap:8px; }
   .teclado button { min-height:64px; font-size:30px; background:transparent; color:#7dd3fc; border:2px solid #6b7280; border-radius:16px; font-weight:600; }
   .teclado button:disabled { color:#6b7280; border-color:#444; }
+  /* ===== Layout novo: coluna à esquerda (Mapa, Postos, Manutenção, Ajustes) + barra de baixo (5 abas) ===== */
+  .layout { display:grid !important; grid-template-columns:104px minmax(0,1fr); grid-template-rows:minmax(0,1fr) auto; height:100vh; }
+  .trilho { grid-column:1; grid-row:1; display:flex; flex-direction:column; gap:6px; padding:6px; background:#1d1d24; overflow-y:auto; }
+  .trilho .aba { position:relative; flex:0 0 auto; min-height:96px; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:2px; padding:4px; font-size:14px; border-radius:16px;
+    background:transparent !important; border:none !important; color:#c5ccd6 !important; }
+  .trilho .aba .ic { font-size:30px; line-height:1.1; }
+  .trilho .aba.sel { color:#fff !important; font-weight:700; background:#1f3a5c !important; }
+  .main { grid-column:2; grid-row:1; order:0; }
+  .menu { grid-column:1 / -1; grid-row:2; order:0; }
+  .trilho .aba.novo::after { top:8px; right:14px; }
+  /* Painel principal: números menores, tudo na tela de uma vez (grade, faixa de extras e tanque). */
+  #t-painel .grid { grid-template-columns:repeat(3,1fr); grid-template-rows:1fr 1fr; gap:8px; padding:0 10px 8px; }
+  #t-painel .card { padding:6px 10px !important; }
+  #t-painel .val { font-size:min(6.6vw, 11vh); }
+  #t-painel .lbl { font-size:15px !important; }
+  #t-painel .unit { font-size:18px; }
+  .strip { flex:0 0 auto; display:grid; grid-template-columns:repeat(5,1fr); gap:8px; padding:0 10px 8px; }
+  .strip .card { padding:6px 10px !important; min-height:0; border-radius:16px !important; }
+  .strip .v2 { font-size:32px; line-height:1.1; }
+  .strip .unit { font-size:15px; }
+  .strip .lbl { font-size:13px !important; }
+  #tanque-faixa { margin:0 10px 8px; padding:8px 16px; font-size:19px; }
+  /* Aba Combustível: três partes. */
+  .seg3 { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; padding:8px 12px 6px; flex:0 0 auto; }
+  .seg3 button { min-height:56px; font-size:20px; background:var(--btn); color:var(--fg); border:3px solid #3a4a5c; border-radius:12px; }
+  .seg3 button.sel { background:var(--sel); border-color:#5b9be0; }
 </style>
 </head>
 <body>
@@ -189,10 +212,15 @@
 <nav class="menu">
   <button class="aba sel" id="ab-painel" onclick="aba('painel')"><span class="ic">📊</span>Painel</button>
   <button class="aba" id="ab-tocador" onclick="aba('tocador')"><span class="ic">🎵</span>Mídias</button>
+  <button class="aba" id="ab-consumo" onclick="aba('consumo')"><span class="ic">⛽</span>Combustível</button>
   <button class="aba" id="ab-saude" onclick="aba('saude')"><span class="ic">❤️</span>Saúde</button>
-  <button class="aba" id="ab-consumo" onclick="aba('consumo')"><span class="ic">📈</span>Consumo</button>
   <button class="aba" id="ab-diag" onclick="aba('diag')"><span class="ic">🩺</span>Diagnóstico</button>
-  <button class="aba" id="ab-mais" onclick="aba('mais')"><span class="ic">☰</span>Mais</button>
+</nav>
+<nav class="trilho">
+  <button class="aba" id="rl-mapa" onclick="aba('mapa')"><span class="ic">🗺️</span>Mapa</button>
+  <button class="aba" id="rl-postos" onclick="aba('postos')"><span class="ic">📍</span>Postos</button>
+  <button class="aba" id="rl-manutencao" onclick="aba('manutencao')"><span class="ic">🔧</span>Manutenção</button>
+  <button class="aba" id="rl-ajustes" onclick="aba('ajustes')"><span class="ic">⚙️</span>Ajustes</button>
 </nav>
 <main class="main">
 <div id="status">Aguardando o celular…</div>
@@ -215,6 +243,13 @@
     <div class="card" id="c-kml"><div class="lbl" id="kml-lbl">Consumo agora</div><div class="val" id="kml">--</div><div class="unit" id="kml-unit">km/l</div></div>
     <div class="card" id="c-avg"><div class="lbl">Média da viagem</div><div class="val" id="avg">--</div><div class="unit">km/l</div><div class="unit" id="avg-mov" style="font-size:18px"></div></div>
     <div class="card" id="c-bat"><div class="lbl">Bateria</div><div class="val" id="bat">--</div><div class="unit">V</div></div>
+  </div>
+  <div class="strip">
+    <div class="card"><div class="lbl">Distância</div><div class="v2" id="p-dist">--</div><div class="unit">km</div></div>
+    <div class="card"><div class="lbl">Custo do trajeto</div><div class="v2" id="p-custo">--</div><div class="unit">R$</div></div>
+    <div class="card"><div class="lbl">Vel. média</div><div class="v2" id="p-vmed">--</div><div class="unit">km/h</div></div>
+    <div class="card"><div class="lbl">No tanque</div><div class="v2" id="p-tq">--</div><div class="unit">L (estimado)</div></div>
+    <div class="card"><div class="lbl">Autonomia</div><div class="v2" id="p-aut">--</div><div class="unit">km</div></div>
   </div>
   <div id="tanque-faixa" onclick="aba('consumo')" style="cursor:pointer">
     <div id="tq-texto">⛽ Combustível estimado: salve um abastecimento com tanque cheio para começar.</div>
@@ -405,19 +440,10 @@
     <div class="aviso" id="aj-conta">Conta: ver no celular</div>
     <button class="enviar" onclick="cmdAjuste('nuvem.sincronizar')">Sincronizar este carro</button>
     <div class="aviso">Convidar pessoa e sair da conta ficam no celular.</div>
+    <div class="lbl">Ajuda</div>
+    <button class="opc" onclick="aba('ajuda')">❓ Como conectar ao celular</button>
     </div>
     <div class="aviso">Adaptador, conexão automática e janela flutuante ficam no celular.</div>
-  </div>
-</div>
-
-<div class="tela" id="t-mais">
-  <div class="lista" style="gap:12px">
-    <button class="mbtn" onclick="aba('mapa')">🗺️ Mapa</button>
-    <button class="mbtn" onclick="aba('abastecer')">⛽ Abastecer</button>
-    <button class="mbtn" onclick="aba('postos')">📍 Postos</button>
-    <button class="mbtn" onclick="aba('manutencao')">🔧 Manutenção</button>
-    <button class="mbtn" id="mb-ajustes" onclick="aba('ajustes')">⚙️ Ajustes</button>
-    <button class="mbtn" onclick="aba('ajuda')">❓ Como conectar</button>
   </div>
 </div>
 
@@ -432,7 +458,13 @@
 </div>
 
 <div class="tela" id="t-consumo">
-  <div class="consumo">
+  <div class="seg3">
+    <button id="fc-b-tanque" class="sel" onclick="fcModo('tanque')">⛽ Tanque</button>
+    <button id="fc-b-consumo" onclick="fcModo('consumo')">📈 Consumo</button>
+    <button id="fc-b-abast" onclick="fcModo('abast')">🧾 Abastecimentos</button>
+  </div>
+  <div class="consumo" id="fc-tanque">
+    <button class="enviar" style="min-height:72px" onclick="aba('abastecer')">⛽ Registrar abastecimento</button>
     <div class="lbl">Combustível no tanque (estimado)</div>
     <div class="aviso" id="tqc-texto">Salve um abastecimento com tanque cheio para começar.</div>
     <svg id="tq-grafico" viewBox="0 0 600 160" preserveAspectRatio="none" style="width:100%;height:160px;background:#0f1826;border-radius:12px;display:block"></svg>
@@ -445,6 +477,9 @@
       <button class="opc" onclick="nivelTanque(100)">Cheio</button>
     </div>
     <div class="aviso" id="tq-ajuste-msg">Toque na fração que o marcador do carro mostra agora. A estimativa continua a partir dali.</div>
+    <button class="feito" style="margin-top:0" onclick="aba('postos')">📍 Ver postos (onde abastecer)</button>
+  </div>
+  <div class="consumo" id="fc-consumo" style="display:none">
     <div class="grafs">
       <div class="gf"><div class="lbl">Consumo (km/l)</div><canvas id="cv-km"></canvas></div>
       <div class="gf"><div class="lbl">Velocidade (km/h)</div><canvas id="cv-vel"></canvas></div>
@@ -461,6 +496,9 @@
     <div class="lbl">Trajetos anteriores</div>
     <div class="aviso" id="trj-total">Nenhum trajeto guardado ainda. Cada vez que você zera o trajeto, o resumo dele fica guardado aqui.</div>
     <div class="lista" id="trj-lista" style="padding:0;flex:0 0 auto;overflow:visible"></div>
+  </div>
+  <div class="consumo" id="fc-abast" style="display:none">
+    <button class="enviar" style="min-height:72px" onclick="aba('abastecer')">⛽ Registrar abastecimento</button>
     <div class="lbl">Últimos abastecimentos</div>
     <div class="lista" id="abast-lista" style="padding:0;flex:0 0 auto;overflow:visible"></div>
   </div>
@@ -550,18 +588,27 @@
     return m + ':' + ('0' + (s % 60)).slice(-2);
   }
   var abaAtual = 'painel';
-  var MAIS = ['postos', 'manutencao', 'ajustes', 'ajuda', 'mapa', 'abastecer'];
+  function fcModo(m) {
+    ['tanque', 'consumo', 'abast'].forEach(function (n) {
+      el('fc-' + n).style.display = n === m ? 'flex' : 'none';
+      el('fc-b-' + n).classList.toggle('sel', n === m);
+    });
+  }
   function aba(nome) {
     abaAtual = nome;
     document.body.classList.toggle('na-midia', nome === 'tocador');
     if (nome === 'mapa' && mapaObj) setTimeout(function () { mapaObj.invalidateSize(); }, 150);
     if (nome === 'abastecer' && !postoAtual) localizarPosto();
-    var grupo = MAIS.indexOf(nome) >= 0 ? 'mais' : nome;
-    ['painel', 'tocador', 'saude', 'postos', 'abastecer', 'manutencao', 'consumo', 'diag', 'ajustes', 'mapa', 'ajuda', 'mais'].forEach(function (n) {
+    var grupo = nome === 'abastecer' ? 'consumo' : nome;
+    var grupoRail = nome === 'ajuda' ? 'ajustes' : nome;
+    ['painel', 'tocador', 'saude', 'postos', 'abastecer', 'manutencao', 'consumo', 'diag', 'ajustes', 'mapa', 'ajuda'].forEach(function (n) {
       el('t-' + n).classList.toggle('sel', n === nome);
     });
-    ['painel', 'tocador', 'saude', 'consumo', 'diag', 'mais'].forEach(function (n) {
+    ['painel', 'tocador', 'saude', 'consumo', 'diag'].forEach(function (n) {
       el('ab-' + n).classList.toggle('sel', n === grupo);
+    });
+    ['mapa', 'postos', 'manutencao', 'ajustes'].forEach(function (n) {
+      el('rl-' + n).classList.toggle('sel', n === grupoRail);
     });
   }
   var ultimoSaude = '', ultimoPostos = '';
@@ -897,6 +944,9 @@
     el('c-media').textContent = num(d.tripAvgKmL, 1);
     el('c-media-mov').textContent = num(d.tripAvgMovKmL, 1);
     el('c-dist').textContent = num(d.tripKm, 1);
+    el('p-dist').textContent = num(d.tripKm, 1);
+    el('p-custo').textContent = num(c.custo, 2);
+    el('p-vmed').textContent = num(c.velMedia, 0);
     el('c-custo').textContent = num(c.custo, 2);
     el('c-vmed').textContent = num(c.velMedia, 0);
     // Mesmos números no lado direito da aba Mídias.
@@ -1113,7 +1163,7 @@
     var b = el('at-instalar');
     b.style.display = a.podeInstalar ? '' : 'none';
     b.textContent = a.pronta ? 'Instalar agora' : 'Baixar e instalar';
-    ['ab-mais', 'mb-ajustes', 'chip-conta'].forEach(function (id) {
+    ['rl-ajustes', 'chip-conta'].forEach(function (id) {
       var x = el(id);
       if (x) x.classList.toggle('novo', !!a.podeInstalar);
     });
@@ -1538,6 +1588,8 @@
       el('tq-barra').style.width = '0%';
     }
     if (tq) el('aj-tanque').textContent = num(tq.capacidade, 0) + ' L';
+    el('p-tq').textContent = (tq && tq.litros !== null && tq.litros !== undefined) ? num(tq.litros, 0) : '--';
+    el('p-aut').textContent = (tq && tq.autonomiaKm) ? num(tq.autonomiaKm, 0) : '--';
     el('sg-carga').textContent = num(d.carga, 0);
     el('sg-pressao').textContent = num(d.pressaoKpa, 0);
     el('sg-ar').textContent = num(d.arAdmissao, 0);
