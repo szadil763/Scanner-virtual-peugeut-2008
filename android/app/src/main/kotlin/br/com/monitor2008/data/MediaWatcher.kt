@@ -132,11 +132,67 @@ class MediaWatcher private constructor(private val app: Application) {
             existing.transportControls.play()
             return
         }
+        // App fechado (carro desligado): a tecla "tocar" e a conexão no serviço de mídia do app (a mesma que o
+        // Android usa para "retomar a última música") costumam bastar, sem abrir o app.
         val sent = sendPlayKey(pkg)
+        val browsed = resumeViaBrowser(pkg)
         handler.postDelayed({
             val n = _now.value
-            if (n == null || n.pkg != pkg || !n.playing) launcher.openApp(pkg, activity)
-        }, if (sent) 3_000L else 0L)
+            if (n == null || n.pkg != pkg || !n.playing) {
+                launcher.openApp(pkg, activity)
+                // Aberto o app (Spotify...), a sessão aparece parada na última música: dá play nela.
+                playWhenSession(pkg)
+            }
+        }, if (sent || browsed) 5_000L else 0L)
+    }
+
+    /**
+     * Conecta no serviço de navegação de mídia do app pedindo a "última música" (EXTRA_RECENT) e dá play pela
+     * sessão dele. É o jeito de retomar sem abrir o app. Falso se o app não tiver esse serviço.
+     */
+    private fun resumeViaBrowser(pkg: String): Boolean {
+        val info = try {
+            app.packageManager.queryIntentServices(Intent("android.media.browse.MediaBrowserService").setPackage(pkg), 0)
+                .firstOrNull()?.serviceInfo
+        } catch (e: Exception) { null } ?: return false
+        return try {
+            val hints = android.os.Bundle().apply { putBoolean("android.service.media.extra.RECENT", true) }
+            var browser: android.media.browse.MediaBrowser? = null
+            browser = android.media.browse.MediaBrowser(
+                app, ComponentName(info.packageName, info.name),
+                object : android.media.browse.MediaBrowser.ConnectionCallback() {
+                    override fun onConnected() {
+                        try {
+                            val token = browser?.sessionToken
+                            if (token != null) MediaController(app, token).transportControls.play()
+                        } catch (_: Exception) { }
+                        // Solta a conexão depois de dar tempo do app começar a tocar.
+                        handler.postDelayed({ try { browser?.disconnect() } catch (_: Exception) { } }, 15_000L)
+                    }
+                    override fun onConnectionFailed() { try { browser?.disconnect() } catch (_: Exception) { } }
+                },
+                hints,
+            )
+            browser?.connect()
+            true
+        } catch (e: Exception) { false }
+    }
+
+    /** Espera a sessão do app [pkg] aparecer (até 25 s) e dá play nela, se não estiver tocando. */
+    private fun playWhenSession(pkg: String) {
+        var tries = 0
+        var played = 0
+        val check = object : Runnable {
+            override fun run() {
+                tries++
+                val n = _now.value
+                if (n != null && n.pkg == pkg && n.playing) return
+                val s = try { msm?.getActiveSessions(component) } catch (e: SecurityException) { null }?.firstOrNull { it.packageName == pkg }
+                if (s != null && played < 3 && tries % 3 == 1) { s.transportControls.play(); played++ }
+                if (tries < 25) handler.postDelayed(this, 1_000L)
+            }
+        }
+        handler.postDelayed(check, 2_000L)
     }
 
     /**
