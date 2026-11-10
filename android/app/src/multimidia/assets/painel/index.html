@@ -265,6 +265,14 @@
   <div class="split">
   <div id="mid-esq" style="min-width:0;display:flex;flex-direction:column">
   <div class="tocador" id="mid-musica">
+    <div id="sem-app-musica" style="display:none;width:100%;border:2px solid #ffcc33;border-radius:16px;padding:12px;font-size:18px;color:#ffcc33">
+      Nenhum app de música está escolhido em Ajustes, por isso o player pode ficar escondido. Escolha o app que você usa (ex.: Spotify):
+      <div id="sem-app-lista" style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px"></div>
+    </div>
+    <div id="sem-continuar" style="display:none;width:100%;border:2px solid #ffcc33;border-radius:16px;padding:12px;font-size:18px;color:#ffcc33">
+      "Continuar a rádio ou a música" está desligado em Ajustes: ao ligar o carro a música não volta a tocar sozinha.
+      <button class="feito" onclick="cmdAjuste('ajuste.continuar',{valor:true})">Ligar agora</button>
+    </div>
     <div id="sem-acesso" style="display:none;width:100%;border:2px solid #ffcc33;border-radius:16px;padding:12px;font-size:18px;color:#ffcc33">
       Para mostrar e controlar a música aqui, ative o acesso às notificações do Monitor 2008.
       <button class="feito" onclick="cmdAjuste('sistema.notificacoes')">Ativar o acesso às notificações</button>
@@ -1703,6 +1711,27 @@
       .catch(function () { el('status').textContent = 'Sem resposta do multimídia'; });
   }
   // Música e rádio vêm do próprio multimídia (não do celular), a cada segundo.
+  var listaSemApp = '';
+  function avisosMidia(a) {
+    if (!a) return;
+    var musicas = a.musicas || [];
+    var semApp = !a.musicaApp && musicas.length > 0;
+    el('sem-app-musica').style.display = semApp ? 'block' : 'none';
+    var chave = semApp ? JSON.stringify(musicas) : '';
+    if (chave !== listaSemApp) {
+      listaSemApp = chave;
+      var box = el('sem-app-lista');
+      box.textContent = '';
+      if (semApp) musicas.forEach(function (x) {
+        var b = document.createElement('button');
+        b.className = 'opc';
+        b.textContent = x.nome;
+        b.onclick = function () { cmdAjuste('ajuste.musica', { valor: x.pkg }); };
+        box.appendChild(b);
+      });
+    }
+    el('sem-continuar').style.display = (a.continuar === false) ? 'block' : 'none';
+  }
   function pollMidia() {
     fetch('/midia?t=' + Date.now(), { cache: 'no-store' })
       .then(function (r) { return r.json(); })
@@ -1716,6 +1745,7 @@
         if (ult) el('ultima-texto').textContent = 'Última tocada: ' + (ult.titulo ? ult.titulo + ' · ' : '') + ult.app;
         paintAjustesLocais(m.ajustes);
         el('sem-acesso').style.display = (m.acessoNotificacoes === false) ? 'block' : 'none';
+        avisosMidia(m.ajustes);
         var flM = m.ajustes && m.ajustes.flutuante;
         el('sem-sobrepor').style.display = (flM && flM.modo === 'MONITOR' && !flM.permissao) ? 'block' : 'none';
         paintAtualizacao(m.atualizacao);
