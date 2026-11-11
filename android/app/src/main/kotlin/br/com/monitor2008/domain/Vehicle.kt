@@ -115,10 +115,11 @@ object Vehicles {
             "coxins do motor e mangueiras de vácuo. O motor usa corrente de comando: ruído metálico ao ligar frio é sinal para verificar.",
     )
 
+    /** Perfil genérico: carro que o app não conhece (chassi sem perfil cadastrado). Não aparece na lista de escolha. */
     val AUTO = Vehicle(
         id = "auto",
-        name = "Automático",
-        engine = "detectar pelo OBD2",
+        name = "Carro",
+        engine = "sem perfil próprio",
         gearbox = "automático ou manual",
         brand = "fabricante",
         displacementL = 1.6,
@@ -136,33 +137,36 @@ object Vehicles {
             "filtros, mangueiras de vácuo e coxins do motor.",
     )
 
-    val all = listOf(AUTO, PEUGEOT_2008, C4_LOUNGE_20, NISSAN_TIIDA_18)
+    /** Perfis que o dono pode escolher. O [AUTO] fica de fora: é só o perfil dos carros sem cadastro. */
+    val all = listOf(PEUGEOT_2008, C4_LOUNGE_20, NISSAN_TIIDA_18)
 
     fun byId(id: String?): Vehicle? = all.firstOrNull { it.id == id }
 
-    /**
-     * Identifica o perfil do carro automaticamente a partir do chassi (VIN, modo 09 PID 02) ou
-     * das características lidas pelo OBD2. Se o carro não informar o VIN ou não estiver entre os
-     * modelos específicos cadastrados, devolve [AUTO] (universal).
-     */
-    fun detect(vin: String?, supportedPids: Set<Int> = emptySet()): Vehicle {
-        val v = vin?.trim()?.uppercase().orEmpty()
-        if (v.length == 17) {
-            val wmi = v.substring(0, 3)
-            val vds = v.substring(3, 9)
-            when {
-                // Citroën C4 Lounge (fabricado na Argentina: 8BC, ou França: VF7)
-                wmi == "8BC" || wmi == "VF7" -> return C4_LOUNGE_20
-                // Peugeot 2008 (Brasil: 936, Argentina: 8AD, França: VF3)
-                wmi == "936" || wmi == "8AD" || wmi == "VF3" -> return PEUGEOT_2008
-                // Nissan Tiida (México: 3N1, Japão: JN1)
-                wmi == "3N1" || wmi == "JN1" -> return NISSAN_TIIDA_18
-                // Outros PSA que trazem código de motor no VDS:
-                "RFJ" in vds || "EW10" in vds -> return C4_LOUNGE_20
-                "NFP" in vds || "EC5" in vds -> return PEUGEOT_2008
-                "MR18" in vds -> return NISSAN_TIIDA_18
-            }
-        }
-        return AUTO
+    /** Chave de dados de um carro sem perfil cadastrado: vale o chassi, então dois carros nunca se misturam. */
+    fun customKey(vin: String) = "vin-$vin"
+    fun isCustomKey(id: String?) = id != null && id.startsWith("vin-")
+
+    /** Nome para mostrar: o do perfil, ou "Carro ABC123" (fim do chassi) para o que não tem perfil. */
+    fun nameOf(id: String?): String = byId(id)?.name ?: if (isCustomKey(id)) "Carro ${id!!.takeLast(6)}" else (id ?: "")
+
+    private val VIN_VALIDO = Regex("[A-HJ-NPR-Z0-9]{17}")
+
+    /** Chassi válido: 17 caracteres, letras e números, sem I, O e Q. */
+    fun validVin(vin: String?): Boolean = vin != null && VIN_VALIDO.matches(vin)
+
+    /** Fábrica (3 primeiros caracteres do chassi, o WMI) -> perfil cadastrado dessa fábrica. */
+    private val PERFIL_POR_FABRICA: Map<String, Vehicle> by lazy {
+        mapOf(
+            "8BC" to C4_LOUNGE_20, "VF7" to C4_LOUNGE_20, // Citroën: Argentina, França
+            "936" to PEUGEOT_2008, "8AD" to PEUGEOT_2008, "VF3" to PEUGEOT_2008, // Peugeot: Brasil, Argentina, França
+            "3N1" to NISSAN_TIIDA_18, "JN1" to NISSAN_TIIDA_18, // Nissan: México, Japão
+        )
     }
+
+    /**
+     * Perfil cadastrado da fábrica deste chassi, ou null. ATENÇÃO: o WMI diz a marca e o país da fábrica, não o
+     * modelo (todo Peugeot feito no Brasil começa com 936). Serve como palpite na primeira vez que o chassi
+     * aparece; a escolha do dono em Ajustes vale mais e fica guardada para aquele chassi.
+     */
+    fun candidateByWmi(vin: String?): Vehicle? = if (validVin(vin)) PERFIL_POR_FABRICA[vin!!.substring(0, 3)] else null
 }

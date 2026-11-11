@@ -55,11 +55,31 @@ class VehicleTest {
         assertTrue(r.contains("Citroën C4 Lounge 2.0 16V flex (EW10)"))
     }
 
-    @Test fun detectsVehicleFromVinOrFallsBackToAuto() {
-        assertEquals(Vehicles.PEUGEOT_2008, Vehicles.detect("936CMNFP0GB000001"))
-        assertEquals(Vehicles.C4_LOUNGE_20, Vehicles.detect("8BCCMRFJ0GB000001"))
-        assertEquals(Vehicles.NISSAN_TIIDA_18, Vehicles.detect("3N1BC1AS0BK000001"))
-        assertEquals(Vehicles.AUTO, Vehicles.detect(null))
-        assertEquals(Vehicles.AUTO, Vehicles.detect("9BWZZZ377VT004251"))
+    @Test fun wmiGivesOnlyTheRegisteredProfileOfThatFactory() {
+        assertEquals(Vehicles.PEUGEOT_2008, Vehicles.candidateByWmi("936CMNFP0GB000001"))
+        assertEquals(Vehicles.C4_LOUNGE_20, Vehicles.candidateByWmi("8BCCMRFJ0GB000001"))
+        assertEquals(Vehicles.NISSAN_TIIDA_18, Vehicles.candidateByWmi("3N1BC1AS0BK000001"))
+        assertNull(Vehicles.candidateByWmi("9BWZZZ377VT004251")) // Volkswagen: sem perfil cadastrado
+        assertNull(Vehicles.candidateByWmi(null))
+        assertNull(Vehicles.candidateByWmi("936CMNFP0GB00000")) // 16 caracteres
+    }
+
+    @Test fun vinMustHave17CharactersWithoutIOQ() {
+        assertTrue(Vehicles.validVin("936CMNFP0GB000001"))
+        assertFalse(Vehicles.validVin(null))
+        assertFalse(Vehicles.validVin("936CMNFP0GB00001")) // 16
+        assertFalse(Vehicles.validVin("936CMNFP0GBO00001")) // tem a letra O
+        assertFalse(Vehicles.validVin("936cmnfp0gb000001")) // minúsculas não valem (o app converte antes)
+    }
+
+    @Test fun carsWithoutProfileGetTheirOwnKeyAndAGenericProfile() {
+        val key = Vehicles.customKey("9BWZZZ377VT004251")
+        assertEquals("vin-9BWZZZ377VT004251", key)
+        assertTrue(Vehicles.isCustomKey(key))
+        assertNull(Vehicles.byId(key)) // o app usa o perfil genérico nesse caso
+        assertEquals("Carro 004251", Vehicles.nameOf(key))
+        assertEquals("Peugeot 2008", Vehicles.nameOf(Vehicles.PEUGEOT_2008.id))
+        assertFalse(Vehicles.isCustomKey(Vehicles.PEUGEOT_2008.id))
+        assertFalse(Vehicles.all.contains(Vehicles.AUTO))
     }
 }

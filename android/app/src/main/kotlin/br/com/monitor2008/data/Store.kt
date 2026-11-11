@@ -364,12 +364,39 @@ class Store(context: Context) {
         set(v) { app.edit().putBoolean("pipOnLeave", v).apply() }
 
     /**
-     * Perfil do carro deste aparelho ([Vehicles]); por padrão começa em [Vehicles.AUTO] (detectar
-     * automaticamente pelo OBD2), sem travar a tela inicial.
+     * Carro deste aparelho: o id de um perfil ([Vehicles]) ou, para um carro sem perfil cadastrado, "vin-<chassi>".
+     * É a chave dos dados do carro (arquivo local e pasta na nuvem). Sem escolha, vale o 2008 (instalação antiga).
      */
     var vehicleId: String
-        get() = app.getString("vehicleId", null) ?: if (odometerKm > 0) Vehicles.PEUGEOT_2008.id else Vehicles.AUTO.id
+        get() = carKey
         set(v) { app.edit().putString("vehicleId", v).apply() }
+
+    /** Identificar o carro sozinho pelo chassi ao conectar (padrão). Desligado = o dono fixou o carro. */
+    var autoDetect: Boolean
+        get() = app.getBoolean("autoDetect", true)
+        set(v) { app.edit().putBoolean("autoDetect", v).apply() }
+
+    /** Chassi do carro conectado agora (null = o carro não informou). */
+    var lastVin: String?
+        get() = app.getString("lastVin", null)
+        set(v) { if (v == null) app.edit().remove("lastVin").apply() else app.edit().putString("lastVin", v).apply() }
+
+    /** Aviso sobre como o carro foi identificado (aparece em Diagnóstico e Ajustes). */
+    var vehicleNotice: String
+        get() = app.getString("vehicleNotice", "") ?: ""
+        set(v) { app.edit().putString("vehicleNotice", v).apply() }
+
+    /** Chassi -> carro, aprendido na primeira vez e corrigido quando o dono escolhe o carro em Ajustes. */
+    val vinCars: Map<String, String>
+        get() = (app.getString("vinCars", "") ?: "").split(';').mapNotNull { e ->
+            val parts = e.split('>')
+            if (parts.size == 2 && parts[0].isNotBlank() && parts[1].isNotBlank()) parts[0] to parts[1] else null
+        }.toMap()
+
+    fun learnVin(vin: String, carId: String) {
+        val novo = vinCars + (vin to carId)
+        app.edit().putString("vinCars", novo.entries.joinToString(";") { "${it.key}>${it.value}" }).apply()
+    }
 
     /**
      * Canal de atualização (UpdateChannel): "ESTAVEL" só recebe versões aprovadas pelo dono; "TESTE"

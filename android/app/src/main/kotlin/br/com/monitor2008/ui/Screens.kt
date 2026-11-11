@@ -1407,7 +1407,10 @@ private fun DiagnosticoScreen(ui: UiState, vm: MonitorEngine) {
         val c = ui.conn
         val color = when (c.state) { ConnState.CONNECTED -> OkGreen; ConnState.ERROR -> Bad; else -> Warn }
         Text("Conexão: ${c.message.ifBlank { "aguardando" }}${if (c.protocol.isNotBlank()) " · protocolo ${c.protocol}" else ""}", color = color, fontSize = 18.sp)
-        c.vin?.let { Text("Chassi (VIN): $it", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 16.sp) }
+        if (c.vin != null) Text("Chassi (VIN): ${c.vin}", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 16.sp)
+        else if (c.state == ConnState.CONNECTED) Text("Chassi (VIN): o carro não informou", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 16.sp)
+        Text("Carro: ${ui.vehicle?.fullName ?: "?"}", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 16.sp)
+        if (ui.vehicleNotice.isNotBlank()) Text(ui.vehicleNotice, color = Warn, fontSize = 15.sp)
         OutlinedButton(onClick = vm::start, modifier = Modifier.height(60.dp)) { Text("Reconectar", fontSize = 18.sp) }
         Text("Falhas armazenadas", fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
         when (val d = ui.dtcs) {
@@ -1460,14 +1463,18 @@ private fun AjustesScreen(ui: UiState, vm: MonitorEngine) {
         Text("Ajustes", fontSize = 26.sp, fontWeight = FontWeight.Bold)
         Text("Carro", fontSize = 18.sp)
         Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            FilterChip(selected = ui.autoDetect, onClick = { vm.setAutoDetect(!ui.autoDetect) }, enabled = !ui.moving,
+                label = { Text("Automático (pelo chassi)", fontSize = 18.sp) }, modifier = Modifier.height(56.dp))
             Vehicles.all.forEach { v ->
-                val chipLabel = if (v == Vehicles.AUTO) "Automático (detectar pelo OBD2)" else "${v.name} ${v.engine.substringBefore(" (")}"
                 FilterChip(selected = ui.vehicle?.id == v.id, onClick = { vm.setVehicle(v.id) }, enabled = !ui.moving,
-                    label = { Text(chipLabel, fontSize = 18.sp) }, modifier = Modifier.height(56.dp))
+                    label = { Text("${v.name} ${v.engine.substringBefore(" (")}", fontSize = 18.sp) }, modifier = Modifier.height(56.dp))
             }
         }
-        Text("Ao conectar no OBD2, o app lê o chassi (VIN), o endereço do adaptador e os sensores suportados pela central para identificar o carro automaticamente. " +
-            "Você também pode fixar o modelo manualmente.", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 15.sp)
+        Text("Carro atual: ${ui.vehicle?.fullName ?: "não identificado"}", fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+        Text("Com o automático ligado, ao conectar o app lê o chassi (VIN) do carro e usa os dados dele; carros diferentes nunca se misturam. " +
+            "Se o carro não informar o chassi, vale o adaptador. Escolher o modelo aqui corrige o palpite para o chassi conectado.",
+            color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 15.sp)
+        if (ui.vehicleNotice.isNotBlank()) Text(ui.vehicleNotice, color = Warn, fontSize = 15.sp)
         UpdateSection(ui.moving)
         Text("Combustível no tanque", fontSize = 18.sp)
         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {

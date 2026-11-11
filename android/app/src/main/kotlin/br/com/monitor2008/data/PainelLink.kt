@@ -371,11 +371,11 @@ object PainelLink {
                 put("calibracao", Math.round(st.calibration * 100) / 100.0)
                 put("preco", Math.round(st.fuelPrice * 100) / 100.0)
                 put("eficiencia", Math.round(st.volumetricEfficiency * 100) / 100.0)
-                put("carro", st.vehicleId ?: "")
+                put("carro", st.vehicleId)
                 put("capacidadeTanque", ui.tankCapacityL)
                 put("conta", JSONObject().apply {
                     put("email", Conta.email() ?: "")
-                    put("carro", br.com.monitor2008.domain.Vehicles.byId(st.vehicleId)?.name ?: "")
+                    put("carro", br.com.monitor2008.domain.Vehicles.nameOf(st.vehicleId))
                 })
                 put("carros", JSONArray().apply {
                     br.com.monitor2008.domain.Vehicles.all.forEach { v -> put(JSONObject().put("id", v.id).put("nome", v.name)) }

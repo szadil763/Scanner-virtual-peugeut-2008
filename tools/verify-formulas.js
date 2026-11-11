@@ -176,6 +176,20 @@ console.log('ok  falhas de todas as centrais (câmbio vazio + motor P0171)');
 assert.deepStrictEqual(dtcs('00A\r0: 43 03 01 71 01 30 \r1: 04 20 00 00 00 00 00 \r\r>'), ['P0171', 'P0130', 'P0420']); ok++;
 console.log('ok  resposta longa em vários quadros -> P0171, P0130, P0420');
 
+// ---------- Modo 09 PID 00: o carro declara o chassi? (mesmos números do ObdParserTest) ----------
+function infoTypeSupported(raw, infoType) {
+  const masks = payloads(juntaQuadros(raw), '4900').filter((b) => b.length >= 4);
+  if (!masks.length) return null;
+  if (infoType < 1 || infoType > 32) return false;
+  const idx = Math.floor((infoType - 1) / 8), bit = 7 - ((infoType - 1) % 8);
+  return masks.some((b) => ((b[idx] >> bit) & 1) === 1);
+}
+assert.strictEqual(infoTypeSupported('49 00 40 00 00 00 \r\r>', 2), true); ok++;
+assert.strictEqual(infoTypeSupported('49 00 BE 3F A8 13 \r\r>', 2), false); ok++;
+assert.strictEqual(infoTypeSupported('49 00 BE 3F A8 13 \r\r>', 1), true); ok++;
+assert.strictEqual(infoTypeSupported('NO DATA\r\r>', 2), null); ok++;
+console.log('ok  modo 09 PID 00: chassi declarado só quando o bit da informação 02 está ligado');
+
 // ---------- Chassi / VIN (modo 09 PID 02) ----------
 function vin(raw) {
   const blocks = payloads(juntaQuadros(raw), '4902');

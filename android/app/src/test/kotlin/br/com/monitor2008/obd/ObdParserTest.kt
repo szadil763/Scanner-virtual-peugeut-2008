@@ -104,6 +104,15 @@ class ObdParserTest {
         assertEquals("936CMNFP0GB000001", ObdParser.vin(raw))
     }
 
+    @Test fun infoTypeBitmapSaysWhetherTheCarDeclaresTheVin() {
+        // 0x40 = só a informação 02 (chassi)
+        assertEquals(true, ObdParser.infoTypeSupported("49 00 40 00 00 00 \r\r>", 2))
+        // 0xBE = 1011 1110: a informação 01 sim, a 02 não
+        assertEquals(false, ObdParser.infoTypeSupported("49 00 BE 3F A8 13 \r\r>", 2))
+        assertEquals(true, ObdParser.infoTypeSupported("49 00 BE 3F A8 13 \r\r>", 1))
+        assertNull(ObdParser.infoTypeSupported("NO DATA\r\r>", 2))
+    }
+
     @Test fun vinNoDataReturnsNull() {
         assertNull(ObdParser.vin("NO DATA\r\r>"))
     }

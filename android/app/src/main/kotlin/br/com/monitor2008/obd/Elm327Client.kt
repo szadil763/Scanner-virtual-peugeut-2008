@@ -77,7 +77,11 @@ class Elm327Client(
     fun readPendingDtcs(): List<String> = ObdParser.dtcs(send("07", 4_000), "47")
 
     /** Modo 09 PID 02: chassi (VIN) do veículo, para identificar o modelo sozinho. Somente leitura. */
-    fun readVin(): String? = ObdParser.vin(send("0902", 4_000))
+    fun readVin(): String? {
+        // Como nos PIDs do modo 01: só pede o chassi se o carro declarar (0900, informação 02).
+        if (ObdParser.infoTypeSupported(send("0900", 3_000), 2) != true) return null
+        return ObdParser.vin(send("0902", 4_000))
+    }
 }
 
 /**

@@ -38,7 +38,7 @@ internal fun ContaSection() {
             email = Conta.email()
         }
     }
-    val nomeCarro = Vehicles.byId(store.carKey)?.name ?: store.carKey
+    val nomeCarro = Vehicles.nameOf(store.carKey)
     var estado by remember { mutableStateOf(store.nuvemStatus) }
     var abastecimentos by remember { mutableStateOf(store.refuels().size) }
     LaunchedEffect(Unit) {

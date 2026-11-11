@@ -141,6 +141,20 @@ object ObdParser {
     }
 
     /**
+     * Resposta do modo 09 PID 00: quais informações do veículo o carro declara. Devolve se o [infoType] (ex.: 2 =
+     * chassi) é declarado, ou null se ninguém respondeu (o carro não tem modo 09). O mapa de bits é o mesmo do
+     * modo 01: o bit mais alto do primeiro byte é a informação 01, o seguinte a 02, e assim por diante.
+     */
+    fun infoTypeSupported(raw: String, infoType: Int): Boolean? {
+        val masks = payloads(joinMultiFrame(raw), "4900").filter { it.size >= 4 }
+        if (masks.isEmpty()) return null
+        if (infoType !in 1..32) return false
+        val idx = (infoType - 1) / 8
+        val bit = 7 - (infoType - 1) % 8
+        return masks.any { ((it[idx] shr bit) and 1) == 1 }
+    }
+
+    /**
      * Decodifica o número do chassi (VIN) devolvido pelo modo 09 PID 02 (prefixo "4902").
      * Em CAN multi-frame, após [joinMultiFrame], os bytes depois de "4902" começam pelo contador de
      * itens (ex.: 01) seguido dos 17 caracteres ASCII do VIN. Em protocolos antigos, cada linha
