@@ -251,6 +251,11 @@ class Store(context: Context) {
         p.edit().putString("tankHistory", keep.toString()).apply()
     }
 
+    /** Último resultado da sincronização com a nuvem (aparece em Ajustes, para entender quando algo não bate). */
+    var nuvemStatus: String
+        get() = app.getString("nuvemStatus", "") ?: ""
+        set(v) { app.edit().putString("nuvemStatus", v).apply() }
+
     /** Este aparelho já entrou no carro na nuvem (depois disso o envio é automático). */
     var nuvemPronta: Boolean
         get() = p.getBoolean("nuvemPronta", false)

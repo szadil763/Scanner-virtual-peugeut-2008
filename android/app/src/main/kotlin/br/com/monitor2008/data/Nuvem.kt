@@ -160,6 +160,18 @@ object Nuvem {
         puxarTudo(ctx, store, aplicou)
     }
 
+    private fun registrar(store: Store, texto: String) {
+        val hora = java.text.SimpleDateFormat("dd/MM HH:mm:ss", java.util.Locale("pt", "BR")).format(java.util.Date())
+        store.nuvemStatus = "$hora · carro ${store.carKey} · $texto"
+    }
+
+    /** O carro do aparelho mudou: o controle de "já conferi a nuvem" era do carro anterior. */
+    fun trocouCarro() {
+        primeiroPuxe = false; primeiroTudo = false; inicioVivoMs = 0L
+        nuvemTudoMs = 0L; vivoEnviadoT = 0L; vivoEnvioMs = 0L; vivoPuxeMs = 0L; tudoPuxeMs = 0L; ultimoEnvioMs = 0L
+        sujo = false; enviandoDesde = 0L
+    }
+
     @Volatile private var nuvemTudoMs = 0L
     @Volatile private var tudoPuxeMs = 0L
     @Volatile private var primeiroTudo = false
@@ -191,6 +203,7 @@ object Nuvem {
                 val nuvemMs = msSnap.getValue(Long::class.java) ?: 0L
                 nuvemTudoMs = nuvemMs
                 val local = store.dadosMs
+                registrar(store, "conferiu a nuvem (nuvem $nuvemMs, aqui $local)")
                 if (nuvemMs > local || (nuvemMs == 0L && local == 0L)) {
                     ref.get()
                         .addOnSuccessListener { snap ->
@@ -205,21 +218,23 @@ object Nuvem {
                                     }
                                     if (adotar) {
                                         store.adotarTudo(JSONObject(tudo), maxOf(nuvemMs, 1L))
+                                        registrar(store, "adotou os dados da nuvem")
                                         snap.child("viagensSaude").getValue(String::class.java)?.takeIf { it.isNotBlank() }
                                             ?.let { HealthStore(ctx, store.carKey).substituirRaw(it) }
                                         store.dadosHash = impressao(ctx, store)
                                         aplicou()
                                     } else {
                                         store.dadosMs = System.currentTimeMillis() // os daqui são mais completos: sobem
+                                        registrar(store, "dados daqui são mais completos: vão subir")
                                     }
                                 }
                             } catch (_: Exception) { }
                             primeiroTudo = true
                         }
-                        .addOnFailureListener { primeiroTudo = true }
+                        .addOnFailureListener { primeiroTudo = true; registrar(store, "não consegui LER a nuvem: ${it.message ?: "sem permissão"}") }
                 } else primeiroTudo = true
             }
-            .addOnFailureListener { primeiroTudo = true }
+            .addOnFailureListener { primeiroTudo = true; registrar(store, "não consegui LER a nuvem: ${it.message ?: "sem permissão"}") }
     }
 
     fun aguardandoVivo(store: Store): Boolean =
@@ -231,6 +246,7 @@ object Nuvem {
         vivoEnviadoT = store.vivoMs
         vivoEnvioMs = System.currentTimeMillis()
         carro(store.carKey).child("vivo").setValue(store.vivoJson())
+            .addOnFailureListener { registrar(store, "estado do trajeto NÃO enviado: ${it.message ?: "sem permissão"}") }
     }
 
     /** Traz o estado vivo (trajeto, tanque, hodômetro) se for mais novo que o daqui. */
@@ -261,12 +277,12 @@ object Nuvem {
      */
     fun auto(ctx: Context, store: Store) {
         try {
-            if (uid() == null) return
+            if (uid() == null) { registrar(store, "sem conta Google neste celular (entre em Ajustes)"); return }
             val agora = System.currentTimeMillis()
             if (!store.nuvemPronta) {
                 if (Features.mediaControl || entrando) return
                 entrando = true
-                sincronizar(ctx, store) { _, _ -> entrando = false }
+                sincronizar(ctx, store) { ok, msg -> entrando = false; registrar(store, (if (ok) "entrou no carro: " else "NÃO entrou no carro: ") + msg) }
                 return
             }
             // Qualquer mudança nos dados do carro (feita aqui) é carimbada; mudança vinda de outro celular é adotada.
@@ -286,8 +302,9 @@ object Nuvem {
             val vencido = agora - ultimoEnvioMs >= INTERVALO_PERIODICO_MS
             if (!vencido && !(sujo && agora - ultimoEnvioMs >= INTERVALO_MUDANCA_MS)) return
             enviandoDesde = agora
-            enviar(ctx, store, store.carKey) { ok, _ ->
+            enviar(ctx, store, store.carKey) { ok, msg ->
                 enviandoDesde = 0L
+                registrar(store, if (ok) "enviou os dados para a nuvem" else "NÃO enviou: $msg")
                 if (ok) { sujo = false; ultimoEnvioMs = System.currentTimeMillis() } else ultimoEnvioMs = System.currentTimeMillis() - INTERVALO_PERIODICO_MS + 60_000L
             }
         } catch (_: Exception) { enviandoDesde = 0L; entrando = false }

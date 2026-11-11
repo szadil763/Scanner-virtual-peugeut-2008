@@ -551,6 +551,7 @@ class MonitorEngine private constructor(private val app: Application) {
     fun recarregarCarro() = reloadForCar()
 
     private fun reloadForCar() {
+        br.com.monitor2008.data.Nuvem.trocouCarro()
         odometerKm = store.odometerKm
         uncalLiters = store.uncalLiters
         kmSinceFull = store.kmSinceFull

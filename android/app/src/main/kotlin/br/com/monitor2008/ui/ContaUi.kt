@@ -8,6 +8,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -21,6 +22,7 @@ import br.com.monitor2008.data.Conta
 import br.com.monitor2008.data.Nuvem
 import br.com.monitor2008.data.Store
 import br.com.monitor2008.domain.Vehicles
+import kotlinx.coroutines.delay
 
 /** Ajustes: conta Google, sincronização do carro na nuvem e convite de pessoas para o carro. */
 @Composable
@@ -37,6 +39,11 @@ internal fun ContaSection() {
         }
     }
     val nomeCarro = Vehicles.byId(store.carKey)?.name ?: store.carKey
+    var estado by remember { mutableStateOf(store.nuvemStatus) }
+    var abastecimentos by remember { mutableStateOf(store.refuels().size) }
+    LaunchedEffect(Unit) {
+        while (true) { estado = store.nuvemStatus; abastecimentos = store.refuels().size; delay(2_000) }
+    }
     Text("Conta Google e nuvem", fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
     Text(
         "Os dados são de cada carro. Quem está na lista do carro vê o histórico dele, em qualquer aparelho.",
@@ -47,6 +54,8 @@ internal fun ContaSection() {
     if (atual != null) {
         Text("Conectado como: $atual", fontSize = 16.sp)
         Text("Carro deste aparelho: $nomeCarro", fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+        Text("Abastecimentos neste aparelho: $abastecimentos", fontSize = 15.sp)
+        Text("Sincronização: ${estado.ifBlank { "ainda não rodou" }}", fontSize = 15.sp)
         Button({ Nuvem.sincronizar(ctx, store) { _, texto -> aviso = texto } }, Modifier.height(56.dp)) {
             Text("Sincronizar este carro", fontSize = 17.sp)
         }
