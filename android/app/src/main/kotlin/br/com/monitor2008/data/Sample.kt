@@ -35,4 +35,5 @@ data class ConnectionInfo(
     val message: String = "",
     val protocol: String = "",
     val supportedPids: Set<Int> = emptySet(),
+    val vin: String? = null,
 )

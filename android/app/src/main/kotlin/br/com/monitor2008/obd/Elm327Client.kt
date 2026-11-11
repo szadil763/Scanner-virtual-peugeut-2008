@@ -75,6 +75,9 @@ class Elm327Client(
 
     /** Modo 07: falhas pendentes (a central viu o problema, mas ainda não acendeu a luz). Somente leitura. */
     fun readPendingDtcs(): List<String> = ObdParser.dtcs(send("07", 4_000), "47")
+
+    /** Modo 09 PID 02: chassi (VIN) do veículo, para identificar o modelo sozinho. Somente leitura. */
+    fun readVin(): String? = ObdParser.vin(send("0902", 4_000))
 }
 
 /**

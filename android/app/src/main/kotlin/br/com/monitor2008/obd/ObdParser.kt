@@ -139,4 +139,27 @@ object ObdParser {
         current?.let { out += it.toString() }
         return out.joinToString("\r")
     }
+
+    /**
+     * Decodifica o número do chassi (VIN) devolvido pelo modo 09 PID 02 (prefixo "4902").
+     * Em CAN multi-frame, após [joinMultiFrame], os bytes depois de "4902" começam pelo contador de
+     * itens (ex.: 01) seguido dos 17 caracteres ASCII do VIN. Em protocolos antigos, cada linha
+     * traz "49 02 01 ...", "49 02 02 ...". Filtra caracteres ASCII alfanuméricos válidos de VIN.
+     */
+    fun vin(raw: String): String? {
+        val blocks = payloads(joinMultiFrame(raw), "4902")
+        if (blocks.isEmpty()) return null
+        val chars = StringBuilder()
+        for (b in blocks) {
+            val start = if (b.isNotEmpty() && b[0] in 1..5) 1 else 0
+            for (i in start until b.size) {
+                val c = b[i]
+                if (c in 0x30..0x39 || c in 0x41..0x5A || c in 0x61..0x7A) {
+                    chars.append(c.toChar().uppercaseChar())
+                }
+            }
+            if (chars.length >= 17) return chars.substring(0, 17)
+        }
+        return if (chars.length >= 17) chars.substring(0, 17) else null
+    }
 }

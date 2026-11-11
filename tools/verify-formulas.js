@@ -176,6 +176,28 @@ console.log('ok  falhas de todas as centrais (câmbio vazio + motor P0171)');
 assert.deepStrictEqual(dtcs('00A\r0: 43 03 01 71 01 30 \r1: 04 20 00 00 00 00 00 \r\r>'), ['P0171', 'P0130', 'P0420']); ok++;
 console.log('ok  resposta longa em vários quadros -> P0171, P0130, P0420');
 
+// ---------- Chassi / VIN (modo 09 PID 02) ----------
+function vin(raw) {
+  const blocks = payloads(juntaQuadros(raw), '4902');
+  if (!blocks.length) return null;
+  let chars = '';
+  for (const b of blocks) {
+    const start = b.length > 0 && b[0] >= 1 && b[0] <= 5 ? 1 : 0;
+    for (let i = start; i < b.length; i++) {
+      const c = b[i];
+      if ((c >= 0x30 && c <= 0x39) || (c >= 0x41 && c <= 0x5a) || (c >= 0x61 && c <= 0x7a)) {
+        chars += String.fromCharCode(c).toUpperCase();
+      }
+    }
+    if (chars.length >= 17) return chars.slice(0, 17);
+  }
+  return chars.length >= 17 ? chars.slice(0, 17) : null;
+}
+assert.strictEqual(vin('014\r0: 49 02 01 39 33 36 \r1: 43 4D 4E 46 50 30 47 \r2: 42 30 30 30 30 30 31 \r\r>'), '936CMNFP0GB000001'); ok++;
+console.log('ok  VIN modo 0902 multi-quadro -> 936CMNFP0GB000001');
+assert.strictEqual(vin('NO DATA\r\r>'), null); ok++;
+console.log('ok  VIN NO DATA -> null');
+
 // ---------- Consumo ----------
 const AFR_GASOLINA = 14.7, AFR_ETANOL = 9.0, DENS_GASOLINA = 745, DENS_ETANOL = 789;
 const blend = (f) => ({

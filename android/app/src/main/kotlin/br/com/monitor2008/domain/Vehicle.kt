@@ -115,7 +115,54 @@ object Vehicles {
             "coxins do motor e mangueiras de vácuo. O motor usa corrente de comando: ruído metálico ao ligar frio é sinal para verificar.",
     )
 
-    val all = listOf(PEUGEOT_2008, C4_LOUNGE_20, NISSAN_TIIDA_18)
+    val AUTO = Vehicle(
+        id = "auto",
+        name = "Automático",
+        engine = "detectar pelo OBD2",
+        gearbox = "automático ou manual",
+        brand = "fabricante",
+        displacementL = 1.6,
+        tankL = 50.0,
+        highConsumptionGasoline = 7.5,
+        highConsumptionEthanol = 5.2,
+        notes = common + mapOf(
+            "mix" to "Comece pelas mangueiras de vácuo, respiro do cárter (PCV), válvula do cânister e junta do coletor de admissão.",
+            "idle" to "Verifique velas, bobinas de ignição e a limpeza do corpo de borboleta.",
+            "cool" to "Confira o nível do reservatório com o motor frio, a tampa, a válvula termostática e se a ventoinha do radiador liga com o motor quente.",
+        ),
+        gearboxTip = "Em câmbio automático ou CVT, troque o fluido periodicamente (em geral entre 40.000 e 60.000 km) usando apenas a especificação do manual. " +
+            "Em câmbio manual, confira o nível do óleo e o estado da embreagem.",
+        periodicTip = "A cada revisão: nível e aditivo do líquido de arrefecimento, velas e bobinas, limpeza do corpo de borboleta, " +
+            "filtros, mangueiras de vácuo e coxins do motor.",
+    )
+
+    val all = listOf(AUTO, PEUGEOT_2008, C4_LOUNGE_20, NISSAN_TIIDA_18)
 
     fun byId(id: String?): Vehicle? = all.firstOrNull { it.id == id }
+
+    /**
+     * Identifica o perfil do carro automaticamente a partir do chassi (VIN, modo 09 PID 02) ou
+     * das características lidas pelo OBD2. Se o carro não informar o VIN ou não estiver entre os
+     * modelos específicos cadastrados, devolve [AUTO] (universal).
+     */
+    fun detect(vin: String?, supportedPids: Set<Int> = emptySet()): Vehicle {
+        val v = vin?.trim()?.uppercase().orEmpty()
+        if (v.length == 17) {
+            val wmi = v.substring(0, 3)
+            val vds = v.substring(3, 9)
+            when {
+                // Citroën C4 Lounge (fabricado na Argentina: 8BC, ou França: VF7)
+                wmi == "8BC" || wmi == "VF7" -> return C4_LOUNGE_20
+                // Peugeot 2008 (Brasil: 936, Argentina: 8AD, França: VF3)
+                wmi == "936" || wmi == "8AD" || wmi == "VF3" -> return PEUGEOT_2008
+                // Nissan Tiida (México: 3N1, Japão: JN1)
+                wmi == "3N1" || wmi == "JN1" -> return NISSAN_TIIDA_18
+                // Outros PSA que trazem código de motor no VDS:
+                "RFJ" in vds || "EW10" in vds -> return C4_LOUNGE_20
+                "NFP" in vds || "EC5" in vds -> return PEUGEOT_2008
+                "MR18" in vds -> return NISSAN_TIIDA_18
+            }
+        }
+        return AUTO
+    }
 }

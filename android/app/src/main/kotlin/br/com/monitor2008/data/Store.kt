@@ -364,11 +364,11 @@ class Store(context: Context) {
         set(v) { app.edit().putBoolean("pipOnLeave", v).apply() }
 
     /**
-     * Perfil do carro deste aparelho ([Vehicles]); null = ainda não escolhido. Instalação antiga, que já
-     * rodou com o adaptador, era do 2008: vale como 2008 sem perguntar.
+     * Perfil do carro deste aparelho ([Vehicles]); por padrão começa em [Vehicles.AUTO] (detectar
+     * automaticamente pelo OBD2), sem travar a tela inicial.
      */
-    var vehicleId: String?
-        get() = app.getString("vehicleId", null) ?: if (odometerKm > 0) Vehicles.PEUGEOT_2008.id else null
+    var vehicleId: String
+        get() = app.getString("vehicleId", null) ?: if (odometerKm > 0) Vehicles.PEUGEOT_2008.id else Vehicles.AUTO.id
         set(v) { app.edit().putString("vehicleId", v).apply() }
 
     /**

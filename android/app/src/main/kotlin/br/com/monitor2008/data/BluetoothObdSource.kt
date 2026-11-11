@@ -105,8 +105,10 @@ class BluetoothObdSource(
                     engineOff = true
                 } else {
                     val supported = synchronized(lock) { c.supportedPids() }
+                    val vin = synchronized(lock) { c.readVin() }
+                    if (vin != null) log("0902 (Chassi/VIN) -> $vin")
                     logging = false
-                    _info.value = ConnectionInfo(ConnState.CONNECTED, "Conectado", protocol, supported)
+                    _info.value = ConnectionInfo(ConnState.CONNECTED, "Conectado", protocol, supported, vin)
 
                     val values = mutableMapOf<Pid, Double>()
                     var adapterVolts: Double? = null

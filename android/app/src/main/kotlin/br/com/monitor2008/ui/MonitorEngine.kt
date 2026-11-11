@@ -273,7 +273,14 @@ class MonitorEngine private constructor(private val app: Application) {
                 // Conexão perdida ou carro desligado: a viagem termina aqui.
                 if (it.state != ConnState.CONNECTED) closeTrip()
                 conn = it
-                if (it.state == ConnState.CONNECTED) (src as? BluetoothObdSource)?.connectedAddress?.let { a -> checkCarByAdapter(a) }
+                if (it.state == ConnState.CONNECTED) {
+                    val addr = (src as? BluetoothObdSource)?.connectedAddress
+                    if (addr != null) checkCarByAdapter(addr)
+                    if (store.vehicleId == Vehicles.AUTO.id) {
+                        val detected = Vehicles.detect(it.vin, it.supportedPids)
+                        if (detected.id != Vehicles.AUTO.id) setVehicle(detected.id)
+                    }
+                }
                 // Falhas: lidas assim que conecta, mesmo com o motor desligado (só a ignição ligada).
                 if (it.state == ConnState.CONNECTED && !tripDtcsRead) readTripDtcs()
                 publish()
@@ -523,7 +530,7 @@ class MonitorEngine private constructor(private val app: Application) {
     fun setPipOnLeave(on: Boolean) { store.pipOnLeave = on; publish() }
 
     /** Carro deste aparelho: muda a cilindrada do consumo (método MAP) e as dicas do modelo. */
-    private val vehicle: Vehicle get() = Vehicles.byId(store.vehicleId) ?: Vehicles.PEUGEOT_2008
+    private val vehicle: Vehicle get() = Vehicles.byId(store.vehicleId) ?: Vehicles.AUTO
 
     fun setVehicle(id: String) {
         if (Vehicles.byId(id) == null) return
@@ -923,7 +930,7 @@ class MonitorEngine private constructor(private val app: Application) {
             },
             pipOnLeave = store.pipOnLeave,
             missedNotice = store.missedNotice,
-            vehicle = Vehicles.byId(store.vehicleId),
+            vehicle = vehicle,
             stations = stationList,
             stationRatings = stationRatings(),
             history = history.toList(),

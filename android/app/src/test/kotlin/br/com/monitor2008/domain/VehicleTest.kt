@@ -54,4 +54,12 @@ class VehicleTest {
         )
         assertTrue(r.contains("Citroën C4 Lounge 2.0 16V flex (EW10)"))
     }
+
+    @Test fun detectsVehicleFromVinOrFallsBackToAuto() {
+        assertEquals(Vehicles.PEUGEOT_2008, Vehicles.detect("936CMNFP0GB000001"))
+        assertEquals(Vehicles.C4_LOUNGE_20, Vehicles.detect("8BCCMRFJ0GB000001"))
+        assertEquals(Vehicles.NISSAN_TIIDA_18, Vehicles.detect("3N1BC1AS0BK000001"))
+        assertEquals(Vehicles.AUTO, Vehicles.detect(null))
+        assertEquals(Vehicles.AUTO, Vehicles.detect("9BWZZZ377VT004251"))
+    }
 }

@@ -98,4 +98,13 @@ class ObdParserTest {
     @Test fun noDtcs() = assertEquals(emptyList<String>(), ObdParser.dtcs("43 00 00 00 00 00 00 00"))
 
     @Test fun networkDtcLetter() = assertEquals(listOf("U0100"), ObdParser.dtcs("43 01 C1 00 00 00 00 00"))
+
+    @Test fun vinFromMultiFrameCan() {
+        val raw = "014\r0: 49 02 01 39 33 36 \r1: 43 4D 4E 46 50 30 47 \r2: 42 30 30 30 30 30 31 \r\r>"
+        assertEquals("936CMNFP0GB000001", ObdParser.vin(raw))
+    }
+
+    @Test fun vinNoDataReturnsNull() {
+        assertNull(ObdParser.vin("NO DATA\r\r>"))
+    }
 }
