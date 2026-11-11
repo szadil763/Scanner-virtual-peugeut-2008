@@ -359,7 +359,7 @@ object PainelLink {
             put("midia", midia(app))
             put("saude", saude(ui))
             put("postos", postos(ui))
-            put("manutencao", manutencao(ui))
+            put("manutencao", manutencao(app, ui))
             put("consumo", consumo(ui))
             put("diagnostico", diagnostico(app, ui))
             put("falaId", falaId)
@@ -515,7 +515,20 @@ object PainelLink {
     }
 
     /** Itens de manutenção com o estado de cada um (só leitura no multimídia; marcar como feito é comando). */
-    private fun manutencao(ui: UiState): JSONArray = JSONArray().apply {
+    private fun manutencao(app: Application, ui: UiState): JSONArray = JSONArray().apply {
+        // A troca de óleo é guardada à parte das outras (tem plano e botão próprios), então entra aqui na frente.
+        val meses = Store(app).oilIntervalMonths
+        put(JSONObject().apply {
+            put("id", "oleo")
+            put("nome", "Óleo do motor e filtro")
+            put("porque", "Intervalo usado: ${ui.oilIntervalKm} km ou $meses meses, o que vier primeiro. Confirme no manual.")
+            put("feito", ui.oilConfigured)
+            put("estado", if (ui.oilConfigured) ui.oil?.state?.name ?: JSONObject.NULL else JSONObject.NULL)
+            put("kmRestante", if (ui.oilConfigured) num(ui.oil?.kmLeft) else JSONObject.NULL)
+            put("diasRestantes", if (ui.oilConfigured) ui.oil?.daysLeft ?: JSONObject.NULL else JSONObject.NULL)
+            put("intervaloKm", ui.oilIntervalKm)
+            put("intervaloMeses", meses)
+        })
         ui.maint.forEach { row ->
             put(JSONObject().apply {
                 put("id", row.item.id)
@@ -525,6 +538,8 @@ object PainelLink {
                 put("estado", row.status?.state?.name ?: JSONObject.NULL)
                 put("kmRestante", num(row.status?.kmLeft))
                 put("diasRestantes", row.status?.daysLeft ?: JSONObject.NULL)
+                put("intervaloKm", row.item.intervalKm ?: JSONObject.NULL)
+                put("intervaloMeses", row.item.intervalMonths ?: JSONObject.NULL)
             })
         }
     }
@@ -676,6 +691,7 @@ object PainelLink {
 
     /** Marca um item de manutenção como feito hoje (o celular recusa com o carro andando). */
     private fun feitoManutencao(app: Application, id: String) {
+        if (id == "oleo") { MonitorEngine.get(app).registerOilChange(); return }
         if (MaintCatalog.items.none { it.id == id }) return
         MonitorEngine.get(app).registerMaintDone(id)
     }

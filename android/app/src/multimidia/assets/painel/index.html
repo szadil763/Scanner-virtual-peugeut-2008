@@ -208,6 +208,25 @@
   .strip #tq-texto { font-size:17px; line-height:1.15; max-height:2.35em; overflow:hidden; }
   .strip #tanque-faixa .barra-tq { margin-top:6px; flex:0 0 auto; }
   .strip .v2 { font-size:28px; }
+  /* ===== Manutenção: cartões grandes em duas colunas, com a situação de cada item em destaque ===== */
+  #manut-resumo { flex:0 0 auto; display:flex; gap:8px; flex-wrap:wrap; padding:4px 12px 8px; }
+  #manut-resumo .rs { padding:6px 14px; border-radius:20px; font-size:17px; font-weight:700; background:#0f1826; border:2px solid #2a3a52; color:#c5ccd6; }
+  #manut-resumo .rs.DUE { border-color:#ff5555; color:#ff7777; } #manut-resumo .rs.SOON { border-color:#ffcc33; color:#ffcc33; }
+  #manut-resumo .rs.OK { border-color:#3ddc6b; color:#3ddc6b; }
+  #manut-lista { display:grid !important; grid-template-columns:1fr 1fr; gap:10px; align-content:start; }
+  .mi { background:#0f1826; border-radius:20px; border-left:10px solid #4b5563; padding:10px 14px; display:grid; grid-template-columns:minmax(0,1fr) 190px; gap:2px 14px; align-items:center; min-width:0; }
+  .mi.OK { border-left-color:#3ddc6b; } .mi.SOON { border-left-color:#ffcc33; } .mi.DUE { border-left-color:#ff5555; }
+  .mi .topo { grid-column:1; display:flex; align-items:center; gap:10px; min-width:0; }
+  .mi .nome { font-size:21px; font-weight:700; line-height:1.15; min-width:0; }
+  .mi .chip { flex:0 0 auto; font-size:13px; font-weight:800; letter-spacing:.05em; padding:3px 10px; border-radius:12px; background:#374151; color:#fff; text-transform:uppercase; }
+  .mi.OK .chip { background:#14532d; color:#86efac; } .mi.SOON .chip { background:#713f12; color:#fde68a; } .mi.DUE .chip { background:#7f1d1d; color:#fecaca; }
+  .mi .grande { grid-column:1; font-size:24px; font-weight:800; line-height:1.15; }
+  .mi.OK .grande { color:#3ddc6b; } .mi.SOON .grande { color:#ffcc33; } .mi.DUE .grande { color:#ff6b6b; } .mi.NA .grande { color:#9ca3af; font-size:20px; }
+  .mi .barra-m { grid-column:1; height:9px; background:#1f2937; border-radius:5px; overflow:hidden; margin:3px 0; }
+  .mi .barra-m div { height:100%; background:#4b5563; border-radius:5px; }
+  .mi.OK .barra-m div { background:#3ddc6b; } .mi.SOON .barra-m div { background:#ffcc33; } .mi.DUE .barra-m div { background:#ff5555; }
+  .mi .porque { grid-column:1; font-size:14px; color:#9aa6b6; line-height:1.2; max-height:2.4em; overflow:hidden; }
+  .mi button { grid-column:2; grid-row:1 / span 4; align-self:center; min-height:64px; margin:0; font-size:17px; border-radius:30px; }
 </style>
 </head>
 <body>
@@ -352,7 +371,10 @@
 
 <div class="tela" id="t-saude"><div class="lista" id="saude-lista"></div></div>
 <div class="tela" id="t-postos"><div class="lista" id="postos-lista"></div></div>
-<div class="tela" id="t-manutencao"><div class="lista" id="manut-lista"></div></div>
+<div class="tela" id="t-manutencao">
+  <div id="manut-resumo"></div>
+  <div class="lista" id="manut-lista"></div>
+</div>
 <div class="tela" id="t-diag">
   <div class="consumo">
     <div class="item" id="dg-estado"><div class="t" id="dg-t">Conexão</div><div class="v" id="dg-v">--</div><div class="d" id="dg-d"></div></div>
@@ -807,26 +829,80 @@
     fetch('/comando', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ acao: 'manutencao.feito', id: id }) })
       .catch(function () { el('status').textContent = 'Sem resposta do multimídia'; });
   }
+  var ordemEstado = { DUE: 0, SOON: 1, OK: 2 };
+  var rotuloChip = { OK: 'Em dia', SOON: 'Perto de vencer', DUE: 'Vencido' };
+  function tempoLongo(d) { return d >= 60 ? '≈\u00a0' + Math.round(d / 30.4) + ' meses' : d + (d === 1 ? ' dia' : ' dias'); }
   function paintManut(lista) {
     var chave = JSON.stringify(lista) + '|' + confirmaManut + '|' + parado;
     if (chave === ultimoManut) return;
     ultimoManut = chave;
-    var box = el('manut-lista');
-    box.textContent = '';
+    var box = el('manut-lista'), resumo = el('manut-resumo');
+    box.textContent = ''; resumo.textContent = '';
     if (!lista || lista.length === 0) {
       box.appendChild(linha('', 'Sem itens de manutenção', '', ''));
       return;
     }
-    lista.forEach(function (m) {
-      var classe = m.feito ? (m.estado === 'OK' ? 'ok' : m.estado === 'SOON' ? 'warn' : m.estado === 'DUE' ? 'alerta' : '') : '';
-      var d = linha(classe, m.nome, m.feito ? (rotuloEstado[m.estado] || '') : 'Não informado', detalheManut(m));
+    function nivel(m) { return m.feito ? (ordemEstado[m.estado] !== undefined ? ordemEstado[m.estado] : 2) : 3; }
+    var itens = lista.slice().sort(function (a, b) {
+      var d = nivel(a) - nivel(b);
+      if (d !== 0) return d;
+      return (a.id === 'oleo' ? -1 : 0) - (b.id === 'oleo' ? -1 : 0);
+    });
+    // Resumo no alto: quantos vencidos, perto de vencer, em dia e sem registro.
+    var cont = { DUE: 0, SOON: 0, OK: 0, NA: 0 };
+    itens.forEach(function (m) { var n = nivel(m); cont[n === 0 ? 'DUE' : n === 1 ? 'SOON' : n === 2 ? 'OK' : 'NA']++; });
+    [['DUE', 'vencido(s)'], ['SOON', 'perto de vencer'], ['OK', 'em dia'], ['NA', 'sem registro']].forEach(function (r) {
+      if (!cont[r[0]]) return;
+      var x = document.createElement('span');
+      x.className = 'rs ' + r[0];
+      x.textContent = cont[r[0]] + ' ' + r[1];
+      resumo.appendChild(x);
+    });
+    itens.forEach(function (m) {
+      var est = m.feito ? (m.estado || 'OK') : 'NA';
+      var c = document.createElement('div');
+      c.className = 'mi ' + est;
+      var topo = document.createElement('div'); topo.className = 'topo';
+      var nome = document.createElement('div'); nome.className = 'nome'; nome.textContent = m.nome;
+      var chip = document.createElement('div'); chip.className = 'chip'; chip.textContent = m.feito ? (rotuloChip[est] || '') : 'Sem registro';
+      topo.appendChild(nome); topo.appendChild(chip);
+      c.appendChild(topo);
+      var grande = document.createElement('div'); grande.className = 'grande';
+      if (!m.feito) {
+        grande.textContent = 'Informe quando foi feito';
+      } else {
+        var partes = [];
+        if (m.kmRestante !== null && m.kmRestante !== undefined) {
+          partes.push(m.kmRestante >= 0 ? 'Faltam ' + fmtNum(m.kmRestante) + ' km' : 'Passou ' + fmtNum(-m.kmRestante) + ' km');
+        }
+        if (m.diasRestantes !== null && m.diasRestantes !== undefined) {
+          var diasOk = m.diasRestantes >= 0, kmOk = (m.kmRestante === null || m.kmRestante === undefined) ? diasOk : m.kmRestante >= 0;
+          var tempo = tempoLongo(Math.abs(m.diasRestantes));
+          if (!partes.length) partes.push((diasOk ? 'Faltam ' : 'Passou ') + tempo);
+          else if (diasOk === kmOk) partes.push('ou ' + tempo);
+          else partes.push('· ' + (diasOk ? 'faltam ' : 'passou ') + tempo);
+        }
+        grande.textContent = partes.join(' ');
+      }
+      c.appendChild(grande);
+      // Barra: quanto do intervalo já foi gasto (vale o que estiver mais adiantado, km ou tempo).
+      var gasto = 0;
+      if (m.feito) {
+        if (m.intervaloKm && m.kmRestante !== null && m.kmRestante !== undefined) gasto = Math.max(gasto, (m.intervaloKm - m.kmRestante) / m.intervaloKm);
+        if (m.intervaloMeses && m.diasRestantes !== null && m.diasRestantes !== undefined) gasto = Math.max(gasto, (m.intervaloMeses * 30.44 - m.diasRestantes) / (m.intervaloMeses * 30.44));
+      }
+      var bar = document.createElement('div'); bar.className = 'barra-m';
+      var fill = document.createElement('div'); fill.style.width = Math.round(Math.max(0, Math.min(1, gasto)) * 100) + '%';
+      bar.appendChild(fill); c.appendChild(bar);
+      var porque = document.createElement('div'); porque.className = 'porque'; porque.textContent = m.porque || '';
+      c.appendChild(porque);
       var b = document.createElement('button');
       b.className = 'feito' + (confirmaManut === m.id ? ' conf' : '');
       b.disabled = !parado;
       b.textContent = !parado ? 'Só com o carro parado' : (confirmaManut === m.id ? 'Toque de novo para confirmar' : 'Marcar como feito hoje');
       b.onclick = function () { manutFeito(m.id); };
-      d.appendChild(b);
-      box.appendChild(d);
+      c.appendChild(b);
+      box.appendChild(c);
     });
   }
   var ultimoAbast = '';
