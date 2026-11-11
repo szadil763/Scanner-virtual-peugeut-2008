@@ -167,6 +167,38 @@ class Store(context: Context) {
         p.edit().putString("trip", "$distanceKm;$liters;$seconds;$kmWithFuel;$litersMoving").apply()
     }
 
+    /**
+     * Estado vivo do carro (trajeto, nível do tanque, hodômetro do app, calibração): é o que muda enquanto se
+     * dirige e precisa seguir o carro de um celular para o outro pela nuvem. [vivoMs] = hora da última mudança
+     * feita neste aparelho (ou do estado que ele adotou da nuvem).
+     */
+    var vivoMs: Long
+        get() = p.getLong("vivoMs", 0L)
+        set(v) { p.edit().putLong("vivoMs", v).apply() }
+
+    fun vivoJson(): String = JSONObject()
+        .put("t", vivoMs)
+        .put("odo", odometerKm).put("uncal", uncalLiters).put("kmFull", kmSinceFull)
+        .put("trip", p.getString("trip", "") ?: "")
+        .put("tanque", tankEstimateL ?: JSONObject.NULL)
+        .put("fator", calibration)
+        .put("base", baselineValid).put("pend", pendingRealLiters).put("incompleto", tankIncomplete)
+        .put("desde", tripSinceDay ?: JSONObject.NULL)
+        .toString()
+
+    /** Adota o estado vivo que veio da nuvem (de outro celular que leu o carro depois). */
+    fun aplicarVivo(o: JSONObject) {
+        saveProgress(o.getDouble("odo"), o.getDouble("uncal"), o.getDouble("kmFull"))
+        o.optString("trip", "").takeIf { it.isNotBlank() }?.let { p.edit().putString("trip", it).apply() }
+        tankEstimateL = if (o.isNull("tanque")) null else o.getDouble("tanque")
+        calibration = o.getDouble("fator")
+        baselineValid = o.getBoolean("base")
+        pendingRealLiters = o.getDouble("pend")
+        tankIncomplete = o.getBoolean("incompleto")
+        tripSinceDay = if (o.isNull("desde")) null else o.getLong("desde")
+        vivoMs = o.getLong("t")
+    }
+
     // Histórico do nível estimado do tanque (gráfico). Últimos TankHistory.MAX_POINTS pontos.
     fun tankHistoryJson(): String = p.getString("tankHistory", "[]") ?: "[]"
 

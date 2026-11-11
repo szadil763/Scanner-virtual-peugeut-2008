@@ -133,7 +133,93 @@ object Nuvem {
     @Volatile private var entrando = false
 
     /** Algo do carro mudou: envia logo (no máximo uma vez a cada 15 s). */
-    fun mudou(ctx: Context, store: Store) { sujo = true; auto(ctx, store) }
+    fun mudou(ctx: Context, store: Store) {
+        sujo = true
+        try { if (store.nuvemPronta && uid() != null) enviarVivo(store) } catch (_: Exception) { }
+        auto(ctx, store)
+    }
+
+    // ---- Estado vivo: trajeto, nível do tanque e hodômetro seguem o carro de um celular para o outro ----
+    private const val VIVO_INTERVALO_MS = 30_000L
+    private const val VIVO_PARADO_MS = 120_000L
+    private const val VIVO_ESPERA_MS = 10_000L
+    @Volatile private var vivoEnviadoT = 0L
+    @Volatile private var vivoEnvioMs = 0L
+    @Volatile private var vivoPuxeMs = 0L
+    @Volatile private var primeiroPuxe = false
+    @Volatile private var inicioVivoMs = 0L
+
+    /**
+     * Logo ao abrir: traz o estado do carro da nuvem antes de este celular começar a somar. Enquanto espera
+     * (até 10 s), o motor não soma trajeto, para não partir de um estado velho.
+     */
+    fun iniciarVivo(ctx: Context, store: Store, aplicou: () -> Unit) {
+        inicioVivoMs = System.currentTimeMillis()
+        puxarVivo(store, aplicou)
+    }
+
+    fun aguardandoVivo(store: Store): Boolean =
+        !primeiroPuxe && inicioVivoMs != 0L && store.nuvemPronta && uid() != null &&
+            System.currentTimeMillis() - inicioVivoMs < VIVO_ESPERA_MS
+
+    private fun enviarVivo(store: Store) {
+        if (store.vivoMs == 0L) return
+        vivoEnviadoT = store.vivoMs
+        vivoEnvioMs = System.currentTimeMillis()
+        carro(store.carKey).child("vivo").setValue(store.vivoJson())
+    }
+
+    /** Traz o estado vivo (se for mais novo que o daqui) e os abastecimentos feitos em outro celular. */
+    private fun puxarVivo(store: Store, aplicou: () -> Unit) {
+        if (uid() == null || !store.nuvemPronta) { primeiroPuxe = true; return }
+        vivoPuxeMs = System.currentTimeMillis()
+        val ref = carro(store.carKey)
+        ref.child("vivo").get()
+            .addOnSuccessListener { vivoSnap ->
+                var mudou = false
+                try {
+                    val raw = vivoSnap.getValue(String::class.java)
+                    if (!raw.isNullOrBlank()) {
+                        val o = JSONObject(raw)
+                        if (o.getLong("t") > store.vivoMs) { store.aplicarVivo(o); mudou = true }
+                    }
+                } catch (_: Exception) { }
+                ref.child("abastecimentos").get()
+                    .addOnSuccessListener { aSnap ->
+                        try {
+                            val abast = aSnap.getValue(String::class.java)
+                            if (!abast.isNullOrBlank() && unirAbastecimentos(store, JSONArray(abast))) mudou = true
+                        } catch (_: Exception) { }
+                        primeiroPuxe = true
+                        if (mudou) aplicou()
+                    }
+                    .addOnFailureListener { primeiroPuxe = true; if (mudou) aplicou() }
+            }
+            .addOnFailureListener { primeiroPuxe = true }
+    }
+
+    /** Abastecimentos da nuvem mais novos que o último daqui (feitos em outro celular). Não traz de volta os antigos apagados. */
+    private fun unirAbastecimentos(store: Store, nuvem: JSONArray): Boolean {
+        val locais = store.refuels()
+        val ultimo = locais.maxOfOrNull { it.timeMs } ?: 0L
+        var trouxe = false
+        for (i in 0 until nuvem.length()) {
+            val o = nuvem.getJSONObject(i)
+            val hora = o.optLong("hora", 0L).takeIf { it > 0 } ?: (o.getLong("dia") * 86_400_000L + 43_200_000L)
+            if (hora <= ultimo || locais.any { it.timeMs == hora }) continue
+            store.addRefuel(
+                Refuel(
+                    epochDay = o.getLong("dia"), liters = o.getDouble("litros"), pricePerLiter = o.getDouble("preco"),
+                    full = o.getBoolean("cheio"), odometerKm = o.optDouble("odometro", 0.0),
+                    realKmPerL = if (o.isNull("kmL")) null else o.getDouble("kmL"), timeMs = hora,
+                    stationId = if (o.isNull("posto")) null else o.getString("posto"),
+                    ethanol = o.optBoolean("etanol", false), tankRatio = if (o.isNull("tanque")) null else o.getDouble("tanque"),
+                ),
+            )
+            trouxe = true
+        }
+        return trouxe
+    }
 
     /**
      * Chamar de tempos em tempos (a cada 20 s, pelo motor). Em silêncio: sem conta Google ou sem internet não faz
@@ -149,6 +235,11 @@ object Nuvem {
                 entrando = true
                 sincronizar(ctx, store) { _, _ -> entrando = false }
                 return
+            }
+            // Estado vivo: quem está lendo o carro envia; quem está parado busca o que o outro celular mandou.
+            if (store.vivoMs > vivoEnviadoT && agora - vivoEnvioMs >= VIVO_INTERVALO_MS) enviarVivo(store)
+            else if (agora - vivoPuxeMs >= VIVO_INTERVALO_MS && agora - store.vivoMs > VIVO_PARADO_MS) {
+                puxarVivo(store) { MonitorEngine.get(ctx.applicationContext as android.app.Application).reloadLive() }
             }
             if (enviandoDesde != 0L && agora - enviandoDesde < ENVIO_PRESO_MS) return
             val vencido = agora - ultimoEnvioMs >= INTERVALO_PERIODICO_MS

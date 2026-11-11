@@ -57,6 +57,8 @@ import br.com.monitor2008.domain.Vehicles
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -213,8 +215,32 @@ class MonitorEngine private constructor(private val app: Application) {
     init {
         // Quem já tinha informado o km antes do lembrete: conta a partir de hoje (sem lembrar logo de cara).
         if (store.odoOffset != null && store.odoCheckedMs == 0L) store.odoCheckedMs = System.currentTimeMillis()
+        // Traz da nuvem o trajeto e o tanque que o outro celular deixou, antes de começar a somar.
+        try { br.com.monitor2008.data.Nuvem.iniciarVivo(app, store) { reloadLive() } } catch (_: Exception) { }
         start()
         SessionResume.startHeartbeat(app, scope)
+        // Relógio da sincronização: também no celular que não está lendo o carro (ele só busca o estado do outro).
+        scope.launch {
+            while (isActive) {
+                delay(30_000L)
+                if (!store.useSimulated) try { br.com.monitor2008.data.Nuvem.auto(app, store) } catch (_: Exception) { }
+            }
+        }
+    }
+
+    private fun touchVivo() { store.vivoMs = System.currentTimeMillis() }
+
+    /** Recarrega o trajeto, o tanque e o hodômetro do armazenamento (depois de adotar o estado vindo da nuvem). Não reconecta. */
+    fun reloadLive() {
+        odometerKm = store.odometerKm
+        uncalLiters = store.uncalLiters
+        kmSinceFull = store.kmSinceFull
+        tankEstimateL = store.tankEstimateL
+        realTrip.reset()
+        store.loadTrip()?.let { a -> realTrip.restore(a[0], a[1], a[2], a[3], a.getOrElse(4) { a[1] }) }
+        refuelList = store.refuels().asReversed()
+        lastTankPoint = store.tankHistory().lastOrNull()
+        publish()
     }
 
     /**
@@ -294,6 +320,7 @@ class MonitorEngine private constructor(private val app: Application) {
         tankEstimateL = FuelTank.litersFromPercent(percent, tankCapacityL())
         store.tankEstimateL = tankEstimateL
         recordTank("ajuste", force = true)
+        touchVivo()
         br.com.monitor2008.data.Nuvem.mudou(app, store)
         publish()
     }
@@ -306,7 +333,7 @@ class MonitorEngine private constructor(private val app: Application) {
         if (running && !engineWasRunning) MicService.update(app, renew = true)
         engineWasRunning = running
         speakCritical(s)
-        val dt = if (lastTimeMs == 0L) 0.0 else ((s.timeMs - lastTimeMs) / 1000.0).coerceIn(0.0, 5.0)
+        val dt = if (lastTimeMs == 0L || br.com.monitor2008.data.Nuvem.aguardandoVivo(store)) 0.0 else ((s.timeMs - lastTimeMs) / 1000.0).coerceIn(0.0, 5.0)
         lastTimeMs = s.timeMs
         val speed = s.speedKmh ?: 0.0
 
@@ -317,6 +344,7 @@ class MonitorEngine private constructor(private val app: Application) {
         // Só com o motor ligado (ou andando): parado com a ignição ligada não puxa a média para baixo.
         if ((s.rpm ?: 0.0) > 400 || speed > 1) {
             trip.add(dt, speed, lph)
+            if (dt > 0.0 && !store.useSimulated) touchVivo()
             // Desconta do tanque o que o app estima ter gasto (só depois de um abastecimento cheio).
             if (lph != null) tankEstimateL = FuelTank.afterDriving(tankEstimateL, lph * dt / 3600.0)
         }
@@ -560,6 +588,8 @@ class MonitorEngine private constructor(private val app: Application) {
         trip.reset(); history.clear()
         if (!store.useSimulated) store.tripSinceDay = LocalDate.now().toEpochDay()
         saveNow()
+        touchVivo()
+        br.com.monitor2008.data.Nuvem.mudou(app, store)
         publish()
     }
 
@@ -600,6 +630,7 @@ class MonitorEngine private constructor(private val app: Application) {
         tankEstimateL = FuelTank.afterRefuel(tankEstimateL, tankCapacityL(), liters, full)
         store.tankEstimateL = tankEstimateL
         recordTank("abasteceu", force = true)
+        touchVivo()
         store.addRefuel(
             Refuel(
                 LocalDate.now().toEpochDay(), liters, price, full, odometerKm, result.realKmPerL,
@@ -753,6 +784,8 @@ class MonitorEngine private constructor(private val app: Application) {
         store.calibration = next
         trip.scaleFuel(next / before)
         saveNow()
+        touchVivo()
+        br.com.monitor2008.data.Nuvem.mudou(app, store)
         publish()
         val nova = trip.avgKmPerL
         return String.format(
