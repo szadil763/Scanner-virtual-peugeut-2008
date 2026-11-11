@@ -29,7 +29,11 @@ object Nuvem {
         carro(id).child("membros").child(uid).setValue(true)
             .addOnSuccessListener {
                 receber(ctx, store, id) { ok, msg ->
-                    if (ok) { store.nuvemPronta = true; ultimoEnvioMs = System.currentTimeMillis(); sujo = false }
+                    if (ok) {
+                        store.nuvemPronta = true; ultimoEnvioMs = System.currentTimeMillis(); sujo = false
+                        // Já traz o trajeto e o tanque do outro celular, sem esperar o relógio.
+                        try { agora(ctx, store) } catch (_: Exception) { }
+                    }
                     depois(ok, msg)
                 }
             }
@@ -165,6 +169,15 @@ object Nuvem {
         store.nuvemStatus = "$hora · carro ${store.carKey} · $texto"
     }
 
+    /** Confere a nuvem agora (sem esperar os 30 s): estado do trajeto e foto geral dos dados. */
+    fun agora(ctx: Context, store: Store) {
+        if (uid() == null || !store.nuvemPronta) return
+        val recarregar = { MonitorEngine.get(ctx.applicationContext as android.app.Application).reloadLive() }
+        puxarVivo(store, recarregar)
+        tudoPuxeMs = System.currentTimeMillis()
+        puxarTudo(ctx, store, recarregar)
+    }
+
     /** O carro do aparelho mudou: o controle de "já conferi a nuvem" era do carro anterior. */
     fun trocouCarro() {
         primeiroPuxe = false; primeiroTudo = false; inicioVivoMs = 0L
@@ -259,9 +272,28 @@ object Nuvem {
                 var mudou = false
                 try {
                     val raw = vivoSnap.getValue(String::class.java)
-                    if (!raw.isNullOrBlank()) {
+                    val local = store.vivoMs
+                    if (raw.isNullOrBlank()) {
+                        // A nuvem ainda não tem o estado do trajeto: este celular é a base (até alguém dirigir com a versão nova).
+                        if (local == 0L && store.carroTemDados()) {
+                            store.vivoMs = 1L
+                            enviarVivo(store)
+                            registrar(store, "enviou o estado do trajeto (base)")
+                        }
+                    } else {
                         val o = JSONObject(raw)
-                        if (o.getLong("t") > store.vivoMs) { store.aplicarVivo(o); mudou = true }
+                        val t = o.getLong("t")
+                        if (t > local) {
+                            if (local == 0L && t <= 1L && store.odometerKm > o.getDouble("odo")) {
+                                // Os dois só têm a base antiga: vale o que rodou mais (hodômetro maior).
+                                store.vivoMs = 1L
+                                enviarVivo(store)
+                                registrar(store, "enviou o estado do trajeto (hodômetro daqui é maior)")
+                            } else {
+                                store.aplicarVivo(o); mudou = true
+                                registrar(store, "adotou o trajeto e o tanque da nuvem")
+                            }
+                        }
                     }
                 } catch (_: Exception) { }
                 primeiroPuxe = true
