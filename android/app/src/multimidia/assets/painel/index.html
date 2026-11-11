@@ -1776,6 +1776,10 @@
       .then(function () { setTimeout(pollMidia, 1000); });
   }
   /** "Adilson (Moto G54)": quem está conectado pelo celular. */
+  /** Nome do carro: no topo do pacote (celular novo) ou, nos celulares antigos, dentro do diagnóstico/ajustes. */
+  function carroDe(d) {
+    return d.carro || (d.diagnostico && d.diagnostico.carro) || (d.ajustes && d.ajustes.conta && d.ajustes.conta.carro) || '';
+  }
   function quem(d) {
     var nome = d.usuario || '', cel = d.celular || '';
     if (nome && cel) return nome + ' (' + cel + ')';
@@ -1795,7 +1799,7 @@
             st.textContent = (quem(s.dados) || 'Celular') + ': sem conexão com o carro. Confira o adaptador na tomada, a ignição e o Bluetooth do celular.';
             st.className = '';
           } else {
-            st.textContent = '● ' + quem(s.dados) + (s.dados.carro ? ' conectado ao ' + s.dados.carro : ' conectado');
+            st.textContent = '● ' + quem(s.dados) + (carroDe(s.dados) ? ' conectado ao ' + carroDe(s.dados) : ' conectado');
             st.className = 'on';
           }
           paint(s.dados);

@@ -326,6 +326,7 @@ object PainelLink {
             // Quem está conectado: o painel mostra "Adilson conectado ao Peugeot 2008 · celular".
             put("usuario", try { Conta.nome() ?: "" } catch (_: Exception) { "" })
             put("celular", nomeDoCelular(app))
+            put("carro", br.com.monitor2008.domain.Vehicles.nameOf(Store(app).carKey))
             put("rpm", num(s?.rpm))
             put("speed", num(s?.speedKmh))
             put("coolant", num(s?.coolantC))
