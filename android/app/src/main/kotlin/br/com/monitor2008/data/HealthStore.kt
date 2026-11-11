@@ -44,6 +44,11 @@ class HealthStore(context: Context, carId: String = Vehicles.PEUGEOT_2008.id) {
         try { if (json.isNotBlank() && !file.exists()) file.writeText(json) } catch (e: Exception) { }
     }
 
+    /** Troca as viagens pelas da nuvem (outro celular tem a versão mais nova). */
+    fun substituirRaw(json: String) {
+        try { if (json.isNotBlank()) file.writeText(json) } catch (e: Exception) { }
+    }
+
     fun load(): List<TripHealth> = try {
         if (!file.exists()) emptyList() else {
             val arr = JSONArray(file.readText())

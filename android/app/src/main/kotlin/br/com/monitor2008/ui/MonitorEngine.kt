@@ -239,6 +239,8 @@ class MonitorEngine private constructor(private val app: Application) {
         realTrip.reset()
         store.loadTrip()?.let { a -> realTrip.restore(a[0], a[1], a[2], a[3], a.getOrElse(4) { a[1] }) }
         refuelList = store.refuels().asReversed()
+        stationList = store.stations()
+        trips = healthStore.load()
         lastTankPoint = store.tankHistory().lastOrNull()
         publish()
     }

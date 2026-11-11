@@ -84,6 +84,7 @@ class Store(context: Context) {
     fun exportarCarro(): org.json.JSONObject {
         val out = org.json.JSONObject()
         for ((k, v) in p.all) {
+            if (k in NAO_VAI_PARA_NUVEM) continue
             val o = org.json.JSONObject()
             when (v) {
                 is String -> out.put(k, o.put("t", "s").put("v", v))
@@ -100,6 +101,7 @@ class Store(context: Context) {
     fun importarCarro(j: org.json.JSONObject) {
         val ed = p.edit()
         for (k in j.keys()) {
+            if (k in NAO_VAI_PARA_NUVEM) continue
             val o = j.getJSONObject(k)
             when (o.getString("t")) {
                 "s" -> ed.putString(k, o.getString("v"))
@@ -110,6 +112,32 @@ class Store(context: Context) {
             }
         }
         ed.apply()
+    }
+
+    /**
+     * Hora da última mudança nos dados do carro (abastecimentos, manutenção, configurações, trajetos guardados,
+     * histórico do tanque, viagens da Saúde) e a "impressão" do conteúdo na última conferência. Quando a impressão
+     * muda, algo mudou: o app carimba [dadosMs] e envia para a nuvem; o celular com carimbo mais velho adota o da nuvem.
+     */
+    var dadosMs: Long
+        get() = p.getLong("dadosMs", 0L)
+        set(v) { p.edit().putLong("dadosMs", v).apply() }
+    var dadosHash: Int
+        get() = p.getInt("dadosHash", 0)
+        set(v) { p.edit().putInt("dadosHash", v).apply() }
+    fun temDadosHash(): Boolean = p.contains("dadosHash")
+
+    fun hashDados(extra: String = ""): Int {
+        val j = exportarCarro()
+        var h = extra.hashCode()
+        for (k in j.keys().asSequence().toList().sorted()) h = 31 * h + k.hashCode() + 17 * j.getJSONObject(k).toString().hashCode()
+        return h
+    }
+
+    /** Adota os dados do carro que vieram da nuvem (mais novos que os daqui). */
+    fun adotarTudo(j: org.json.JSONObject, ms: Long) {
+        importarCarro(j)
+        dadosMs = ms
     }
 
     /** O carro já tem dados neste aparelho? (senão, pode trazer da nuvem sem perder nada) */
@@ -184,6 +212,8 @@ class Store(context: Context) {
         .put("fator", calibration)
         .put("base", baselineValid).put("pend", pendingRealLiters).put("incompleto", tankIncomplete)
         .put("desde", tripSinceDay ?: JSONObject.NULL)
+        .put("dist", p.getString("distCounterKm", null) ?: JSONObject.NULL)
+        .put("distApp", p.getString("distCounterAppKm", null) ?: JSONObject.NULL)
         .toString()
 
     /** Adota o estado vivo que veio da nuvem (de outro celular que leu o carro depois). */
@@ -196,6 +226,9 @@ class Store(context: Context) {
         pendingRealLiters = o.getDouble("pend")
         tankIncomplete = o.getBoolean("incompleto")
         tripSinceDay = if (o.isNull("desde")) null else o.getLong("desde")
+        if (o.has("dist") && !o.isNull("dist") && !o.isNull("distApp")) {
+            p.edit().putString("distCounterKm", o.getString("dist")).putString("distCounterAppKm", o.getString("distApp")).apply()
+        }
         vivoMs = o.getLong("t")
     }
 
@@ -592,6 +625,13 @@ class Store(context: Context) {
 
 
 /** Chaves de preferências que são do aparelho (não mudam ao trocar de carro). */
+/** Do arquivo do carro, mas que NÃO vai na foto geral para a nuvem: muda o tempo todo (vai pelo estado vivo) ou é deste celular. */
+private val NAO_VAI_PARA_NUVEM = setOf(
+    "trip", "odometerKm", "uncalLiters", "kmSinceFull", "tankEstimateL", "calibration", "baselineValid", "pendingRealLiters",
+    "tankIncomplete", "tripSinceDay", "vivoMs", "dadosMs", "dadosHash", "distCounterKm", "distCounterAppKm",
+    "autoConnectAddress", "nuvemPronta", "missedNotice",
+)
+
 private val CHAVES_DO_APARELHO = setOf(
     "highContrast", "driveMode", "ttsVoice", "ttsRate", "ttsPitch", "wakeWord", "backgroundReading", "floatMode", "floatSize", "floatItems", "floatX", "floatY", "lastTab", "mapPackage", "musicPackage", "mediaMode", "radioFavorites", "lastRadio", "places", "refuelByMoney", "updateChannel", "updateCheckedMs", "autoOpen", "resumeMedia", "pipOnLeave", "painelAddress", "useSimulated", "vehicleId", "lastPlayingAtMs", "lastPlayingPkg", "aliveAtMs", "lastPlayingTitle", "resumeMap", "lastFront", "lastFrontAtMs", "lastRouteAddress", "lastRouteAtMs", "lastRouteLat", "lastRouteLon"
 )

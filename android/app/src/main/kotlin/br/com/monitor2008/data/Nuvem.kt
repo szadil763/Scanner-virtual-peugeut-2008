@@ -156,6 +156,70 @@ object Nuvem {
     fun iniciarVivo(ctx: Context, store: Store, aplicou: () -> Unit) {
         inicioVivoMs = System.currentTimeMillis()
         puxarVivo(store, aplicou)
+        tudoPuxeMs = inicioVivoMs
+        puxarTudo(ctx, store, aplicou)
+    }
+
+    @Volatile private var nuvemTudoMs = 0L
+    @Volatile private var tudoPuxeMs = 0L
+    @Volatile private var primeiroTudo = false
+
+    private fun impressao(ctx: Context, store: Store): Int =
+        store.hashDados(HealthStore(ctx, store.carKey).rawJson())
+
+    /** Se o conteúdo dos dados do carro mudou desde a última conferência, carimba a hora (vai para a nuvem). */
+    private fun detectarMudanca(ctx: Context, store: Store) {
+        val h = impressao(ctx, store)
+        if (!store.temDadosHash()) { store.dadosHash = h; return } // primeira vez nesta versão: só memoriza
+        if (h != store.dadosHash) {
+            store.dadosHash = h
+            store.dadosMs = System.currentTimeMillis()
+            sujo = true
+        }
+    }
+
+    /**
+     * Compara com a nuvem. Se lá a foto geral é mais nova, adota (abastecimentos, manutenção, configurações, trajetos
+     * guardados, histórico do tanque e viagens da Saúde). Sem carimbo dos dois lados (dados de antes desta versão),
+     * vale quem tem mais abastecimentos.
+     */
+    private fun puxarTudo(ctx: Context, store: Store, aplicou: () -> Unit) {
+        if (uid() == null || !store.nuvemPronta) { primeiroTudo = true; return }
+        val ref = carro(store.carKey)
+        ref.child("tudoMs").get()
+            .addOnSuccessListener { msSnap ->
+                val nuvemMs = msSnap.getValue(Long::class.java) ?: 0L
+                nuvemTudoMs = nuvemMs
+                val local = store.dadosMs
+                if (nuvemMs > local || (nuvemMs == 0L && local == 0L)) {
+                    ref.get()
+                        .addOnSuccessListener { snap ->
+                            try {
+                                val tudo = snap.child("tudo").getValue(String::class.java)
+                                if (tudo.isNullOrBlank()) {
+                                    if (local == 0L && store.carroTemDados()) store.dadosMs = System.currentTimeMillis()
+                                } else {
+                                    val adotar = nuvemMs > local || run {
+                                        val n = try { JSONArray(snap.child("abastecimentos").getValue(String::class.java) ?: "[]").length() } catch (e: Exception) { 0 }
+                                        n >= store.refuels().size
+                                    }
+                                    if (adotar) {
+                                        store.adotarTudo(JSONObject(tudo), maxOf(nuvemMs, 1L))
+                                        snap.child("viagensSaude").getValue(String::class.java)?.takeIf { it.isNotBlank() }
+                                            ?.let { HealthStore(ctx, store.carKey).substituirRaw(it) }
+                                        store.dadosHash = impressao(ctx, store)
+                                        aplicou()
+                                    } else {
+                                        store.dadosMs = System.currentTimeMillis() // os daqui são mais completos: sobem
+                                    }
+                                }
+                            } catch (_: Exception) { }
+                            primeiroTudo = true
+                        }
+                        .addOnFailureListener { primeiroTudo = true }
+                } else primeiroTudo = true
+            }
+            .addOnFailureListener { primeiroTudo = true }
     }
 
     fun aguardandoVivo(store: Store): Boolean =
@@ -169,7 +233,7 @@ object Nuvem {
         carro(store.carKey).child("vivo").setValue(store.vivoJson())
     }
 
-    /** Traz o estado vivo (se for mais novo que o daqui) e os abastecimentos feitos em outro celular. */
+    /** Traz o estado vivo (trajeto, tanque, hodômetro) se for mais novo que o daqui. */
     private fun puxarVivo(store: Store, aplicou: () -> Unit) {
         if (uid() == null || !store.nuvemPronta) { primeiroPuxe = true; return }
         vivoPuxeMs = System.currentTimeMillis()
@@ -184,41 +248,10 @@ object Nuvem {
                         if (o.getLong("t") > store.vivoMs) { store.aplicarVivo(o); mudou = true }
                     }
                 } catch (_: Exception) { }
-                ref.child("abastecimentos").get()
-                    .addOnSuccessListener { aSnap ->
-                        try {
-                            val abast = aSnap.getValue(String::class.java)
-                            if (!abast.isNullOrBlank() && unirAbastecimentos(store, JSONArray(abast))) mudou = true
-                        } catch (_: Exception) { }
-                        primeiroPuxe = true
-                        if (mudou) aplicou()
-                    }
-                    .addOnFailureListener { primeiroPuxe = true; if (mudou) aplicou() }
+                primeiroPuxe = true
+                if (mudou) aplicou()
             }
             .addOnFailureListener { primeiroPuxe = true }
-    }
-
-    /** Abastecimentos da nuvem mais novos que o último daqui (feitos em outro celular). Não traz de volta os antigos apagados. */
-    private fun unirAbastecimentos(store: Store, nuvem: JSONArray): Boolean {
-        val locais = store.refuels()
-        val ultimo = locais.maxOfOrNull { it.timeMs } ?: 0L
-        var trouxe = false
-        for (i in 0 until nuvem.length()) {
-            val o = nuvem.getJSONObject(i)
-            val hora = o.optLong("hora", 0L).takeIf { it > 0 } ?: (o.getLong("dia") * 86_400_000L + 43_200_000L)
-            if (hora <= ultimo || locais.any { it.timeMs == hora }) continue
-            store.addRefuel(
-                Refuel(
-                    epochDay = o.getLong("dia"), liters = o.getDouble("litros"), pricePerLiter = o.getDouble("preco"),
-                    full = o.getBoolean("cheio"), odometerKm = o.optDouble("odometro", 0.0),
-                    realKmPerL = if (o.isNull("kmL")) null else o.getDouble("kmL"), timeMs = hora,
-                    stationId = if (o.isNull("posto")) null else o.getString("posto"),
-                    ethanol = o.optBoolean("etanol", false), tankRatio = if (o.isNull("tanque")) null else o.getDouble("tanque"),
-                ),
-            )
-            trouxe = true
-        }
-        return trouxe
     }
 
     /**
@@ -236,12 +269,20 @@ object Nuvem {
                 sincronizar(ctx, store) { _, _ -> entrando = false }
                 return
             }
+            // Qualquer mudança nos dados do carro (feita aqui) é carimbada; mudança vinda de outro celular é adotada.
+            detectarMudanca(ctx, store)
+            if (agora - tudoPuxeMs >= VIVO_INTERVALO_MS) {
+                tudoPuxeMs = agora
+                puxarTudo(ctx, store) { MonitorEngine.get(ctx.applicationContext as android.app.Application).reloadLive() }
+            }
             // Estado vivo: quem está lendo o carro envia; quem está parado busca o que o outro celular mandou.
             if (store.vivoMs > vivoEnviadoT && agora - vivoEnvioMs >= VIVO_INTERVALO_MS) enviarVivo(store)
             else if (agora - vivoPuxeMs >= VIVO_INTERVALO_MS && agora - store.vivoMs > VIVO_PARADO_MS) {
                 puxarVivo(store) { MonitorEngine.get(ctx.applicationContext as android.app.Application).reloadLive() }
             }
             if (enviandoDesde != 0L && agora - enviandoDesde < ENVIO_PRESO_MS) return
+            // Só envia a foto geral depois de conferir a nuvem, e se os dados daqui não estiverem atrás dos de lá.
+            if (!primeiroTudo || store.dadosMs <= 0L || store.dadosMs < nuvemTudoMs) return
             val vencido = agora - ultimoEnvioMs >= INTERVALO_PERIODICO_MS
             if (!vencido && !(sujo && agora - ultimoEnvioMs >= INTERVALO_MUDANCA_MS)) return
             enviandoDesde = agora
@@ -307,6 +348,7 @@ object Nuvem {
             "tudo" to store.exportarCarro().toString(),
             "viagensSaude" to HealthStore(ctx, id).rawJson(),
             "trajetos" to store.tripArchiveJson(),
+            "tudoMs" to store.dadosMs,
             "tanque" to JSONObject().apply {
                 put("nivelL", store.tankEstimateL ?: JSONObject.NULL)
                 put("historico", JSONArray(store.tankHistoryJson()))
