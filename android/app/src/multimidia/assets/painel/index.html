@@ -186,10 +186,31 @@
   .seg3 { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; padding:8px 12px 6px; flex:0 0 auto; }
   .seg3 button { min-height:56px; font-size:20px; background:var(--btn); color:var(--fg); border:3px solid #3a4a5c; border-radius:12px; }
   .seg3 button.sel { background:var(--sel); border-color:#5b9be0; }
+  /* ===== Altura de verdade: o WebView tem ~650 px (a barra do sistema e o aviso de endereço tomam o resto). ===== */
+  #status { min-height:0 !important; padding:4px 16px !important; font-size:16px !important; flex:0 0 auto; display:block !important; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  #voz { position:relative !important; top:auto !important; right:auto !important; z-index:auto !important; min-width:0 !important; min-height:84px !important; font-size:14px !important; }
+  .trilho #voz { background:#1d5c33 !important; color:#fff !important; border:2px solid #3ddc6b !important; }
+  .trilho #voz:disabled { background:#222 !important; border-color:#444 !important; color:#777 !important; }
+  .trilho .aba { min-height:84px !important; }
+  .menu { height:72px !important; }
+  .menu .aba { min-height:56px !important; }
+  .tela { overflow:hidden; }
+  .tela.sel { min-height:0; }
+  #t-painel .grid { grid-template-rows:repeat(2,minmax(0,1fr)); }
+  #t-painel .card { overflow:hidden; min-height:0; padding:4px 10px !important; }
+  #t-painel .val { font-size:min(5.8vw, 9vh); line-height:1.02; }
+  #t-painel .unit { font-size:16px; line-height:1.1; }
+  #t-painel .lbl { font-size:14px !important; }
+  /* Linha de baixo: três números pequenos e o tanque (texto e barra) no mesmo bloco. */
+  .strip { grid-template-columns:1fr 1fr 1fr 2.6fr; align-items:stretch; }
+  .strip .card { overflow:hidden; }
+  .strip #tanque-faixa { margin:0 !important; padding:6px 14px !important; display:flex; flex-direction:column; justify-content:center; border-radius:16px !important; min-width:0; }
+  .strip #tq-texto { font-size:17px; line-height:1.15; max-height:2.35em; overflow:hidden; }
+  .strip #tanque-faixa .barra-tq { margin-top:6px; flex:0 0 auto; }
+  .strip .v2 { font-size:28px; }
 </style>
 </head>
 <body>
-<button id="voz" onclick="ouvirVoz()">🎤</button>
 <div id="toast" role="status"></div>
 <div id="edit-abast" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;z-index:60;background:#000;padding:20px;overflow-y:auto">
   <div style="max-width:640px;margin:0 auto;display:grid;gap:10px">
@@ -217,6 +238,7 @@
   <button class="aba" id="ab-diag" onclick="aba('diag')"><span class="ic">🩺</span>Diagnóstico</button>
 </nav>
 <nav class="trilho">
+  <button class="aba" id="voz" onclick="ouvirVoz()"><span class="ic">🎤</span>Voz</button>
   <button class="aba" id="rl-mapa" onclick="aba('mapa')"><span class="ic">🗺️</span>Mapa</button>
   <button class="aba" id="rl-postos" onclick="aba('postos')"><span class="ic">📍</span>Postos</button>
   <button class="aba" id="rl-manutencao" onclick="aba('manutencao')"><span class="ic">🔧</span>Manutenção</button>
@@ -248,12 +270,10 @@
     <div class="card"><div class="lbl">Distância</div><div class="v2" id="p-dist">--</div><div class="unit">km</div></div>
     <div class="card"><div class="lbl">Custo do trajeto</div><div class="v2" id="p-custo">--</div><div class="unit">R$</div></div>
     <div class="card"><div class="lbl">Vel. média</div><div class="v2" id="p-vmed">--</div><div class="unit">km/h</div></div>
-    <div class="card"><div class="lbl">No tanque</div><div class="v2" id="p-tq">--</div><div class="unit">L (estimado)</div></div>
-    <div class="card"><div class="lbl">Autonomia</div><div class="v2" id="p-aut">--</div><div class="unit">km</div></div>
-  </div>
-  <div id="tanque-faixa" onclick="aba('consumo')" style="cursor:pointer">
-    <div id="tq-texto">⛽ Combustível estimado: salve um abastecimento com tanque cheio para começar.</div>
-    <div class="barra-tq"><div id="tq-barra"></div></div>
+    <div id="tanque-faixa" class="card" onclick="aba('consumo')" style="cursor:pointer">
+      <div id="tq-texto">⛽ Tanque: toque para começar a estimativa.</div>
+      <div class="barra-tq"><div id="tq-barra"></div></div>
+    </div>
   </div>
 </div>
 
@@ -430,6 +450,7 @@
 
     </div>
     <div class="gr-aj" id="gr-voz">
+    <div class="aviso" id="voz-mm">Voz deste multimídia: verificando…</div>
     <div class="lbl">Voz do app</div>
     <div id="aj-vozes"></div>
     <div class="lbl">Velocidade da fala</div>
@@ -1203,7 +1224,8 @@
   var ultimaFala = null, ultimoFalaTxt = '', vozStatus = '';
   function mostraVoz() {
     var partes = [];
-    if (vozStatus && vozStatus !== 'pronta') partes.push('Voz deste multimídia: ' + vozStatus);
+    var vm = el('voz-mm');
+    if (vm) vm.textContent = 'Voz deste multimídia: ' + (vozStatus || 'verificando…');
     if (ultimoFalaTxt) partes.push('Última resposta: ' + ultimoFalaTxt);
     el('vozinfo').textContent = partes.join(' · ');
   }
@@ -1584,20 +1606,18 @@
     var tq = d.tanque;
     if (tq && tq.litros !== null && tq.litros !== undefined) {
       var pct = tq.percentual || 0;
-      el('tq-texto').textContent = '⛽ ~' + num(tq.litros, 0) + ' L no tanque (' + pct + '%)' +
-        (tq.autonomiaKm ? ' · autonomia ≈ ' + num(tq.autonomiaKm, 0) + ' km' : '') + ' · só uma estimativa';
+      el('tq-texto').textContent = '⛽ ~' + num(tq.litros, 0) + ' L (' + pct + '%)' +
+        (tq.autonomiaKm ? ' · autonomia ≈ ' + num(tq.autonomiaKm, 0) + ' km' : '');
       el('tq-barra').style.width = pct + '%';
       el('tq-barra').style.background = pct < 15 ? '#f87171' : (pct < 30 ? '#ffcc33' : '#3ddc6b');
       if (tq.alerta) el('tq-texto').textContent = '⚠️ ' + tq.alerta;
       el('tq-texto').style.color = tq.alerta ? '#f87171' : '';
       el('tanque-faixa').style.outline = tq.alerta ? '2px solid #f87171' : '';
     } else {
-      el('tq-texto').textContent = '⛽ Combustível estimado: salve um abastecimento com tanque cheio para começar.';
+      el('tq-texto').textContent = '⛽ Tanque: toque e corrija o nível para começar.';
       el('tq-barra').style.width = '0%';
     }
     if (tq) el('aj-tanque').textContent = num(tq.capacidade, 0) + ' L';
-    el('p-tq').textContent = (tq && tq.litros !== null && tq.litros !== undefined) ? num(tq.litros, 0) : '--';
-    el('p-aut').textContent = (tq && tq.autonomiaKm) ? num(tq.autonomiaKm, 0) : '--';
     el('sg-carga').textContent = num(d.carga, 0);
     el('sg-pressao').textContent = num(d.pressaoKpa, 0);
     el('sg-ar').textContent = num(d.arAdmissao, 0);
@@ -1755,6 +1775,12 @@
       .catch(function () {})
       .then(function () { setTimeout(pollMidia, 1000); });
   }
+  /** "Adilson (Moto G54)": quem está conectado pelo celular. */
+  function quem(d) {
+    var nome = d.usuario || '', cel = d.celular || '';
+    if (nome && cel) return nome + ' (' + cel + ')';
+    return nome || cel || 'Celular';
+  }
   function poll() {
     var st = el('status');
     fetch('/estado?t=' + Date.now(), { cache: 'no-store' })
@@ -1766,15 +1792,15 @@
         if (postoLocalAtual) paintPosto(postoLocalAtual);
         if (s.dados && s.idadeMs >= 0 && s.idadeMs < 4000) {
           if (s.dados.ok === false) {
-            st.textContent = 'O celular não está conectado ao carro. Confira se o adaptador está na tomada do carro, com a ignição ligada, e se o Bluetooth do celular está ligado.';
+            st.textContent = (quem(s.dados) || 'Celular') + ': sem conexão com o carro. Confira o adaptador na tomada, a ignição e o Bluetooth do celular.';
             st.className = '';
           } else {
-            st.textContent = 'Conectado ao celular';
+            st.textContent = '● ' + quem(s.dados) + (s.dados.carro ? ' conectado ao ' + s.dados.carro : ' conectado');
             st.className = 'on';
           }
           paint(s.dados);
         } else {
-          st.textContent = 'Sem dados do celular. Confira: 1) o hotspot do celular está ligado; 2) este multimídia está conectado nele; 3) o app Monitor está aberto no celular.';
+          st.textContent = 'Sem dados do celular. Confira: hotspot ligado, multimídia conectado nele e o app Monitor aberto no celular.';
           st.className = '';
           // Sem dados não dá para saber a velocidade: depois de 15 s sem movimento visto, libera (não fica travado para sempre).
           if (!parado && Date.now() - ultimoMovimentoMs > 15000) { parado = true; refreshParado(); }

@@ -313,10 +313,19 @@ object PainelLink {
         false
     }
 
+    /** Nome que a pessoa deu ao celular (Configurações) ou, sem ele, o modelo. */
+    private fun nomeDoCelular(app: Application): String = try {
+        (android.provider.Settings.Global.getString(app.contentResolver, "device_name")?.takeIf { it.isNotBlank() }
+            ?: android.os.Build.MODEL).trim().take(30)
+    } catch (_: Exception) { android.os.Build.MODEL }
+
     fun toJson(app: Application, ui: UiState): JSONObject {
         val s = ui.sample
         return JSONObject().apply {
             put("ok", ui.conn.state == ConnState.CONNECTED)
+            // Quem está conectado: o painel mostra "Adilson conectado ao Peugeot 2008 · celular".
+            put("usuario", try { Conta.nome() ?: "" } catch (_: Exception) { "" })
+            put("celular", nomeDoCelular(app))
             put("rpm", num(s?.rpm))
             put("speed", num(s?.speedKmh))
             put("coolant", num(s?.coolantC))
@@ -414,7 +423,7 @@ object PainelLink {
         put("estado", ui.conn.state.name)
         put("mensagem", ui.conn.message)
         put("protocolo", ui.conn.protocol)
-        put("carro", ui.vehicle?.name ?: "")
+        put("carro", br.com.monitor2008.domain.Vehicles.nameOf(Store(app).carKey))
         put("simulado", ui.simulated)
         put("falhasLidas", ui.dtcs != null)
         put("falhas", JSONArray().apply {

@@ -2,6 +2,9 @@ package br.com.monitor2008.data
 
 import android.app.Activity
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
+import android.view.View
 import android.speech.tts.TextToSpeech
 import android.webkit.JavascriptInterface
 import java.util.Locale
@@ -86,6 +89,16 @@ class PainelServerActivity : Activity() {
             addJavascriptInterface(VozBridge(), "monitorVoz")
         }
         web = view
+        // O endereço para digitar no celular só serve para parear: depois de conectado, some e libera a altura do painel.
+        val relogio = Handler(Looper.getMainLooper())
+        uiHandler = relogio
+        relogio.post(object : Runnable {
+            override fun run() {
+                val conectado = latestAtMs > 0 && System.currentTimeMillis() - latestAtMs < 8_000L
+                info.visibility = if (conectado) View.GONE else View.VISIBLE
+                relogio.postDelayed(this, 2_000L)
+            }
+        })
         setContentView(LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             addView(info, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
@@ -127,7 +140,10 @@ class PainelServerActivity : Activity() {
         SessionResume.markPanelFront(application)
     }
 
+    private var uiHandler: Handler? = null
+
     override fun onDestroy() {
+        uiHandler?.removeCallbacksAndMessages(null)
         running = false
         try { server?.close() } catch (_: Exception) { }
         web?.destroy()

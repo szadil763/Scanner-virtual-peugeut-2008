@@ -24,6 +24,13 @@ object Conta {
 
     fun email(): String? = FirebaseAuth.getInstance().currentUser?.email
 
+    /** Primeiro nome de quem está na conta Google (para o painel mostrar quem está conectado). */
+    fun nome(): String? {
+        val u = FirebaseAuth.getInstance().currentUser ?: return null
+        val bruto = u.displayName?.takeIf { it.isNotBlank() } ?: u.email?.substringBefore('@')?.takeIf { it.isNotBlank() } ?: return null
+        return bruto.trim().split(' ', '.', '_').first().replaceFirstChar { it.uppercase() }
+    }
+
     fun uid(): String? = FirebaseAuth.getInstance().currentUser?.uid
 
     /** Recebe o resultado da tela do Google e entra no Firebase. [depois] diz se deu certo e o motivo. */
