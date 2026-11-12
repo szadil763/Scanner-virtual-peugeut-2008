@@ -282,7 +282,18 @@ class MonitorEngine private constructor(private val app: Application) {
                     store.lastVin = vin
                     if (store.autoDetect) {
                         // O chassi é único de cada carro e vale mais que o adaptador (adaptadores baratos repetem o endereço).
-                        if (vin != null) identifyByVin(vin) else if (addr != null) checkCarByAdapter(addr)
+                        if (vin != null) identifyByVin(vin)
+                        else if (addr != null) {
+                            if (store.adapterCars[addr.uppercase()] != null) {
+                                checkCarByAdapter(addr)
+                                store.vehicleNotice = ""
+                            } else {
+                                // Sem chassi e com adaptador desconhecido, o app não tem como saber: mantém o carro e avisa.
+                                store.vehicleNotice = "O carro não informou o chassi e este adaptador ($addr) ainda não está ligado a nenhum carro; " +
+                                    "o app manteve ${Vehicles.nameOf(store.carKey)}. Se não for esse, escolha o carro certo em Ajustes, uma vez: " +
+                                    "o app aprende o adaptador e passa a reconhecer sozinho."
+                            }
+                        }
                     }
                 }
                 // Falhas: lidas assim que conecta, mesmo com o motor desligado (só a ignição ligada).

@@ -1875,7 +1875,8 @@
             st.textContent = (quem(s.dados) || 'Celular') + ': sem conexão com o carro. Confira o adaptador na tomada, a ignição e o Bluetooth do celular.';
             st.className = '';
           } else {
-            st.textContent = '● ' + quem(s.dados) + (carroDe(s.dados) ? ' conectado ao ' + carroDe(s.dados) : ' conectado');
+            st.textContent = '● ' + quem(s.dados) + (carroDe(s.dados) ? ' conectado ao ' + carroDe(s.dados) : ' conectado') +
+              (s.dados.carroAviso ? '  ⚠ confira se o carro está certo (Ajustes > Carro, no celular)' : '');
             st.className = 'on';
           }
           paint(s.dados);
