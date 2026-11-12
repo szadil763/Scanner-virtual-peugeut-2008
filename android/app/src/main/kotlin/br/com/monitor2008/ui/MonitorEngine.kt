@@ -47,6 +47,8 @@ import br.com.monitor2008.domain.MissedDistance
 import br.com.monitor2008.domain.OdometerReminder
 import br.com.monitor2008.domain.RefuelCompare
 import br.com.monitor2008.domain.CriticalAlert
+import br.com.monitor2008.domain.CarIdentity
+import br.com.monitor2008.domain.CarSource
 import br.com.monitor2008.domain.CriticalAlerts
 import br.com.monitor2008.domain.DriveModeSetting
 import br.com.monitor2008.domain.DriveModeTracker
@@ -277,24 +279,9 @@ class MonitorEngine private constructor(private val app: Application) {
                 if (it.state != ConnState.CONNECTED) closeTrip()
                 conn = it
                 if (it.state == ConnState.CONNECTED) {
-                    val addr = (src as? BluetoothObdSource)?.connectedAddress
-                    val vin = it.vin?.takeIf { v -> Vehicles.validVin(v) }
-                    store.lastVin = vin
-                    if (store.autoDetect) {
-                        // O chassi é único de cada carro e vale mais que o adaptador (adaptadores baratos repetem o endereço).
-                        if (vin != null) identifyByVin(vin)
-                        else if (addr != null) {
-                            if (store.adapterCars[addr.uppercase()] != null) {
-                                checkCarByAdapter(addr)
-                                store.vehicleNotice = ""
-                            } else {
-                                // Sem chassi e com adaptador desconhecido, o app não tem como saber: mantém o carro e avisa.
-                                store.vehicleNotice = "O carro não informou o chassi e este adaptador ($addr) ainda não está ligado a nenhum carro; " +
-                                    "o app manteve ${Vehicles.nameOf(store.carKey)}. Se não for esse, escolha o carro certo em Ajustes, uma vez: " +
-                                    "o app aprende o adaptador e passa a reconhecer sozinho."
-                            }
-                        }
-                    }
+                    lastAddr = (src as? BluetoothObdSource)?.connectedAddress
+                    store.lastVin = it.vin?.takeIf { v -> Vehicles.validVin(v) }
+                    reconcileCar()
                 }
                 // Falhas: lidas assim que conecta, mesmo com o motor desligado (só a ignição ligada).
                 if (it.state == ConnState.CONNECTED && !tripDtcsRead) readTripDtcs()
@@ -553,57 +540,84 @@ class MonitorEngine private constructor(private val app: Application) {
         val vin = store.lastVin
         if (vin != null) {
             store.learnVin(vin, id)
-            store.vehicleNotice = ""
+            store.confirmVin(vin)
         } else {
-            (source as? BluetoothObdSource)?.connectedAddress?.let { store.learnAdapter(it, id) }
+            lastAddr?.let { store.learnAdapter(it, id) }
         }
+        val painel = freshPainelCar()
+        store.vehicleNotice = if (painel != null && painel != id) {
+            "O multimídia diz ${Vehicles.nameOf(painel)}, mas você escolheu ${Vehicles.nameOf(id)} aqui. " +
+                "Para trocar de vez, mude o carro no multimídia (Ajustes > Carro)."
+        } else ""
         if (id != store.carKey) {
             store.vehicleId = id
             reloadForCar()
         }
+        lastCarKey = "$painel|${store.lastVin}|$lastAddr" // a escolha do dono não é desfeita na hora
         publish()
     }
 
-    /** Liga ou desliga a identificação automática pelo chassi. Ao ligar, já confere o carro conectado. */
-    fun setAutoDetect(on: Boolean) {
-        store.autoDetect = on
-        if (on) store.lastVin?.let { identifyByVin(it) }
-        publish()
+    // ---- Qual é o carro: multimídia (escolha fixa) > chassi > adaptador (ver domain/CarIdentity) ----
+    @Volatile private var painelCar: String? = null
+    @Volatile private var painelCarAtMs = 0L
+    @Volatile private var lastAddr: String? = null
+    private var lastCarKey = ""
+
+    private fun freshPainelCar(): String? = painelCar?.takeIf { System.currentTimeMillis() - painelCarAtMs < 120_000L }
+
+    /** O multimídia do carro avisou qual é o carro dele (chega a cada envio). */
+    fun carFromPainel(id: String) {
+        if (Vehicles.byId(id) == null) return
+        painelCar = id
+        painelCarAtMs = System.currentTimeMillis()
+        reconcileCar()
     }
 
-    /**
-     * Chassi conhecido: usa o carro que ficou guardado para ele. Primeira vez: palpite pela fábrica do chassi
-     * (perfil cadastrado daquela fábrica) ou, sem perfil, um carro novo com o perfil genérico e dados próprios.
-     * O palpite fica guardado, mas o dono corrige em Ajustes e a escolha dele passa a valer.
-     */
-    private fun identifyByVin(vin: String) {
-        val learned = store.vinCars[vin]
-        val target = learned ?: Vehicles.candidateByWmi(vin)?.id ?: Vehicles.customKey(vin)
-        if (learned == null) {
-            store.learnVin(vin, target)
-            store.vehicleNotice = if (Vehicles.isCustomKey(target)) {
-                "Chassi novo ($vin): sem perfil cadastrado, usando o perfil genérico. Escolha o modelo em Ajustes, se quiser."
-            } else {
-                "Chassi $vin identificado como ${Vehicles.nameOf(target)} (pela fábrica do chassi). Se não for esse modelo, escolha o certo em Ajustes."
-            }
+    /** Junta as pistas e, se algo mudou desde a última conta, decide o carro, aprende e troca. */
+    private fun reconcileCar() {
+        if (!store.autoDetect) return
+        val painel = freshPainelCar()
+        val vin = store.lastVin
+        val addr = lastAddr
+        val key = "$painel|$vin|$addr"
+        if (key == lastCarKey) return
+        lastCarKey = key
+        val vinCar = vin?.let { store.vinCars[it] ?: Vehicles.candidateByWmi(it)?.id ?: Vehicles.customKey(it) }
+        val d = CarIdentity.decide(
+            painel = painel, vinCar = vinCar, vinConfirmed = vin != null && vin in store.vinConfirmed,
+            adapterCar = addr?.let { store.adapterCars[it.uppercase()] }, current = store.carKey,
+        )
+        if (vin != null && vinCar != null && store.vinCars[vin] == null) store.learnVin(vin, vinCar) // guarda o palpite
+        if (d.confirmVin && vin != null) { store.learnVin(vin, d.carId); store.confirmVin(vin) }
+        if (d.learnAdapter && addr != null) store.learnAdapter(addr, d.carId)
+        store.vehicleNotice = when (d.source) {
+            CarSource.CONFLICT ->
+                "Conflito: o multimídia diz ${Vehicles.nameOf(painel)}, mas este chassi já foi confirmado como ${Vehicles.nameOf(d.carId)}. " +
+                    "Usando ${Vehicles.nameOf(d.carId)}. Confira o carro escolhido no multimídia."
+            CarSource.VIN_GUESS ->
+                if (Vehicles.isCustomKey(d.carId)) "Chassi novo ($vin): sem perfil cadastrado, usando o perfil genérico. Escolha o modelo em Ajustes, se quiser."
+                else "Chassi $vin identificado como ${Vehicles.nameOf(d.carId)} (palpite pela fábrica). Escolha o carro certo em Ajustes, ou deixe o multimídia confirmar."
+            CarSource.NONE ->
+                if (addr != null) "O carro não informou o chassi e este adaptador ($addr) ainda não está ligado a nenhum carro, e o multimídia não disse qual é; " +
+                    "o app manteve ${Vehicles.nameOf(store.carKey)}. Defina o carro no multimídia (Ajustes > Carro) ou escolha aqui em Ajustes, uma vez."
+                else ""
+            else -> ""
         }
-        // Dentro do launch confere de novo: a conexão pode avisar mais de uma vez antes de a troca acontecer.
-        if (target != store.carKey) scope.launch {
-            if (store.carKey != target) {
-                store.vehicleId = target
+        // Dentro do launch confere de novo: as pistas podem chegar mais de uma vez antes de a troca acontecer.
+        if (d.carId != store.carKey) scope.launch {
+            if (store.carKey != d.carId) {
+                store.vehicleId = d.carId
                 reloadForCar()
             }
         }
+        publish()
     }
 
-    /** Adaptador de outro carro conectou: passa a usar os dados dele, sem reiniciar o app. */
-    private fun checkCarByAdapter(address: String) {
-        val carId = store.adapterCars[address.uppercase()] ?: return
-        if (carId == store.carKey || Vehicles.byId(carId) == null) return
-        scope.launch {
-            store.vehicleId = carId
-            reloadForCar()
-        }
+    /** Liga ou desliga a identificação automática. Ao ligar, já confere as pistas de agora. */
+    fun setAutoDetect(on: Boolean) {
+        store.autoDetect = on
+        if (on) { lastCarKey = ""; reconcileCar() }
+        publish()
     }
 
     /** Recarrega o que é de cada carro (viagem, odômetro, abastecimentos, Saúde) e reconecta. */

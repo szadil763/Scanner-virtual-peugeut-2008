@@ -611,7 +611,10 @@ object PainelLink {
             failCount = 0
             if (c.responseCode == 200) {
                 val txt = c.inputStream.bufferedReader(Charsets.UTF_8).use { it.readText() }
-                val arr = JSONObject(txt).optJSONArray("comandos")
+                val resposta = JSONObject(txt)
+                // O multimídia diz qual é o carro dele (escolha fixa): o celular adota e aprende o chassi e o adaptador.
+                resposta.optString("carro", "").takeIf { it.isNotBlank() }?.let { id -> main.post { MonitorEngine.get(app).carFromPainel(id) } }
+                val arr = resposta.optJSONArray("comandos")
                 if (arr != null) {
                     for (i in 0 until arr.length()) {
                         val cmd = arr.optJSONObject(i) ?: continue

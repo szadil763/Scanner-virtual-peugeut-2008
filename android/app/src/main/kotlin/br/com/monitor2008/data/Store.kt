@@ -371,6 +371,22 @@ class Store(context: Context) {
         get() = carKey
         set(v) { app.edit().putString("vehicleId", v).apply() }
 
+    /**
+     * Carro DESTE multimídia (escolha fixa e obrigatória do dono). O multimídia fica no carro, então é a pista mais
+     * confiável: ele diz ao celular, a cada envio, qual carro é. Só vale um perfil cadastrado.
+     */
+    var fixedCarId: String?
+        get() = app.getString("fixedCar", null)?.takeIf { Vehicles.byId(it) != null }
+        set(v) { if (v == null) app.edit().remove("fixedCar").apply() else app.edit().putString("fixedCar", v).apply() }
+
+    /** Chassis cujo carro foi confirmado (pelo multimídia ou pelo dono em Ajustes), e não só palpitado pela fábrica. */
+    val vinConfirmed: Set<String>
+        get() = (app.getString("vinConfirmed", "") ?: "").split(';').filter { it.isNotBlank() }.toSet()
+
+    fun confirmVin(vin: String) {
+        app.edit().putString("vinConfirmed", (vinConfirmed + vin).joinToString(";")).apply()
+    }
+
     /** Identificar o carro sozinho pelo chassi ao conectar (padrão). Desligado = o dono fixou o carro. */
     var autoDetect: Boolean
         get() = app.getBoolean("autoDetect", true)

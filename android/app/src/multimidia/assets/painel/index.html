@@ -231,6 +231,11 @@
 </head>
 <body>
 <div id="toast" role="status"></div>
+<div id="carro-fixo" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;z-index:70;background:#000;padding:24px;flex-direction:column;gap:14px;overflow-y:auto">
+  <div style="font-size:30px;font-weight:700">Qual é o carro deste multimídia?</div>
+  <div class="aviso" style="font-size:20px">Escolha uma vez, agora. Este multimídia fica sempre no mesmo carro, então o celular usa essa escolha para saber em qual carro está, sem confundir com outro. Dá para mudar depois em Ajustes > Carro.</div>
+  <div id="cf-lista" style="display:grid;gap:12px"></div>
+</div>
 <div id="edit-abast" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;z-index:60;background:#000;padding:20px;overflow-y:auto">
   <div style="max-width:640px;margin:0 auto;display:grid;gap:10px">
     <div class="lbl">Editar abastecimento</div>
@@ -422,7 +427,10 @@
     <div class="linha"><button class="opc" onclick="ajusteAjuste('ajuste.preco',-1)">−</button><div class="v2" id="aj-preco">--</div><button class="opc" onclick="ajusteAjuste('ajuste.preco',1)">+</button></div>
     <div class="lbl">Eficiência volumétrica (usada só no método MAP)</div>
     <div class="linha"><button class="opc" onclick="ajusteAjuste('ajuste.eficiencia',-1)">−</button><div class="v2" id="aj-ef">--</div><button class="opc" onclick="ajusteAjuste('ajuste.eficiencia',1)">+</button></div>
-    <div class="lbl">Carro</div>
+    <div class="lbl">Carro deste multimídia (fixo)</div>
+    <div class="aviso">O multimídia diz ao celular qual é o carro dele, e o celular troca sozinho para esse carro.</div>
+    <div id="cf-ajustes" style="display:grid;gap:8px"></div>
+    <div class="lbl">Carro que o celular está usando agora</div>
     <div id="aj-carros"></div>
     <div class="lbl">Capacidade do tanque</div>
     <div class="linha"><button class="opc" onclick="cmdAjuste('ajuste.tanque',{valor:-1})">−</button><div class="v2" id="aj-tanque">--</div><button class="opc" onclick="cmdAjuste('ajuste.tanque',{valor:1})">+</button></div>
@@ -1861,6 +1869,31 @@
     if (nome && cel) return nome + ' (' + cel + ')';
     return nome || cel || 'Celular';
   }
+  /** Escolha fixa do carro deste multimídia: obrigatória até alguém escolher; depois fica em Ajustes. */
+  var carrosFixoMontado = '';
+  function carroFixoEscolher(id, nome) {
+    cmdAjuste('ajuste.carroFixo', { valor: id });
+    toast('Carro deste multimídia: ' + nome);
+  }
+  function paintCarroFixo(fixo, lista) {
+    if (!lista || !lista.length) return;
+    el('carro-fixo').style.display = fixo ? 'none' : 'flex';
+    var chave = JSON.stringify(lista) + '|' + (fixo || '');
+    if (chave === carrosFixoMontado) return;
+    carrosFixoMontado = chave;
+    ['cf-lista', 'cf-ajustes'].forEach(function (idBox, i) {
+      var box = el(idBox);
+      box.textContent = '';
+      lista.forEach(function (c) {
+        var b = document.createElement('button');
+        b.className = (i === 0 ? 'enviar' : 'opc') + (i === 1 && c.id === fixo ? ' sel' : '');
+        if (i === 0) b.style.minHeight = '84px';
+        b.textContent = (i === 1 && c.id === fixo ? '✓ ' : '') + c.nome;
+        b.onclick = function () { carroFixoEscolher(c.id, c.nome); };
+        box.appendChild(b);
+      });
+    });
+  }
   function poll() {
     var st = el('status');
     fetch('/estado?t=' + Date.now(), { cache: 'no-store' })
@@ -1868,6 +1901,7 @@
       .then(function (s) {
         vozStatus = s.vozMultimidia || '';
         mostraVoz();
+        paintCarroFixo(s.carroFixo, s.carrosLista);
         postoLocalAtual = s.postoLocal || null;
         if (postoLocalAtual) paintPosto(postoLocalAtual);
         if (s.dados && s.idadeMs >= 0 && s.idadeMs < 4000) {

@@ -219,7 +219,8 @@ class PainelServerActivity : Activity() {
                             // Comando velho (celular estava desligado) não vale: abastecimento não entra depois.
                             if (agora - item.first <= VALIDADE_MS) cmds.put(JSONObject(item.second))
                         }
-                        val json = JSONObject().put("comandos", cmds).toString()
+                        // O carro deste multimídia vai junto: o celular adota e aprende o chassi e o adaptador.
+                        val json = JSONObject().put("comandos", cmds).put("carro", Store(application).fixedCarId ?: JSONObject.NULL).toString()
                         send(out, 200, "application/json; charset=utf-8", json.toByteArray(Charsets.UTF_8))
                     }
                     method == "POST" && path == "/capa" -> {
@@ -292,7 +293,7 @@ class PainelServerActivity : Activity() {
                     }
                     method == "GET" && path == "/estado" -> {
                         val age = if (latestAtMs == 0L) -1 else System.currentTimeMillis() - latestAtMs
-                        val json = "{\"idadeMs\":$age,\"dados\":${latestJson ?: "null"},\"vozMultimidia\":\"$ttsStatus\",\"postoLocal\":${postoLocal?.toString() ?: "null"}}"
+                        val json = "{\"idadeMs\":$age,\"dados\":${latestJson ?: "null"},\"vozMultimidia\":\"$ttsStatus\",\"postoLocal\":${postoLocal?.toString() ?: "null"},\"carroFixo\":${JSONObject.quote(Store(application).fixedCarId ?: "")},\"carrosLista\":${carrosLista()}}"
                         send(out, 200, "application/json; charset=utf-8", json.toByteArray(Charsets.UTF_8))
                     }
                     method == "GET" && path == "/midia" ->
@@ -330,6 +331,11 @@ class PainelServerActivity : Activity() {
     }
 
     /** Ajustes deste multimídia: o que a tela mostra e o que cada botão muda. */
+    /** Perfis de carro para a escolha fixa deste multimídia. */
+    private fun carrosLista(): String = JSONArray().apply {
+        br.com.monitor2008.domain.Vehicles.all.forEach { v -> put(JSONObject().put("id", v.id).put("nome", "${v.name} ${v.engine.substringBefore(" (")}")) }
+    }.toString()
+
     private fun executarAjuste(o: JSONObject) {
         val acao = o.optString("acao")
         val valor = o.optString("valor")
@@ -337,6 +343,7 @@ class PainelServerActivity : Activity() {
         val st = Store(application)
         val lanc = AppLauncher(application)
         when (acao) {
+            "ajuste.carroFixo" -> if (br.com.monitor2008.domain.Vehicles.byId(valor) != null) st.fixedCarId = valor
             "ajuste.mapa" -> if (lanc.mapApps().any { it.pkg == valor }) lanc.mapPackage = valor
             "ajuste.musica" -> if (lanc.musicApps().any { it.pkg == valor }) lanc.musicPackage = valor
             "ajuste.voz" -> if (vozesPt().any { it.name == valor }) {
@@ -616,7 +623,7 @@ class PainelServerActivity : Activity() {
         private val AJUSTES_LOCAIS = setOf(
             "ajuste.mapa", "ajuste.musica", "ajuste.voz", "ajuste.vozOuvir", "ajuste.velocidade", "ajuste.tom",
             "ajuste.continuar", "ajuste.lugarRemover", "atualizacao.verificar", "atualizacao.instalar",
-            "sistema.notificacoes", "sistema.sobrepor", "ajuste.flutuante", "ajuste.flutuanteItem", "ajuste.flutuanteTamanho", "ajuste.flutuanteTestar", "ajuste.continuarMapa",
+            "sistema.notificacoes", "sistema.sobrepor", "ajuste.flutuante", "ajuste.flutuanteItem", "ajuste.flutuanteTamanho", "ajuste.flutuanteTestar", "ajuste.continuarMapa", "ajuste.carroFixo",
         )
         private const val VALIDADE_MS = 20_000L
         /** Fila de comandos (instante, JSON) esperando o próximo envio do celular. */
