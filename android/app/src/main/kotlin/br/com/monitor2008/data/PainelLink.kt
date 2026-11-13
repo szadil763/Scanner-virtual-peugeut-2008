@@ -328,6 +328,12 @@ object PainelLink {
             put("celular", nomeDoCelular(app))
             put("carro", br.com.monitor2008.domain.Vehicles.nameOf(Store(app).carKey))
             put("carroAviso", Store(app).vehicleNotice.isNotBlank()) // o app não tem certeza de qual é o carro
+            put("bateriaSituacoes", JSONArray().apply {
+                ui.batteryStats.forEach { st ->
+                    put(JSONObject().put("situacao", st.regime.label).put("n", st.count)
+                        .put("media", r2(st.avgV)).put("min", r2(st.minV)).put("max", r2(st.maxV)))
+                }
+            })
             put("rpm", num(s?.rpm))
             put("speed", num(s?.speedKmh))
             put("coolant", num(s?.coolantC))

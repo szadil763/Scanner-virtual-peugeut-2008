@@ -390,6 +390,9 @@
       <div>Ar na admissão: <b id="sg-ar">--</b> °C</div>
       <div>Borboleta: <b id="sg-borb">--</b> %</div>
     </div>
+    <div class="lbl">Tensão da bateria por situação</div>
+    <div class="lista" id="dg-bateria" style="padding:0;flex:0 0 auto;overflow:visible"></div>
+    <div class="aviso">Com o motor ligado e o alternador carregando, o normal é perto de 13,5 a 14,7 V. Perto de 12,5 V é a bateria sozinha. O registro completo e o botão de compartilhar ficam no app do celular (Diagnóstico).</div>
     <div class="lbl">Falhas armazenadas na central</div>
     <button class="feito" style="margin-top:0" onclick="lerFalhas()">Ler falhas agora (só consulta, não apaga)</button>
     <div class="lista" id="dg-falhas" style="padding:0"></div>
@@ -1894,6 +1897,21 @@
       });
     });
   }
+  var ultimaBateria = '';
+  function paintBateria(lista) {
+    var chave = JSON.stringify(lista || []);
+    if (chave === ultimaBateria) return;
+    ultimaBateria = chave;
+    var box = el('dg-bateria');
+    if (!box) return;
+    box.textContent = '';
+    if (!lista || !lista.length) { box.appendChild(linha('', 'Sem leituras ainda', '', 'Rode um pouco com o motor ligado e o app conectado.')); return; }
+    lista.forEach(function (b) {
+      var ruim = b.media < 13.0;
+      box.appendChild(linha(ruim ? 'warn' : 'ok', b.situacao, b.media.toFixed(2).replace('.', ',') + ' V (média)',
+        'de ' + b.min.toFixed(2).replace('.', ',') + ' a ' + b.max.toFixed(2).replace('.', ',') + ' V · ' + b.n + ' leituras'));
+    });
+  }
   function poll() {
     var st = el('status');
     fetch('/estado?t=' + Date.now(), { cache: 'no-store' })
@@ -1902,6 +1920,7 @@
         vozStatus = s.vozMultimidia || '';
         mostraVoz();
         paintCarroFixo(s.carroFixo, s.carrosLista);
+        if (s.dados) paintBateria(s.dados.bateriaSituacoes);
         postoLocalAtual = s.postoLocal || null;
         if (postoLocalAtual) paintPosto(postoLocalAtual);
         if (s.dados && s.idadeMs >= 0 && s.idadeMs < 4000) {

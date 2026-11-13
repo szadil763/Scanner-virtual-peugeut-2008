@@ -1412,6 +1412,28 @@ private fun DiagnosticoScreen(ui: UiState, vm: MonitorEngine) {
         Text("Carro: ${ui.vehicle?.fullName ?: "?"}", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 16.sp)
         if (ui.vehicleNotice.isNotBlank()) Text(ui.vehicleNotice, color = Warn, fontSize = 15.sp)
         OutlinedButton(onClick = vm::start, modifier = Modifier.height(60.dp)) { Text("Reconectar", fontSize = 18.sp) }
+        // Tensão da bateria por situação: mostra quando o alternador deixa de carregar (ex.: descida sem acelerar).
+        Text("Tensão da bateria por situação", fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
+        if (ui.batteryStats.isEmpty()) {
+            Text("Sem leituras ainda. Rode um pouco com o motor ligado e o app conectado.", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 15.sp)
+        } else {
+            ui.batteryStats.forEach { st ->
+                val ruim = st.avgV < 13.0
+                Text("${st.regime.label}: média ${"%.2f".format(java.util.Locale.US, st.avgV)} V (${"%.2f".format(java.util.Locale.US, st.minV)} a ${"%.2f".format(java.util.Locale.US, st.maxV)}) · ${st.count} leituras",
+                    color = if (ruim) Warn else MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 15.sp)
+            }
+            Text("Com o motor ligado e o alternador carregando, o normal fica perto de 13,5 a 14,7 V. Perto de 12,5 V é a bateria sozinha.",
+                color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 14.sp)
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            OutlinedButton(onClick = {
+                val send = Intent(Intent.ACTION_SEND).setType("text/plain")
+                    .putExtra(Intent.EXTRA_SUBJECT, "Tensão da bateria")
+                    .putExtra(Intent.EXTRA_TEXT, vm.batteryReport())
+                context.startActivity(Intent.createChooser(send, "Enviar o registro da bateria"))
+            }, modifier = Modifier.height(56.dp)) { Text("Compartilhar registro", fontSize = 16.sp) }
+            OutlinedButton(onClick = vm::clearBatteryLog, modifier = Modifier.height(56.dp)) { Text("Apagar registro", fontSize = 16.sp) }
+        }
         Text("Falhas armazenadas", fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
         when (val d = ui.dtcs) {
             null -> Text("Ainda não lidas: o app lê sozinho ao conectar, ou toque em \"Ler falhas\".")

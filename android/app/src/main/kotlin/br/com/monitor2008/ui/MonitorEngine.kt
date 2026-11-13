@@ -13,6 +13,7 @@ import br.com.monitor2008.data.HealthStore
 import br.com.monitor2008.data.ReadingService
 import br.com.monitor2008.data.ObdSource
 import br.com.monitor2008.data.Refuel
+import br.com.monitor2008.data.BatteryStore
 import br.com.monitor2008.data.Sample
 import br.com.monitor2008.data.SimulatedSource
 import br.com.monitor2008.data.Store
@@ -47,6 +48,9 @@ import br.com.monitor2008.domain.MissedDistance
 import br.com.monitor2008.domain.OdometerReminder
 import br.com.monitor2008.domain.RefuelCompare
 import br.com.monitor2008.domain.CriticalAlert
+import br.com.monitor2008.domain.BatteryLog
+import br.com.monitor2008.domain.BatteryPoint
+import br.com.monitor2008.domain.BatteryStat
 import br.com.monitor2008.domain.CarIdentity
 import br.com.monitor2008.domain.CarSource
 import br.com.monitor2008.domain.CriticalAlerts
@@ -122,6 +126,9 @@ data class UiState(
     /** Identificar o carro sozinho pelo chassi, e o aviso de como foi identificado. */
     val autoDetect: Boolean = true,
     val vehicleNotice: String = "",
+    /** Tensão da bateria por situação de rodagem (descida sem acelerar, parado, acelerando...) e total de leituras. */
+    val batteryStats: List<BatteryStat> = emptyList(),
+    val batteryReadings: Int = 0,
     val stations: List<Station> = emptyList(),
     /** Postos com nota de qualidade, os bons e mais perto primeiro. */
     val stationRatings: List<StationRating> = emptyList(),
@@ -216,6 +223,13 @@ class MonitorEngine private constructor(private val app: Application) {
     private val alertSpoken = mutableMapOf<String, Long>()
     private val _ui = MutableStateFlow(snapshot())
     val ui: StateFlow<UiState> = _ui.asStateFlow()
+
+    // Registro da tensão da bateria (declarado antes do init: o init já pode chamar publish()).
+    private val batteryPoints = ArrayList<BatteryPoint>().also { it.addAll(BatteryStore(app, store.carKey).load()) }
+    private val batteryPending = ArrayList<BatteryPoint>()
+    private var lastBatteryPoint: BatteryPoint? = null
+    @Volatile private var batteryStatsCache: List<BatteryStat> = BatteryLog.stats(batteryPoints)
+    private var batteryStatsAtMs = 0L
 
     init {
         // Quem já tinha informado o km antes do lembrete: conta a partir de hoje (sem lembrar logo de cara).
@@ -339,7 +353,44 @@ class MonitorEngine private constructor(private val app: Application) {
     /** Motor girando na amostra anterior: ao ligar o motor, a escuta da palavra "Monitor" volta. */
     private var engineWasRunning = false
 
+    // ---- Registro da tensão da bateria com a rotação, a velocidade e a carga ----
+
+    private fun recordBattery(s: Sample) {
+        val volts = s.batteryV ?: return
+        val rpm = s.rpm ?: return
+        if (store.useSimulated || rpm < BatteryLog.MIN_RPM) return
+        val p = BatteryPoint(s.timeMs, volts, rpm, s.speedKmh ?: 0.0, s.loadPct, s.throttlePct)
+        if (!BatteryLog.shouldRecord(lastBatteryPoint, p)) return
+        lastBatteryPoint = p
+        synchronized(batteryPoints) {
+            batteryPoints += p
+            batteryPending += p
+            if (batteryPoints.size > BatteryLog.MAX_POINTS) batteryPoints.subList(0, batteryPoints.size - BatteryLog.MAX_POINTS).clear()
+        }
+        if (s.timeMs - batteryStatsAtMs > 5_000L) {
+            batteryStatsAtMs = s.timeMs
+            batteryStatsCache = synchronized(batteryPoints) { BatteryLog.stats(batteryPoints) }
+        }
+    }
+
+    private fun flushBattery() {
+        val lote = synchronized(batteryPoints) { batteryPending.toList().also { batteryPending.clear() } }
+        BatteryStore(app, store.carKey).append(lote)
+    }
+
+    /** Texto para o mecânico: resumo por situação e amostra das leituras (compartilha pelo WhatsApp). */
+    fun batteryReport(): String = BatteryLog.report(Vehicles.nameOf(store.carKey), synchronized(batteryPoints) { batteryPoints.toList() })
+
+    fun clearBatteryLog() {
+        synchronized(batteryPoints) { batteryPoints.clear(); batteryPending.clear() }
+        lastBatteryPoint = null
+        batteryStatsCache = emptyList()
+        BatteryStore(app, store.carKey).clear()
+        publish()
+    }
+
     private fun onSample(s: Sample) {
+        recordBattery(s)
         val running = (s.rpm ?: 0.0) > 300
         if (running && !engineWasRunning) MicService.update(app, renew = true)
         engineWasRunning = running
@@ -625,6 +676,10 @@ class MonitorEngine private constructor(private val app: Application) {
     fun recarregarCarro() = reloadForCar()
 
     private fun reloadForCar() {
+        flushBattery()
+        synchronized(batteryPoints) { batteryPoints.clear(); batteryPending.clear(); batteryPoints.addAll(BatteryStore(app, store.carKey).load()) }
+        lastBatteryPoint = null
+        batteryStatsCache = BatteryLog.stats(batteryPoints)
         br.com.monitor2008.data.Nuvem.trocouCarro()
         odometerKm = store.odometerKm
         uncalLiters = store.uncalLiters
@@ -912,6 +967,7 @@ class MonitorEngine private constructor(private val app: Application) {
 
     /** Grava o progresso (odômetro, acumuladores e trajeto). Chamado a cada 20 s e quando o app sai da tela. */
     fun saveNow() {
+        flushBattery()
         store.saveProgress(odometerKm, uncalLiters, kmSinceFull)
         store.tankEstimateL = tankEstimateL
         recordTank("rodando")
@@ -1000,6 +1056,8 @@ class MonitorEngine private constructor(private val app: Application) {
             vehicle = vehicle,
             autoDetect = store.autoDetect,
             vehicleNotice = store.vehicleNotice,
+            batteryStats = batteryStatsCache,
+            batteryReadings = batteryPoints.size,
             stations = stationList,
             stationRatings = stationRatings(),
             history = history.toList(),
