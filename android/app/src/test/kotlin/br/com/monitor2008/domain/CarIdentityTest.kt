@@ -15,21 +15,29 @@ class CarIdentityTest {
         assertTrue(d.learnAdapter); assertFalse(d.confirmVin)
     }
 
-    @Test fun painelConfirmsAGuessedVin() {
-        // O chassi tinha um palpite pela fábrica (2008); o multimídia do C4 diz C4: vale o multimídia e o chassi é confirmado como C4.
-        val d = CarIdentity.decide(painel = c4, vinCar = p2008, vinConfirmed = false, adapterCar = p2008, current = p2008)
+    @Test fun painelAgreeingWithTheVinConfirmsIt() {
+        val d = CarIdentity.decide(painel = c4, vinCar = c4, vinConfirmed = false, adapterCar = c4, current = p2008)
         assertEquals(c4, d.carId); assertEquals(CarSource.PAINEL, d.source); assertTrue(d.confirmVin); assertTrue(d.learnAdapter)
     }
 
-    @Test fun confirmedVinBeatsADisagreeingPainel() {
-        val d = CarIdentity.decide(painel = c4, vinCar = p2008, vinConfirmed = true, adapterCar = null, current = c4)
-        assertEquals(p2008, d.carId); assertEquals(CarSource.CONFLICT, d.source)
-        assertFalse(d.confirmVin); assertFalse(d.learnAdapter)
+    @Test fun painelTeachesAVinThatHasNoProfile() {
+        val unknown = Vehicles.customKey("9BWZZZ377VT004251")
+        val d = CarIdentity.decide(painel = c4, vinCar = unknown, vinConfirmed = false, adapterCar = null, current = c4)
+        assertEquals(CarSource.PAINEL, d.source); assertTrue(d.confirmVin)
     }
 
-    @Test fun painelAgreeingWithConfirmedVinIsNotAConflict() {
-        val d = CarIdentity.decide(painel = c4, vinCar = c4, vinConfirmed = true, adapterCar = null, current = c4)
-        assertEquals(CarSource.PAINEL, d.source)
+    @Test fun aVinOfAnotherCarMeansTheWrongAdapterAndKeepsTheCurrentCar() {
+        // Multimídia do C4, mas o adaptador conectado é do 2008 (carros lado a lado): não mistura os dados.
+        val d = CarIdentity.decide(painel = c4, vinCar = p2008, vinConfirmed = true, adapterCar = null, current = c4)
+        assertEquals(CarSource.CONFLICT, d.source); assertEquals(c4, d.carId); assertEquals(p2008, d.otherCar)
+        assertFalse(d.confirmVin); assertFalse(d.learnAdapter)
+        // Mesmo com o chassi só palpitado pela fábrica: marcas diferentes não combinam.
+        assertEquals(CarSource.CONFLICT, CarIdentity.decide(c4, p2008, false, null, c4).source)
+    }
+
+    @Test fun anAdapterKnownToBeOfAnotherCarIsAlsoAConflictWhenThereIsNoVin() {
+        val d = CarIdentity.decide(painel = c4, vinCar = null, vinConfirmed = false, adapterCar = p2008, current = c4)
+        assertEquals(CarSource.CONFLICT, d.source); assertEquals(p2008, d.otherCar); assertEquals(c4, d.carId)
     }
 
     @Test fun withoutPainelTheVinWins() {

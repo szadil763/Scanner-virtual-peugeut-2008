@@ -111,6 +111,8 @@ class BleLink private constructor(private val gatt: BluetoothGatt) {
          */
         fun find(
             adapter: BluetoothAdapter, matches: (String) -> Boolean, scanMs: Long = 15_000, seen: MutableSet<String>? = null,
+            /** Recusa adaptadores que se sabe serem de outro carro (carros estacionados lado a lado). */
+            allowAddress: (String) -> Boolean = { true },
         ): BluetoothDevice? {
             val scanner = adapter.bluetoothLeScanner ?: return null
             var found: BluetoothDevice? = null
@@ -121,7 +123,7 @@ class BleLink private constructor(private val gatt: BluetoothGatt) {
                     // Registra também os sem nome (pelo endereço): mostra no registro se o rádio está vendo algo.
                     seen?.let { synchronized(it) { it.add(name ?: result.device.address) } }
                     if (name == null) return
-                    if (found == null && matches(name)) {
+                    if (found == null && matches(name) && allowAddress(result.device.address)) {
                         found = result.device
                         latch.countDown()
                     }

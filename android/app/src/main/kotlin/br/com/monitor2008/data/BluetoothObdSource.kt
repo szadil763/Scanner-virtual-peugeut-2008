@@ -39,6 +39,8 @@ import java.util.UUID
 class BluetoothObdSource(
     private val context: Context,
     private val preferredName: String?,
+    /** Diz se pode conectar neste endereço (o motor recusa o adaptador de outro carro quando o multimídia diz qual é o carro). */
+    private val adapterAllowed: (String) -> Boolean = { true },
 ) : ObdSource {
 
     override val name = "Adaptador Bluetooth"
@@ -241,7 +243,7 @@ class BluetoothObdSource(
             ?: return fail("Este aparelho não tem Bluetooth")
         if (!adapter.isEnabled) return fail("Bluetooth desligado")
 
-        val bonded = adapter.bondedDevices.toList().firstOrNull { matches(it.name) }
+        val bonded = adapter.bondedDevices.toList().firstOrNull { matches(it.name) && adapterAllowed(it.address) }
 
         // Adaptador só clássico (ex.: ELM327 mini azul do C4) que já conectou antes: direto nele, sem a busca BLE.
         if (bonded != null && store.classicWorks) {
@@ -357,7 +359,7 @@ class BluetoothObdSource(
 
     private fun connectBle(adapter: BluetoothAdapter, scanMs: Long): BleLink? {
         val addr = store.bleAddress
-        if (addr != null && BluetoothAdapter.checkBluetoothAddress(addr) && matches(store.bleName)) {
+        if (addr != null && BluetoothAdapter.checkBluetoothAddress(addr) && matches(store.bleName) && adapterAllowed(addr)) {
             _info.value = ConnectionInfo(ConnState.CONNECTING, "Conectando no adaptador ${store.bleName}...")
             log("BLE: conectando direto em ${store.bleName} ($addr)")
             // Uma tentativa só: se o adaptador não estiver anunciando, a busca abaixo acha mais rápido
@@ -367,7 +369,7 @@ class BluetoothObdSource(
 
         _info.value = ConnectionInfo(ConnState.CONNECTING, "Procurando o adaptador BLE...")
         val seen = mutableSetOf<String>()
-        val device = BleLink.find(adapter, ::matches, scanMs = scanMs, seen = seen)
+        val device = BleLink.find(adapter, ::matches, scanMs = scanMs, seen = seen, allowAddress = adapterAllowed)
         if (device == null) {
             lastBleSeen = synchronized(seen) { seen.size }
             log("BLE: a busca não achou o adaptador. Aparelhos BLE vistos: ${synchronized(seen) { seen.joinToString(", ") }.ifBlank { "nenhum" }}")

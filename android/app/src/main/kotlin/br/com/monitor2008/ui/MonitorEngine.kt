@@ -284,15 +284,17 @@ class MonitorEngine private constructor(private val app: Application) {
         val src: ObdSource = if (store.useSimulated) {
             SimulatedSource()
         } else {
-            BluetoothObdSource(app, store.adapterName.ifBlank { null })
+            BluetoothObdSource(app, store.adapterName.ifBlank { null }, adapterAllowed = ::adapterAllowed)
         }
         source = src
         infoJob = scope.launch {
             src.info.collect {
                 // Conexão perdida ou carro desligado: a viagem termina aqui.
                 if (it.state != ConnState.CONNECTED) closeTrip()
+                val estadoAntes = conn.state
                 conn = it
                 if (it.state == ConnState.CONNECTED) {
+                    if (estadoAntes != ConnState.CONNECTED || settledSinceMs == 0L) settledSinceMs = System.currentTimeMillis()
                     lastAddr = (src as? BluetoothObdSource)?.connectedAddress
                     store.lastVin = it.vin?.takeIf { v -> Vehicles.validVin(v) }
                     reconcileCar()
@@ -431,7 +433,11 @@ class MonitorEngine private constructor(private val app: Application) {
         if (!store.useSimulated) {
             recordHealth(s, dt)
             // O contador anda de 1 em 1 km: confere só quando muda (e na primeira leitura de cada conexão).
-            s.distSinceClearKm?.let { if (it != lastDistCounter) { lastDistCounter = it; checkMissedDistance(it) } }
+            // Espera o carro assentar (chassi, multimídia e adaptador): conferir antes podia comparar o contador de um carro
+            // com o hodômetro de outro e inventar quilômetros "rodados sem o app".
+            if (System.currentTimeMillis() - settledSinceMs >= SETTLE_MS) {
+                s.distSinceClearKm?.let { if (it != lastDistCounter) { lastDistCounter = it; checkMissedDistance(it) } }
+            }
         }
 
         if (s.timeMs - lastSaveMs > 20_000) {
@@ -613,8 +619,20 @@ class MonitorEngine private constructor(private val app: Application) {
     @Volatile private var painelCarAtMs = 0L
     @Volatile private var lastAddr: String? = null
     private var lastCarKey = ""
+    /** Quando a conexão atual (ou a última troca de carro) começou: o contador de km só é conferido depois de o carro assentar. */
+    @Volatile private var settledSinceMs = 0L
 
-    private fun freshPainelCar(): String? = painelCar?.takeIf { System.currentTimeMillis() - painelCarAtMs < 120_000L }
+    private fun freshPainelCar(): String? = painelCar?.takeIf { System.currentTimeMillis() - painelCarAtMs < 20_000L }
+
+    /**
+     * Com o multimídia por perto (ele diz em qual carro estamos), não conecta em adaptador que se sabe ser de OUTRO
+     * carro: com os dois carros lado a lado, o celular pegava o adaptador do vizinho e trocava de carro a cada conexão.
+     */
+    fun adapterAllowed(address: String): Boolean {
+        val painel = freshPainelCar() ?: return true
+        val dono = store.adapterCars[address.uppercase()] ?: return true
+        return dono == painel
+    }
 
     /** O multimídia do carro avisou qual é o carro dele (chega a cada envio). */
     fun carFromPainel(id: String) {
@@ -640,11 +658,19 @@ class MonitorEngine private constructor(private val app: Application) {
         )
         if (vin != null && vinCar != null && store.vinCars[vin] == null) store.learnVin(vin, vinCar) // guarda o palpite
         if (d.confirmVin && vin != null) { store.learnVin(vin, d.carId); store.confirmVin(vin) }
-        if (d.learnAdapter && addr != null) store.learnAdapter(addr, d.carId)
+        // Não ensina o adaptador se ele já é de outro carro (não sobrescreve um cadastro com um palpite).
+        if (d.learnAdapter && addr != null && (store.adapterCars[addr.uppercase()] ?: d.carId) == d.carId) store.learnAdapter(addr, d.carId)
+        if (d.source == CarSource.CONFLICT) {
+            // Adaptador do carro errado (ex.: o do carro ao lado): guarda de quem é, para não escolher de novo, e reconecta
+            // procurando o certo. Os dados lidos dele NÃO entram nos registros do carro em que se está.
+            d.otherCar?.let { outro -> if (addr != null) store.learnAdapter(addr, outro) }
+            scope.launch { start() }
+        }
         store.vehicleNotice = when (d.source) {
             CarSource.CONFLICT ->
-                "Conflito: o multimídia diz ${Vehicles.nameOf(painel)}, mas este chassi já foi confirmado como ${Vehicles.nameOf(d.carId)}. " +
-                    "Usando ${Vehicles.nameOf(d.carId)}. Confira o carro escolhido no multimídia."
+                "O adaptador conectado é do ${Vehicles.nameOf(d.otherCar)}, mas o multimídia diz ${Vehicles.nameOf(painel)}. " +
+                    "O app desconectou para procurar o adaptador do ${Vehicles.nameOf(painel)} (sem misturar os dados). " +
+                    "Se o carro em que você está for o ${Vehicles.nameOf(d.otherCar)}, desligue o multimídia do outro carro."
             CarSource.VIN_GUESS ->
                 if (Vehicles.isCustomKey(d.carId)) "Chassi novo ($vin): sem perfil cadastrado, usando o perfil genérico. Escolha o modelo em Ajustes, se quiser."
                 else "Chassi $vin identificado como ${Vehicles.nameOf(d.carId)} (palpite pela fábrica). Escolha o carro certo em Ajustes, ou deixe o multimídia confirmar."
@@ -676,6 +702,7 @@ class MonitorEngine private constructor(private val app: Application) {
     fun recarregarCarro() = reloadForCar()
 
     private fun reloadForCar() {
+        settledSinceMs = System.currentTimeMillis()
         flushBattery()
         synchronized(batteryPoints) { batteryPoints.clear(); batteryPending.clear(); batteryPoints.addAll(BatteryStore(app, store.carKey).load()) }
         lastBatteryPoint = null
@@ -1066,6 +1093,8 @@ class MonitorEngine private constructor(private val app: Application) {
     }
 
     companion object {
+        /** Tempo depois de conectar (ou trocar de carro) antes de conferir o contador de km da central. */
+        private const val SETTLE_MS = 8_000L
         /** Motor parado por mais que isso = fim da viagem. */
         private const val ENGINE_OFF_TRIP_END_MS = 30_000L
         private const val SPEED_POINTS = 240
