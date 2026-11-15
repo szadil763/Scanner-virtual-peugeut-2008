@@ -217,19 +217,21 @@ class MonitorEngine private constructor(private val app: Application) {
     /** Onde o carro está (para a distância dos postos); atualizado pela aba Postos. */
     private var here: Pair<Double, Double>? = null
 
+    // Registro da tensão da bateria. Tem de vir ANTES de _ui: o snapshot() que monta _ui já lê estes campos (declarados depois,
+    // ainda eram nulos e o app fechava ao abrir, como na 0.1.64).
+    private val batteryPoints = ArrayList<BatteryPoint>().also { it.addAll(BatteryStore(app, store.carKey).load()) }
+    private val batteryPending = ArrayList<BatteryPoint>()
+    private var lastBatteryPoint: BatteryPoint? = null
+    @Volatile private var batteryStatsCache: List<BatteryStat> = BatteryLog.stats(batteryPoints)
+    private var batteryStatsAtMs = 0L
+
+
     // Antes de _ui e do init: os dois montam a tela (snapshot), que usa o modo direção. Declarados
     // depois, ainda eram nulos e o app fechava ao abrir (0.1.64).
     private val driveTracker = DriveModeTracker()
     private val alertSpoken = mutableMapOf<String, Long>()
     private val _ui = MutableStateFlow(snapshot())
     val ui: StateFlow<UiState> = _ui.asStateFlow()
-
-    // Registro da tensão da bateria (declarado antes do init: o init já pode chamar publish()).
-    private val batteryPoints = ArrayList<BatteryPoint>().also { it.addAll(BatteryStore(app, store.carKey).load()) }
-    private val batteryPending = ArrayList<BatteryPoint>()
-    private var lastBatteryPoint: BatteryPoint? = null
-    @Volatile private var batteryStatsCache: List<BatteryStat> = BatteryLog.stats(batteryPoints)
-    private var batteryStatsAtMs = 0L
 
     init {
         // Quem já tinha informado o km antes do lembrete: conta a partir de hoje (sem lembrar logo de cara).
