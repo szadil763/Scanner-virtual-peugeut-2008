@@ -197,25 +197,31 @@ fun MonitorApp(vm: MonitorEngine) {
                 // Botão de voz grande no menu da esquerda, visível em todas as abas (pedido do dono).
                 BigVoiceButton(compact)
             }) {
-                // Ícone grande e aba escolhida com fundo azul: dá para achar sem ler (análise de uso dirigindo).
-                val itemHeight = if (compact) 60.dp else 66.dp
-                tabs.forEach { t ->
-                    NavigationRailItem(
-                        selected = tab == t,
-                        onClick = { tab = t },
-                        icon = { Text(t.icon, fontSize = if (compact) 20.sp else 22.sp) },
-                        label = {
-                            Text(t.label, fontSize = if (compact) 13.sp else 15.sp,
-                                fontWeight = if (tab == t) FontWeight.Bold else FontWeight.Normal)
-                        },
-                        alwaysShowLabel = true,
-                        colors = androidx.compose.material3.NavigationRailItemDefaults.colors(
-                            indicatorColor = MaterialTheme.colorScheme.primary,
-                            selectedTextColor = MaterialTheme.colorScheme.primary,
-                            unselectedTextColor = MaterialTheme.colorScheme.onSurface,
-                        ),
-                        modifier = Modifier.height(itemHeight),
-                    )
+                // Permite rolar as abas em multimídias de altura menor para nunca cortar Diagnóstico/Ajustes.
+                Column(
+                    modifier = Modifier.verticalScroll(rememberScrollState()),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                ) {
+                    // Ícone grande e aba escolhida com fundo azul: dá para achar sem ler (análise de uso dirigindo).
+                    val itemHeight = if (compact) 60.dp else 66.dp
+                    tabs.forEach { t ->
+                        NavigationRailItem(
+                            selected = tab == t,
+                            onClick = { tab = t },
+                            icon = { Text(t.icon, fontSize = if (compact) 20.sp else 22.sp) },
+                            label = {
+                                Text(t.label, fontSize = if (compact) 13.sp else 15.sp,
+                                    fontWeight = if (tab == t) FontWeight.Bold else FontWeight.Normal)
+                            },
+                            alwaysShowLabel = true,
+                            colors = androidx.compose.material3.NavigationRailItemDefaults.colors(
+                                indicatorColor = MaterialTheme.colorScheme.primary,
+                                selectedTextColor = MaterialTheme.colorScheme.primary,
+                                unselectedTextColor = MaterialTheme.colorScheme.onSurface,
+                            ),
+                            modifier = Modifier.height(itemHeight),
+                        )
+                    }
                 }
             }
             // Margem maior à direita: a moldura do multimídia cobre a borda direita da tela (fotos da 0.1.15).
@@ -282,8 +288,8 @@ private fun PhoneLayout(ui: UiState, vm: MonitorEngine, tab: Tab, onTab: (Tab) -
             }
             val voiceStart = rememberVoiceStart()
             NavigationBarItem(
-                selected = false, onClick = voiceStart, icon = {},
-                label = { Text("🎤 Voz", fontSize = 14.sp, maxLines = 1) }, alwaysShowLabel = true,
+                selected = false, onClick = voiceStart, icon = { Text("🎤", fontSize = 20.sp) },
+                label = { Text("Voz", fontSize = 13.sp, maxLines = 1) }, alwaysShowLabel = true,
             )
             val inMore = tab !in PHONE_TABS
             // Modo direção andando: sem "Mais" (Postos, Manutenção etc. não servem dirigindo).
@@ -1425,6 +1431,7 @@ private fun DiagnosticoScreen(ui: UiState, vm: MonitorEngine) {
             Text("Com o motor ligado e o alternador carregando, o normal fica perto de 13,5 a 14,7 V. Perto de 12,5 V é a bateria sozinha.",
                 color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 14.sp)
         }
+        var confirmarLimparBateria by remember { mutableStateOf(false) }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             OutlinedButton(onClick = {
                 val send = Intent(Intent.ACTION_SEND).setType("text/plain")
@@ -1432,7 +1439,23 @@ private fun DiagnosticoScreen(ui: UiState, vm: MonitorEngine) {
                     .putExtra(Intent.EXTRA_TEXT, vm.batteryReport())
                 context.startActivity(Intent.createChooser(send, "Enviar o registro da bateria"))
             }, modifier = Modifier.height(56.dp)) { Text("Compartilhar registro", fontSize = 16.sp) }
-            OutlinedButton(onClick = vm::clearBatteryLog, modifier = Modifier.height(56.dp)) { Text("Apagar registro", fontSize = 16.sp) }
+            OutlinedButton(onClick = { confirmarLimparBateria = true }, modifier = Modifier.height(56.dp)) { Text("Apagar registro", fontSize = 16.sp) }
+        }
+        if (confirmarLimparBateria) {
+            AlertDialog(
+                onDismissRequest = { confirmarLimparBateria = false },
+                title = { Text("Apagar registro da bateria?") },
+                text = { Text("Remove todas as medições acumuladas por situação do carro. Não dá para desfazer.") },
+                confirmButton = {
+                    TextButton(onClick = {
+                        confirmarLimparBateria = false
+                        vm.clearBatteryLog()
+                    }) { Text("Apagar", color = Bad) }
+                },
+                dismissButton = {
+                    TextButton(onClick = { confirmarLimparBateria = false }) { Text("Cancelar") }
+                },
+            )
         }
         Text("Falhas armazenadas", fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
         when (val d = ui.dtcs) {

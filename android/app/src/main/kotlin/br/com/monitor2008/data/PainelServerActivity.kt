@@ -13,6 +13,7 @@ import android.webkit.WebSettings
 import android.webkit.WebView
 import android.widget.LinearLayout
 import android.widget.TextView
+import java.io.BufferedInputStream
 import java.io.ByteArrayOutputStream
 import java.io.InputStream
 import java.io.OutputStream
@@ -22,10 +23,19 @@ import java.net.ServerSocket
 import java.net.Socket
 import org.json.JSONArray
 import org.json.JSONObject
+import br.com.monitor2008.domain.ContentLength
+import br.com.monitor2008.domain.PainelHttpRules
 import java.util.concurrent.ConcurrentLinkedQueue
+import java.util.concurrent.ExecutorService
+import java.util.concurrent.Executors
+import java.util.concurrent.atomic.AtomicBoolean
 import java.util.Collections
 import kotlin.concurrent.thread
-import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.launch
 
 /**
  * Painel no multimídia (só o APK do multimídia). Abre uma porta na rede e atende:
@@ -38,6 +48,8 @@ import kotlinx.coroutines.runBlocking
 class PainelServerActivity : Activity() {
 
     private var server: ServerSocket? = null
+    private var clientPool: ExecutorService? = null
+    private val ioScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     @Volatile private var running = false
     @Volatile private var latestJson: String? = null
     @Volatile private var latestAtMs = 0L
@@ -106,12 +118,20 @@ class PainelServerActivity : Activity() {
         })
         try {
             val s = ServerSocket(PORT)
+            val pool = Executors.newFixedThreadPool(MAX_CLIENT_THREADS) { r ->
+                Thread(r, "painel-http").apply { isDaemon = true }
+            }
             server = s
+            clientPool = pool
             running = true
             thread(isDaemon = true, name = "painel-servidor") {
                 while (running) {
                     val client = try { s.accept() } catch (_: Exception) { break }
-                    thread(isDaemon = true) { handle(client) }
+                    try {
+                        pool.execute { handle(client) }
+                    } catch (_: Exception) {
+                        try { client.close() } catch (_: Exception) { }
+                    }
                 }
             }
             val lines = addresses().map { "$it:$PORT" }
@@ -145,7 +165,11 @@ class PainelServerActivity : Activity() {
     override fun onDestroy() {
         uiHandler?.removeCallbacksAndMessages(null)
         running = false
+        ioScope.cancel()
+        try { clientPool?.shutdownNow() } catch (_: Exception) { }
+        clientPool = null
         try { server?.close() } catch (_: Exception) { }
+        server = null
         web?.destroy()
         tts?.shutdown()
         super.onDestroy()
@@ -180,24 +204,43 @@ class PainelServerActivity : Activity() {
     private fun handle(client: Socket) {
         client.use { sock ->
             try {
-                val input = sock.getInputStream()
+                sock.soTimeout = SOCKET_TIMEOUT_MS
+                val input = BufferedInputStream(sock.getInputStream())
                 val out = sock.getOutputStream()
-                val head = readHead(input)
-                val lines = head.split("\r\n")
-                val parts = lines.firstOrNull()?.split(" ") ?: return
-                val method = parts.getOrElse(0) { "" }
-                val path = parts.getOrElse(1) { "/" }.substringBefore('?')
-                val len = lines.drop(1)
-                    .firstOrNull { it.startsWith("content-length:", ignoreCase = true) }
-                    ?.substringAfter(':')?.trim()?.toIntOrNull() ?: 0
-                val body = if (len in 1..MAX_BODY) readBody(input, len) else ByteArray(0)
+                val rawHead = readHead(input)
+                val req = PainelHttpRules.parseRequestHead(rawHead) ?: run {
+                    send(out, 400, "text/plain; charset=utf-8", "Requisição inválida".toByteArray(Charsets.UTF_8))
+                    return
+                }
+                val len = when (val cl = PainelHttpRules.parseContentLength(req.headers, MAX_BODY)) {
+                    is ContentLength.Valid -> cl.size
+                    ContentLength.TooLarge -> {
+                        send(out, 413, "text/plain; charset=utf-8", "Corpo muito grande".toByteArray(Charsets.UTF_8))
+                        return
+                    }
+                    ContentLength.Invalid -> {
+                        send(out, 400, "text/plain; charset=utf-8", "Content-Length inválido".toByteArray(Charsets.UTF_8))
+                        return
+                    }
+                }
+                val body = if (len > 0) readBody(input, len) else ByteArray(0)
+                val method = req.method
+                val path = req.path
+                if (method == "POST" && !PainelHttpRules.isAllowedLocalOrigin(req.headers["origin"], req.headers["referer"])) {
+                    send(out, 403, "text/plain; charset=utf-8", "Origem não permitida".toByteArray(Charsets.UTF_8))
+                    return
+                }
                 when {
                     // O próprio multimídia não é fonte de dados (só o celular): descarta o que vier daqui mesmo.
-                    method == "POST" && path == "/estado" && esteAparelho(sock.inetAddress) ->
-                        send(out, 200, "application/json; charset=utf-8", "{\"comandos\":[]}".toByteArray(Charsets.UTF_8))
-                    method == "POST" && path == "/estado" && !fonteAceita(sock.inetAddress, body) ->
-                        send(out, 200, "application/json; charset=utf-8", "{\"comandos\":[]}".toByteArray(Charsets.UTF_8))
                     method == "POST" && path == "/estado" -> {
+                        if (!PainelHttpRules.isJsonContentType(req.headers["content-type"])) {
+                            send(out, 415, "text/plain; charset=utf-8", "Content-Type inválido".toByteArray(Charsets.UTF_8))
+                            return
+                        }
+                        if (esteAparelho(sock.inetAddress) || !fonteAceita(sock.inetAddress, body)) {
+                            send(out, 200, "application/json; charset=utf-8", "{\"comandos\":[]}".toByteArray(Charsets.UTF_8))
+                            return
+                        }
                         latestJson = String(body, Charsets.UTF_8)
                         latestAtMs = System.currentTimeMillis()
                         // A miniatura sobre outros apps mostra estes números (o multimídia não lê o carro).
@@ -212,18 +255,16 @@ class PainelServerActivity : Activity() {
                             )
                         } catch (_: Exception) { }
                         // Resposta: os comandos que os botões pediram desde o último envio.
-                        val cmds = JSONArray()
-                        val agora = System.currentTimeMillis()
-                        while (true) {
-                            val item = pending.poll() ?: break
-                            // Comando velho (celular estava desligado) não vale: abastecimento não entra depois.
-                            if (agora - item.first <= VALIDADE_MS) cmds.put(JSONObject(item.second))
-                        }
+                        val cmds = drainValidCommands()
                         // O carro deste multimídia vai junto: o celular adota e aprende o chassi e o adaptador.
                         val json = JSONObject().put("comandos", cmds).put("carro", Store(application).fixedCarId ?: JSONObject.NULL).toString()
                         send(out, 200, "application/json; charset=utf-8", json.toByteArray(Charsets.UTF_8))
                     }
                     method == "POST" && path == "/capa" -> {
+                        if (!PainelHttpRules.isImageContentType(req.headers["content-type"])) {
+                            send(out, 415, "text/plain; charset=utf-8", "Content-Type de imagem inválido".toByteArray(Charsets.UTF_8))
+                            return
+                        }
                         if (body.isNotEmpty()) capa = body
                         send(out, 204, "text/plain; charset=utf-8", ByteArray(0))
                     }
@@ -233,67 +274,15 @@ class PainelServerActivity : Activity() {
                         else send(out, 404, "text/plain; charset=utf-8", ByteArray(0))
                     }
                     method == "POST" && path == "/comando" -> {
-                        val obj = try { JSONObject(String(body, Charsets.UTF_8)) } catch (_: Exception) { null }
-                        val acaoLocal = obj?.optString("acao") ?: ""
-                        var respondido = false
-                        if (acaoLocal == "mapa.limpar") Store(application).clearLastRoute() // destino limpo: não retoma
-                        if (acaoLocal == "posto.localizar") {
-                            postoLocal = null
-                            thread(isDaemon = true) { localizarNoMultimidia() }
-                        } else if (obj != null && acaoLocal == "musica.buscar") {
-                            // Busca de música: espera o resultado (até 3 s) e devolve o texto, para o painel
-                            // mostrar na hora o que o app fez (ou o erro) em vez de ficar sem resposta.
-                            val resultado = arrayOfNulls<String>(1)
-                            val trava = java.util.concurrent.CountDownLatch(1)
-                            val textoBusca = obj.optString("texto")
-                            runOnUiThread {
-                                try {
-                                    val ok = PainelLink.executarMidia(application, acaoLocal, textoBusca)
-                                    resultado[0] = if (ok) PainelLink.avisoMusica.second.ifBlank { "Pedido enviado." }
-                                    else "Este aparelho não controla música (falta o acesso às notificações)."
-                                } catch (e: Throwable) {
-                                    resultado[0] = "Erro ao buscar: ${e.message ?: e.javaClass.simpleName}"
-                                } finally {
-                                    trava.countDown()
-                                }
-                            }
-                            trava.await(3, java.util.concurrent.TimeUnit.SECONDS)
-                            val corpo = JSONObject().put("mensagem", resultado[0] ?: "O app não respondeu em 3 segundos.").toString()
-                            send(out, 200, "application/json; charset=utf-8", corpo.toByteArray(Charsets.UTF_8))
-                            respondido = true
-                        } else if (obj != null && (acaoLocal.startsWith("musica.") || acaoLocal.startsWith("radio."))) {
-                            // Música e rádio: tocam aqui, no multimídia (não passam pelo celular).
-                            val texto = obj.optString("texto")
-                            runOnUiThread { PainelLink.executarMidia(application, acaoLocal, texto) }
-                        } else if (obj != null && (acaoLocal == "mapa.abrir" || acaoLocal == "mapa.rota")) {
-                            // Mapa: abre o do próprio multimídia; se não conseguir, pede ao celular.
-                            runOnUiThread {
-                                val erro = try {
-                                    if (acaoLocal == "mapa.abrir") AppLauncher(application).openMap(null)
-                                    else obj.optString("texto").trim().takeIf { it.isNotEmpty() }?.let { q ->
-                                        val endereco = br.com.monitor2008.domain.VoiceCommands.placeFor(q, Store(application).places()) ?: q
-                                        AppLauncher(application).routeTo(endereco, null)
-                                    } ?: "Digite o destino."
-                                } catch (_: Exception) { "Não consegui abrir o mapa." }
-                                if (erro != null && comandoValido(obj)) pending.add(System.currentTimeMillis() to obj.toString())
-                                // Mapa aberto aqui: o Monitor fica por cima em miniatura (números do carro); o toque volta ao painel.
-                                if (erro == null && FloatingPanel.available(application)) {
-                                    FloatingPanel.show(application, PainelServerActivity::class.java)
-                                }
-                            }
-                        } else if (obj != null && acaoLocal in AJUSTES_LOCAIS) {
-                            // Ajustes deste multimídia: mudam as preferências daqui, não passam pelo celular.
-                            runOnUiThread { executarAjuste(obj) }
-                        } else if (obj != null && comandoValido(obj)) {
-                            pending.add(System.currentTimeMillis() to obj.toString())
-                            // Fila curta: se o celular não estiver ligado, não acumula comandos.
-                            while (pending.size > 5) pending.poll()
+                        if (!PainelHttpRules.isJsonContentType(req.headers["content-type"])) {
+                            send(out, 415, "text/plain; charset=utf-8", "Content-Type inválido".toByteArray(Charsets.UTF_8))
+                            return
                         }
-                        if (!respondido) send(out, 204, "text/plain; charset=utf-8", ByteArray(0))
+                        handlePostComando(out, body)
                     }
                     method == "GET" && path == "/estado" -> {
                         val age = if (latestAtMs == 0L) -1 else System.currentTimeMillis() - latestAtMs
-                        val json = "{\"idadeMs\":$age,\"dados\":${latestJson ?: "null"},\"vozMultimidia\":\"$ttsStatus\",\"postoLocal\":${postoLocal?.toString() ?: "null"},\"carroFixo\":${JSONObject.quote(Store(application).fixedCarId ?: "")},\"carrosLista\":${carrosLista()}}"
+                        val json = "{\"idadeMs\":$age,\"dados\":${latestJson ?: "null"},\"vozMultimidia\":${JSONObject.quote(ttsStatus)},\"postoLocal\":${postoLocal?.toString() ?: "null"},\"carroFixo\":${JSONObject.quote(Store(application).fixedCarId ?: "")},\"carrosLista\":${carrosLista()}}"
                         send(out, 200, "application/json; charset=utf-8", json.toByteArray(Charsets.UTF_8))
                     }
                     method == "GET" && path == "/midia" ->
@@ -307,9 +296,72 @@ class PainelServerActivity : Activity() {
                     else -> send(out, 404, "text/plain; charset=utf-8", "Não encontrado".toByteArray(Charsets.UTF_8))
                 }
             } catch (_: Exception) {
-                // Cliente cortou a conexão: nada a fazer.
+                // Cliente cortou a conexão ou estourou timeout: nada a fazer.
             }
         }
+    }
+
+    /** Processa POST /comando já validado por origem e Content-Type application/json. */
+    private fun handlePostComando(out: OutputStream, body: ByteArray) {
+        val obj = try { JSONObject(String(body, Charsets.UTF_8)) } catch (_: Exception) { null }
+        if (obj == null) {
+            send(out, 400, "text/plain; charset=utf-8", "JSON inválido".toByteArray(Charsets.UTF_8))
+            return
+        }
+        val acaoLocal = obj.optString("acao")
+        var respondido = false
+        if (acaoLocal == "mapa.limpar") Store(application).clearLastRoute() // destino limpo: não retoma
+        if (acaoLocal == "posto.localizar") {
+            postoLocal = null
+            ioScope.launch { localizarNoMultimidia() }
+        } else if (acaoLocal == "musica.buscar") {
+            // Busca de música: espera o resultado (até 3 s) e devolve o texto, para o painel
+            // mostrar na hora o que o app fez (ou o erro) em vez de ficar sem resposta.
+            val resultado = arrayOfNulls<String>(1)
+            val trava = java.util.concurrent.CountDownLatch(1)
+            val textoBusca = obj.optString("texto")
+            runOnUiThread {
+                try {
+                    val ok = PainelLink.executarMidia(application, acaoLocal, textoBusca)
+                    resultado[0] = if (ok) PainelLink.avisoMusica.second.ifBlank { "Pedido enviado." }
+                    else "Este aparelho não controla música (falta o acesso às notificações)."
+                } catch (e: Throwable) {
+                    resultado[0] = "Erro ao buscar: ${e.message ?: e.javaClass.simpleName}"
+                } finally {
+                    trava.countDown()
+                }
+            }
+            trava.await(3, java.util.concurrent.TimeUnit.SECONDS)
+            val corpo = JSONObject().put("mensagem", resultado[0] ?: "O app não respondeu em 3 segundos.").toString()
+            send(out, 200, "application/json; charset=utf-8", corpo.toByteArray(Charsets.UTF_8))
+            respondido = true
+        } else if (acaoLocal.startsWith("musica.") || acaoLocal.startsWith("radio.")) {
+            // Música e rádio: tocam aqui, no multimídia (não passam pelo celular).
+            val texto = obj.optString("texto")
+            runOnUiThread { PainelLink.executarMidia(application, acaoLocal, texto) }
+        } else if (acaoLocal == "mapa.abrir" || acaoLocal == "mapa.rota") {
+            // Mapa: abre o do próprio multimídia; se não conseguir, pede ao celular.
+            runOnUiThread {
+                val erro = try {
+                    if (acaoLocal == "mapa.abrir") AppLauncher(application).openMap(null)
+                    else obj.optString("texto").trim().takeIf { it.isNotEmpty() }?.let { q ->
+                        val endereco = br.com.monitor2008.domain.VoiceCommands.placeFor(q, Store(application).places()) ?: q
+                        AppLauncher(application).routeTo(endereco, null)
+                    } ?: "Digite o destino."
+                } catch (_: Exception) { "Não consegui abrir o mapa." }
+                if (erro != null && comandoValido(obj)) enqueueCommand(obj.toString())
+                // Mapa aberto aqui: o Monitor fica por cima em miniatura (números do carro); o toque volta ao painel.
+                if (erro == null && FloatingPanel.available(application)) {
+                    FloatingPanel.show(application, PainelServerActivity::class.java)
+                }
+            }
+        } else if (acaoLocal in AJUSTES_LOCAIS) {
+            // Ajustes deste multimídia: mudam as preferências daqui, não passam pelo celular.
+            runOnUiThread { executarAjuste(obj) }
+        } else if (comandoValido(obj)) {
+            enqueueCommand(obj.toString())
+        }
+        if (!respondido) send(out, 204, "text/plain; charset=utf-8", ByteArray(0))
     }
 
     /** Vozes em português deste aparelho, na ordem de qualidade (vazia enquanto o leitor não iniciou). */
@@ -455,19 +507,19 @@ class PainelServerActivity : Activity() {
         }
     }
 
-    private var capaLocalKey: String? = null
+    @Volatile private var capaLocalKey: String? = null
 
     /**
      * Posto pelo GPS deste multimídia. Se ele não achar, pede ao celular (que aparece no
      * próximo envio do painel).
      */
-    private fun localizarNoMultimidia() {
-        val fix = try { runBlocking { PlaceFinder.current(application, timeoutMs = 8_000) } } catch (_: Exception) { null }
+    private suspend fun localizarNoMultimidia() {
+        val fix = try { PlaceFinder.current(application, timeoutMs = 8_000) } catch (_: Exception) { null }
         if (fix == null) {
-            pending.add(System.currentTimeMillis() to JSONObject().put("acao", "posto.localizar").toString())
+            enqueueCommand(JSONObject().put("acao", "posto.localizar").toString())
             return
         }
-        val achado = try { runBlocking { PlaceFinder.address(application, fix.latitude, fix.longitude) } } catch (_: Exception) { null }
+        val achado = try { PlaceFinder.address(application, fix.latitude, fix.longitude) } catch (_: Exception) { null }
         val endereco = if (achado.isNullOrBlank()) "Endereço não encontrado" else achado
         postoLocal = JSONObject().apply {
             put("ok", true)
@@ -478,17 +530,23 @@ class PainelServerActivity : Activity() {
         }
     }
 
+    @Synchronized
+    private fun atualizarCapaLocal(chave: String, art: android.graphics.Bitmap) {
+        if (chave == capaLocalKey) return
+        capaLocalKey = chave
+        val pequena = android.graphics.Bitmap.createScaledBitmap(art, 300, 300, true)
+        val img = ByteArrayOutputStream()
+        pequena.compress(android.graphics.Bitmap.CompressFormat.JPEG, 80, img)
+        capa = img.toByteArray()
+    }
+
     /** Música e rádio deste aparelho (o multimídia tem o próprio acesso às notificações). */
     private fun midiaLocal(): String {
         val np = if (Features.mediaControl) MediaWatcher.get(application).now.value else null
         val art = np?.art
         val chave = if (np != null) "${np.pkg}|${np.title}|${np.artist}" else null
         if (np != null && art != null && chave != null && chave != capaLocalKey) {
-            capaLocalKey = chave
-            val pequena = android.graphics.Bitmap.createScaledBitmap(art, 300, 300, true)
-            val img = ByteArrayOutputStream()
-            pequena.compress(android.graphics.Bitmap.CompressFormat.JPEG, 80, img)
-            capa = img.toByteArray()
+            atualizarCapaLocal(chave, art)
         }
         val musica: Any = np?.let { n ->
             JSONObject().apply {
@@ -512,7 +570,7 @@ class PainelServerActivity : Activity() {
             }
         } else JSONObject.NULL
         // Lista de rádios: favoritas primeiro, depois as mais ouvidas do catálogo (busca em segundo plano).
-        if (!radiosBuscando && System.currentTimeMillis() - radiosTentativaMs > 30_000) buscarRadios()
+        if (!radiosBuscando.get() && System.currentTimeMillis() - radiosTentativaMs > 30_000) buscarRadios()
         val lista = JSONArray()
         PainelLink.radiosMultimidia.forEach { r ->
             lista.put(JSONObject().put("id", r.id).put("nome", r.name).put("assunto", r.subtitle)
@@ -540,20 +598,20 @@ class PainelServerActivity : Activity() {
         }.toString()
     }
 
-    @Volatile private var radiosBuscando = false
+    private val radiosBuscando = AtomicBoolean(false)
     @Volatile private var radiosTentativaMs = 0L
 
     /** Favoritas e as mais ouvidas do catálogo (precisa de internet do hotspot). Tenta a cada 30 s no máximo. */
     private fun buscarRadios() {
-        radiosBuscando = true
+        if (!radiosBuscando.compareAndSet(false, true)) return
         radiosTentativaMs = System.currentTimeMillis()
-        thread(isDaemon = true) {
+        ioScope.launch {
             try {
                 val favoritas = Store(application).radioFavorites()
-                val catalogo = try { runBlocking { br.com.monitor2008.data.RadioBrowser.search(limit = 30) } } catch (_: Exception) { emptyList() }
+                val catalogo = try { br.com.monitor2008.data.RadioBrowser.search(limit = 30) } catch (_: Exception) { emptyList() }
                 PainelLink.radiosMultimidia = (favoritas + catalogo).distinctBy { it.id }
             } finally {
-                radiosBuscando = false
+                radiosBuscando.set(false)
             }
         }
     }
@@ -564,7 +622,7 @@ class PainelServerActivity : Activity() {
         "<h1>Arquivo $name não encontrado</h1>".toByteArray(Charsets.UTF_8)
     }
 
-    /** Lê a linha de pedido e os cabeçalhos (até a linha vazia), byte a byte. */
+    /** Lê a linha de pedido e os cabeçalhos (até a linha vazia). */
     private fun readHead(input: InputStream): String {
         val buf = ByteArrayOutputStream()
         var a = 0
@@ -593,11 +651,7 @@ class PainelServerActivity : Activity() {
     }
 
     private fun send(out: OutputStream, status: Int, type: String, body: ByteArray) {
-        val reason = when (status) {
-            200 -> "OK"
-            204 -> "No Content"
-            else -> "Not Found"
-        }
+        val reason = PainelHttpRules.reasonPhrase(status)
         val head = "HTTP/1.1 $status $reason\r\n" +
             "Content-Type: $type\r\n" +
             "Content-Length: ${body.size}\r\n" +
@@ -610,8 +664,11 @@ class PainelServerActivity : Activity() {
 
     companion object {
         const val PORT = 8080
+        private const val SOCKET_TIMEOUT_MS = 5_000
+        private const val MAX_CLIENT_THREADS = 12
         private const val MAX_HEAD = 16_384
         private const val MAX_BODY = 300_000
+        private const val MAX_PENDING = 5
 
         /** Botões do painel que o celular executa (ver PainelLink.execute). */
         private val COMANDOS = setOf(
@@ -628,6 +685,28 @@ class PainelServerActivity : Activity() {
         private const val VALIDADE_MS = 20_000L
         /** Fila de comandos (instante, JSON) esperando o próximo envio do celular. */
         private val pending = ConcurrentLinkedQueue<Pair<Long, String>>()
+
+        /** Adiciona comando à fila mantendo o limite de [MAX_PENDING] de forma atômica. */
+        private fun enqueueCommand(cmdJson: String) {
+            synchronized(pending) {
+                pending.add(System.currentTimeMillis() to cmdJson)
+                while (pending.size > MAX_PENDING) pending.poll()
+            }
+        }
+
+        /** Drena os comandos válidos dentro da janela de expiração [VALIDADE_MS]. */
+        private fun drainValidCommands(): JSONArray {
+            val cmds = JSONArray()
+            val agora = System.currentTimeMillis()
+            synchronized(pending) {
+                while (true) {
+                    val item = pending.poll() ?: break
+                    // Comando velho (celular estava desligado) não vale: abastecimento não entra depois.
+                    if (agora - item.first <= VALIDADE_MS) cmds.put(JSONObject(item.second))
+                }
+            }
+            return cmds
+        }
 
         /** Confere o pedido antes de guardar: ação conhecida e, no abastecimento, valores plausíveis. */
         private fun comandoValido(o: JSONObject): Boolean {

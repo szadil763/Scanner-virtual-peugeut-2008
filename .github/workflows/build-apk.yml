@@ -2,8 +2,11 @@ name: Gerar APK
 
 # A cada envio para a branch main (ou a branch de desenvolvimento), compila o app, roda os testes e publica o APK
 # na página de Releases (versão "latest"), para baixar direto no multimídia ou no celular.
+# Em Pull Requests, executa os testes de forma estrita e valida o build sem sobrescrever a Release "latest".
 on:
   push:
+    branches: [main, claude/new-session-dxg0wo]
+  pull_request:
     branches: [main, claude/new-session-dxg0wo]
   workflow_dispatch:
 
@@ -29,10 +32,13 @@ jobs:
         with:
           gradle-version: "8.9"
 
+      - name: Validar fórmulas e tabelas
+        run: node tools/verify-formulas.js
+
       - name: Testes unitários
         working-directory: android
         run: gradle testMultimidiaDebugUnitTest --no-daemon --stacktrace
-        continue-on-error: true # um teste falhando não deve impedir de gerar o APK para o teste no carro
+        continue-on-error: ${{ github.event_name != 'pull_request' }} # em PRs falha a checagem; no push mantém build para teste no carro
 
       - name: Relatório dos testes
         if: always()
@@ -47,6 +53,7 @@ jobs:
         run: gradle assembleMultimidiaDebug assembleCelularDebug --no-daemon --stacktrace
 
       - name: Publicar APK na página de Releases
+        if: github.event_name != 'pull_request'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
