@@ -1,5 +1,6 @@
 package br.com.monitor2008.data
 
+import br.com.monitor2008.domain.AdapterSweep
 import br.com.monitor2008.domain.ReconnectRules
 import android.annotation.SuppressLint
 import android.bluetooth.BluetoothAdapter
@@ -48,6 +49,15 @@ class BluetoothObdSource(
     private val _info = MutableStateFlow(ConnectionInfo())
     /** Endereço do adaptador que conectou (para saber de qual carro ele é). */
     @Volatile var connectedAddress: String? = null
+    @Volatile private var connectedLabel: String? = null
+
+    // Dois adaptadores por perto (carros lado a lado): o do carro com o motor ligado é o que vale (ver AdapterSweep).
+    private val sweep = AdapterSweep()
+    @Volatile private var relaxed = false
+
+    /** Pode tentar este adaptador agora? Não, se o carro dele acabou de dizer que está desligado; e, com o multimídia por perto, só os do carro dele. */
+    private fun allowedNow(address: String): Boolean =
+        !sweep.isOff(address, System.currentTimeMillis()) && (relaxed || adapterAllowed(address))
     override val info: StateFlow<ConnectionInfo> = _info.asStateFlow()
 
     private val store = Store(context)
@@ -79,6 +89,22 @@ class BluetoothObdSource(
             _info.value = ConnectionInfo(ConnState.CONNECTING, "Procurando o adaptador...")
             val c = connect()
             if (c == null) { // connect() já deixou a mensagem de erro em _info
+                if (!relaxed) {
+                    // O filtro do multimídia pode ter escondido o adaptador certo: tenta de novo com todos.
+                    relaxed = true
+                    log("Nenhum adaptador permitido: tentando todos os que aparecem")
+                    delay(1_000)
+                    continue
+                }
+                if (sweep.anyOff(System.currentTimeMillis())) {
+                    // Todos os adaptadores vistos estão com o carro desligado: espera (poupa a bateria dos carros).
+                    _info.value = ConnectionInfo(ConnState.IDLE, "Carro desligado: leitura pausada. Volta sozinha quando ligar.")
+                    delay(ReconnectRules.afterEngineOff(offTimes++))
+                    sweep.clear()
+                    relaxed = false
+                    continue
+                }
+                relaxed = false
                 delay(ReconnectRules.afterFailure(failures++))
                 continue
             }
@@ -110,7 +136,10 @@ class BluetoothObdSource(
                     val vin = synchronized(lock) { c.readVin() }
                     if (vin != null) log("0902 (Chassi/VIN) -> $vin")
                     logging = false
-                    _info.value = ConnectionInfo(ConnState.CONNECTED, "Conectado", protocol, supported, vin)
+                    _info.value = ConnectionInfo(ConnState.CONNECTED, "Conectado", protocol, supported, vin, connectedLabel)
+                    // Achou o carro com o motor ligado: a próxima rodada recomeça respeitando o multimídia.
+                    sweep.quickSwitches = 0
+                    relaxed = false
 
                     val values = mutableMapOf<Pid, Double>()
                     var adapterVolts: Double? = null
@@ -155,8 +184,19 @@ class BluetoothObdSource(
             }
 
             if (engineOff) {
-                _info.value = ConnectionInfo(ConnState.IDLE, "Carro desligado: leitura pausada. Volta sozinha quando ligar.")
-                delay(ReconnectRules.afterEngineOff(offTimes++))
+                connectedAddress?.let { sweep.markOff(it, System.currentTimeMillis()) }
+                if (sweep.shouldTryAnotherNow()) {
+                    // Pode ser o adaptador do carro ao lado: passa já para o outro, o do carro que está com o motor ligado.
+                    sweep.quickSwitches++
+                    log("Carro desligado neste adaptador (${connectedLabel ?: "?"}): procurando o outro adaptador")
+                    _info.value = ConnectionInfo(ConnState.CONNECTING, "Carro desligado neste adaptador: procurando o outro...")
+                    delay(1_500)
+                } else {
+                    _info.value = ConnectionInfo(ConnState.IDLE, "Carro desligado: leitura pausada. Volta sozinha quando ligar.")
+                    delay(ReconnectRules.afterEngineOff(offTimes++))
+                    sweep.clear()
+                    relaxed = false
+                }
             } else if (_info.value.state == ConnState.ERROR && muteTimes >= 2) {
                 delay(ReconnectRules.afterFailure(muteTimes))
             } else {
@@ -243,7 +283,7 @@ class BluetoothObdSource(
             ?: return fail("Este aparelho não tem Bluetooth")
         if (!adapter.isEnabled) return fail("Bluetooth desligado")
 
-        val bonded = adapter.bondedDevices.toList().firstOrNull { matches(it.name) && adapterAllowed(it.address) }
+        val bonded = adapter.bondedDevices.toList().firstOrNull { matches(it.name) && allowedNow(it.address) }
 
         // Adaptador só clássico (ex.: ELM327 mini azul do C4) que já conectou antes: direto nele, sem a busca BLE.
         if (bonded != null && store.classicWorks) {
@@ -252,6 +292,7 @@ class BluetoothObdSource(
             openClassic(bonded)?.let { s ->
                 socket = s
                 connectedAddress = bonded.address
+                connectedLabel = "${bonded.name} ${bonded.address}"
                 return Elm327Client(s.inputStream, s.outputStream, ::exchanged).also { client = it }
             }
         }
@@ -277,6 +318,7 @@ class BluetoothObdSource(
             if (s != null) {
                 socket = s
                 connectedAddress = bonded.address
+                connectedLabel = "${bonded.name} ${bonded.address}"
                 return Elm327Client(s.inputStream, s.outputStream, ::exchanged).also { client = it }
             }
             return fail(
@@ -359,7 +401,7 @@ class BluetoothObdSource(
 
     private fun connectBle(adapter: BluetoothAdapter, scanMs: Long): BleLink? {
         val addr = store.bleAddress
-        if (addr != null && BluetoothAdapter.checkBluetoothAddress(addr) && matches(store.bleName) && adapterAllowed(addr)) {
+        if (addr != null && BluetoothAdapter.checkBluetoothAddress(addr) && matches(store.bleName) && allowedNow(addr)) {
             _info.value = ConnectionInfo(ConnState.CONNECTING, "Conectando no adaptador ${store.bleName}...")
             log("BLE: conectando direto em ${store.bleName} ($addr)")
             // Uma tentativa só: se o adaptador não estiver anunciando, a busca abaixo acha mais rápido
@@ -369,7 +411,7 @@ class BluetoothObdSource(
 
         _info.value = ConnectionInfo(ConnState.CONNECTING, "Procurando o adaptador BLE...")
         val seen = mutableSetOf<String>()
-        val device = BleLink.find(adapter, ::matches, scanMs = scanMs, seen = seen, allowAddress = adapterAllowed)
+        val device = BleLink.find(adapter, ::matches, scanMs = scanMs, seen = seen, allowAddress = ::allowedNow)
         if (device == null) {
             lastBleSeen = synchronized(seen) { seen.size }
             log("BLE: a busca não achou o adaptador. Aparelhos BLE vistos: ${synchronized(seen) { seen.joinToString(", ") }.ifBlank { "nenhum" }}")
@@ -383,7 +425,11 @@ class BluetoothObdSource(
 
     private fun openWithRetry(device: BluetoothDevice, tries: Int = 3): BleLink? {
         repeat(tries) { attempt ->
-            BleLink.open(context, device, ::log)?.let { connectedAddress = device.address; return it }
+            BleLink.open(context, device, ::log)?.let {
+                connectedAddress = device.address
+                connectedLabel = "${it.deviceName ?: "BLE"} ${device.address}"
+                return it
+            }
             if (attempt < tries - 1) Thread.sleep(1_500)
         }
         return null

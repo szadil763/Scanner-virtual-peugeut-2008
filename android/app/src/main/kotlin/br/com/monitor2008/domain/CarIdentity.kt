@@ -11,9 +11,9 @@ enum class CarSource {
     /** Só o endereço do adaptador. */
     ADAPTER,
     /**
-     * O multimídia diz um carro, mas o chassi ou o adaptador conectado é de OUTRO (ex.: o celular pegou o adaptador do
-     * carro estacionado ao lado). Os dados lidos não são do carro em que se está: o app não troca de carro,
-     * desconecta e procura o adaptador certo.
+     * O multimídia diz um carro, mas o chassi ou o adaptador conectado é de OUTRO. O adaptador só conecta de verdade
+     * quando o motor está ligado, então vale o carro dele; o multimídia pode ser o do carro ao lado, esquecido ligado.
+     * O app usa o carro do adaptador e avisa.
      */
     CONFLICT,
     /** Nenhuma pista: mantém o carro atual. */
@@ -36,9 +36,9 @@ data class CarDecision(
  * 1. o multimídia do carro (escolha fixa do dono, mandada ao celular);
  * 2. o chassi lido no OBD (único de cada carro), confirmado ou só um palpite;
  * 3. o endereço do adaptador (adaptadores baratos repetem o endereço, por isso o mais fraco).
- * Quando o multimídia diz um carro e o chassi (ou o adaptador conhecido) é de outro, é CONFLITO: o adaptador conectado
- * é o errado. O app não mistura os dados (continua no carro atual) e procura o adaptador certo. Quando não há conflito,
- * o multimídia ensina ao chassi e ao adaptador.
+ * Quando o multimídia diz um carro e o chassi (ou o adaptador conhecido) é de outro, é CONFLITO: vale o carro do
+ * adaptador conectado (o que está com o motor ligado) e o app avisa. Sem conflito, o multimídia ensina ao chassi e ao
+ * adaptador.
  */
 object CarIdentity {
     fun decide(
@@ -52,7 +52,10 @@ object CarIdentity {
             // Carro "sem perfil" (chave vin-...) não conflita: o multimídia é quem o identifica.
             val vinOther = vinCar != null && vinCar != painel && !Vehicles.isCustomKey(vinCar)
             val adapterOther = vinCar == null && adapterCar != null && adapterCar != painel
-            if (vinOther || adapterOther) return CarDecision(current, CarSource.CONFLICT, otherCar = if (vinOther) vinCar else adapterCar)
+            if (vinOther || adapterOther) {
+                val doAdaptador = if (vinOther) vinCar else adapterCar
+                return CarDecision(doAdaptador!!, CarSource.CONFLICT, otherCar = doAdaptador)
+            }
             return CarDecision(painel, CarSource.PAINEL, confirmVin = vinCar != null, learnAdapter = true)
         }
         if (vinCar != null) return CarDecision(vinCar, if (vinConfirmed) CarSource.VIN_CONFIRMED else CarSource.VIN_GUESS)

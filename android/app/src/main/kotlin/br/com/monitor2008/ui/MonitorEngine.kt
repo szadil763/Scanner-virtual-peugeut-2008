@@ -662,17 +662,11 @@ class MonitorEngine private constructor(private val app: Application) {
         if (d.confirmVin && vin != null) { store.learnVin(vin, d.carId); store.confirmVin(vin) }
         // Não ensina o adaptador se ele já é de outro carro (não sobrescreve um cadastro com um palpite).
         if (d.learnAdapter && addr != null && (store.adapterCars[addr.uppercase()] ?: d.carId) == d.carId) store.learnAdapter(addr, d.carId)
-        if (d.source == CarSource.CONFLICT) {
-            // Adaptador do carro errado (ex.: o do carro ao lado): guarda de quem é, para não escolher de novo, e reconecta
-            // procurando o certo. Os dados lidos dele NÃO entram nos registros do carro em que se está.
-            d.otherCar?.let { outro -> if (addr != null) store.learnAdapter(addr, outro) }
-            scope.launch { start() }
-        }
         store.vehicleNotice = when (d.source) {
             CarSource.CONFLICT ->
-                "O adaptador conectado é do ${Vehicles.nameOf(d.otherCar)}, mas o multimídia diz ${Vehicles.nameOf(painel)}. " +
-                    "O app desconectou para procurar o adaptador do ${Vehicles.nameOf(painel)} (sem misturar os dados). " +
-                    "Se o carro em que você está for o ${Vehicles.nameOf(d.otherCar)}, desligue o multimídia do outro carro."
+                "O multimídia diz ${Vehicles.nameOf(painel)}, mas o adaptador com o motor ligado é do ${Vehicles.nameOf(d.carId)}. " +
+                    "O app está lendo o ${Vehicles.nameOf(d.carId)}. Se o multimídia do ${Vehicles.nameOf(painel)} estiver ligado " +
+                    "e você não estiver nele, desligue-o."
             CarSource.VIN_GUESS ->
                 if (Vehicles.isCustomKey(d.carId)) "Chassi novo ($vin): sem perfil cadastrado, usando o perfil genérico. Escolha o modelo em Ajustes, se quiser."
                 else "Chassi $vin identificado como ${Vehicles.nameOf(d.carId)} (palpite pela fábrica). Escolha o carro certo em Ajustes, ou deixe o multimídia confirmar."

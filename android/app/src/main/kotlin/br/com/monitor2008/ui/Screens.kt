@@ -1409,6 +1409,7 @@ private fun DiagnosticoScreen(ui: UiState, vm: MonitorEngine) {
         Text("Conexão: ${c.message.ifBlank { "aguardando" }}${if (c.protocol.isNotBlank()) " · protocolo ${c.protocol}" else ""}", color = color, fontSize = 18.sp)
         if (c.vin != null) Text("Chassi (VIN): ${c.vin}", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 16.sp)
         else if (c.state == ConnState.CONNECTED) Text("Chassi (VIN): o carro não informou", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 16.sp)
+        c.adapter?.let { Text("Adaptador conectado: $it", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 16.sp) }
         Text("Carro: ${ui.vehicle?.fullName ?: "?"}", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 16.sp)
         if (ui.vehicleNotice.isNotBlank()) Text(ui.vehicleNotice, color = Warn, fontSize = 15.sp)
         OutlinedButton(onClick = vm::start, modifier = Modifier.height(60.dp)) { Text("Reconectar", fontSize = 18.sp) }

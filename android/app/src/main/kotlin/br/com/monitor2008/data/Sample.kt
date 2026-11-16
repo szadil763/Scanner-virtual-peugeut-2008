@@ -36,4 +36,6 @@ data class ConnectionInfo(
     val protocol: String = "",
     val supportedPids: Set<Int> = emptySet(),
     val vin: String? = null,
+    /** Nome e endereço do adaptador conectado (o Diagnóstico mostra, para saber em qual carro o app está lendo). */
+    val adapter: String? = null,
 )

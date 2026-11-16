@@ -26,10 +26,10 @@ class CarIdentityTest {
         assertEquals(CarSource.PAINEL, d.source); assertTrue(d.confirmVin)
     }
 
-    @Test fun aVinOfAnotherCarMeansTheWrongAdapterAndKeepsTheCurrentCar() {
-        // Multimídia do C4, mas o adaptador conectado é do 2008 (carros lado a lado): não mistura os dados.
+    @Test fun aVinOfAnotherCarWinsBecauseItsAdapterHasTheEngineRunning() {
+        // Multimídia do C4 (talvez o do carro ao lado, esquecido ligado), mas o adaptador conectado é do 2008: vale o 2008.
         val d = CarIdentity.decide(painel = c4, vinCar = p2008, vinConfirmed = true, adapterCar = null, current = c4)
-        assertEquals(CarSource.CONFLICT, d.source); assertEquals(c4, d.carId); assertEquals(p2008, d.otherCar)
+        assertEquals(CarSource.CONFLICT, d.source); assertEquals(p2008, d.carId); assertEquals(p2008, d.otherCar)
         assertFalse(d.confirmVin); assertFalse(d.learnAdapter)
         // Mesmo com o chassi só palpitado pela fábrica: marcas diferentes não combinam.
         assertEquals(CarSource.CONFLICT, CarIdentity.decide(c4, p2008, false, null, c4).source)
@@ -37,7 +37,7 @@ class CarIdentityTest {
 
     @Test fun anAdapterKnownToBeOfAnotherCarIsAlsoAConflictWhenThereIsNoVin() {
         val d = CarIdentity.decide(painel = c4, vinCar = null, vinConfirmed = false, adapterCar = p2008, current = c4)
-        assertEquals(CarSource.CONFLICT, d.source); assertEquals(p2008, d.otherCar); assertEquals(c4, d.carId)
+        assertEquals(CarSource.CONFLICT, d.source); assertEquals(p2008, d.otherCar); assertEquals(p2008, d.carId)
     }
 
     @Test fun withoutPainelTheVinWins() {
