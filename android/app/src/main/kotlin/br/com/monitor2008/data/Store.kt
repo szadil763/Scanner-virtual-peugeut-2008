@@ -33,6 +33,11 @@ class Store(context: Context) {
 
     init { migrarPreferenciasDoAparelho() }
 
+    companion object {
+        // Trava única de processo para operações ler-alterar-gravar em listas/mapas JSON do SharedPreferences.
+        private val lock = Any()
+    }
+
     /** Id do carro ativo (ver Vehicles). Sem escolha ainda, vale o 2008 (instalação antiga). */
     val carKey: String get() = app.getString("vehicleId", null) ?: Vehicles.PEUGEOT_2008.id
 
@@ -59,17 +64,19 @@ class Store(context: Context) {
      * os outros são aprendidos ao escolher o carro em Ajustes com o adaptador conectado.
      */
     var adapterCars: Map<String, String>
-        get() {
+        get() = synchronized(lock) {
             val raw = app.getString("adapterCars", null)
                 ?: "81:23:45:67:89:BA>${Vehicles.PEUGEOT_2008.id};01:23:45:67:89:BA>${Vehicles.C4_LOUNGE_20.id}"
-            return raw.split(';').mapNotNull { e ->
+            raw.split(';').mapNotNull { e ->
                 val parts = e.split('>')
                 if (parts.size == 2 && parts[0].isNotBlank()) parts[0].uppercase() to parts[1] else null
             }.toMap()
         }
-        set(v) { app.edit().putString("adapterCars", v.entries.joinToString(";") { "${it.key}>${it.value}" }).apply() }
+        set(v) = synchronized(lock) {
+            app.edit().putString("adapterCars", v.entries.joinToString(";") { "${it.key}>${it.value}" }).apply()
+        }
 
-    fun learnAdapter(address: String, carId: String) {
+    fun learnAdapter(address: String, carId: String) = synchronized(lock) {
         adapterCars = adapterCars + (address.uppercase() to carId)
     }
 
@@ -233,17 +240,19 @@ class Store(context: Context) {
     }
 
     // Histórico do nível estimado do tanque (gráfico). Últimos TankHistory.MAX_POINTS pontos.
-    fun tankHistoryJson(): String = p.getString("tankHistory", "[]") ?: "[]"
+    fun tankHistoryJson(): String = synchronized(lock) { p.getString("tankHistory", "[]") ?: "[]" }
 
-    fun tankHistory(): List<br.com.monitor2008.domain.TankPoint> = try {
-        val arr = JSONArray(tankHistoryJson())
-        (0 until arr.length()).map { i ->
-            val o = arr.getJSONObject(i)
-            br.com.monitor2008.domain.TankPoint(o.getLong("t"), o.getDouble("l"), o.optString("k", "rodando"))
-        }
-    } catch (e: Exception) { emptyList() }
+    fun tankHistory(): List<br.com.monitor2008.domain.TankPoint> = synchronized(lock) {
+        try {
+            val arr = JSONArray(tankHistoryJson())
+            (0 until arr.length()).map { i ->
+                val o = arr.getJSONObject(i)
+                br.com.monitor2008.domain.TankPoint(o.getLong("t"), o.getDouble("l"), o.optString("k", "rodando"))
+            }
+        } catch (e: Exception) { emptyList() }
+    }
 
-    fun addTankPoint(pt: br.com.monitor2008.domain.TankPoint) {
+    fun addTankPoint(pt: br.com.monitor2008.domain.TankPoint) = synchronized(lock) {
         val arr = JSONArray(tankHistoryJson())
         arr.put(JSONObject().put("t", pt.timeMs).put("l", pt.liters).put("k", pt.kind))
         val keep = JSONArray()
@@ -262,25 +271,27 @@ class Store(context: Context) {
         set(v) { p.edit().putBoolean("nuvemPronta", v).apply() }
 
     /** Traz o histórico do tanque da nuvem (aparelho novo para este carro). */
-    fun importTankHistory(raw: String) { p.edit().putString("tankHistory", raw).apply() }
+    fun importTankHistory(raw: String) = synchronized(lock) { p.edit().putString("tankHistory", raw).apply() }
 
     // Trajetos guardados cada vez que o dono zera o trajeto (para estudar a soma de todos).
-    fun tripArchiveJson(): String = p.getString("tripArchive", "[]") ?: "[]"
+    fun tripArchiveJson(): String = synchronized(lock) { p.getString("tripArchive", "[]") ?: "[]" }
 
-    fun tripArchive(): List<br.com.monitor2008.domain.TripRecord> = try {
-        val arr = JSONArray(tripArchiveJson())
-        (0 until arr.length()).map { i ->
-            val o = arr.getJSONObject(i)
-            br.com.monitor2008.domain.TripRecord(
-                endMs = o.getLong("fim"), distanceKm = o.getDouble("km"), liters = o.getDouble("litros"),
-                seconds = o.getDouble("seg"), kmWithFuel = o.getDouble("kmComComb"),
-                litersMoving = o.optDouble("litrosMov", o.getDouble("litros")), pricePerLiter = o.optDouble("preco", 0.0),
-                calibration = o.optDouble("fator", 1.0), ethanolFraction = o.optDouble("etanol", 0.3), odometerKm = o.optDouble("odo", 0.0),
-            )
-        }
-    } catch (e: Exception) { emptyList() }
+    fun tripArchive(): List<br.com.monitor2008.domain.TripRecord> = synchronized(lock) {
+        try {
+            val arr = JSONArray(tripArchiveJson())
+            (0 until arr.length()).map { i ->
+                val o = arr.getJSONObject(i)
+                br.com.monitor2008.domain.TripRecord(
+                    endMs = o.getLong("fim"), distanceKm = o.getDouble("km"), liters = o.getDouble("litros"),
+                    seconds = o.getDouble("seg"), kmWithFuel = o.getDouble("kmComComb"),
+                    litersMoving = o.optDouble("litrosMov", o.getDouble("litros")), pricePerLiter = o.optDouble("preco", 0.0),
+                    calibration = o.optDouble("fator", 1.0), ethanolFraction = o.optDouble("etanol", 0.3), odometerKm = o.optDouble("odo", 0.0),
+                )
+            }
+        } catch (e: Exception) { emptyList() }
+    }
 
-    fun archiveTrip(r: br.com.monitor2008.domain.TripRecord) {
+    fun archiveTrip(r: br.com.monitor2008.domain.TripRecord) = synchronized(lock) {
         val arr = JSONArray(tripArchiveJson())
         arr.put(
             JSONObject().put("fim", r.endMs).put("km", r.distanceKm).put("litros", r.liters).put("seg", r.seconds)
@@ -294,7 +305,7 @@ class Store(context: Context) {
     }
 
     /** Traz os trajetos da nuvem (aparelho novo para este carro). */
-    fun importTripArchive(raw: String) { p.edit().putString("tripArchive", raw).apply() }
+    fun importTripArchive(raw: String) = synchronized(lock) { p.edit().putString("tripArchive", raw).apply() }
 
     /** Dia em que o trajeto foi zerado pela última vez (null = nunca). */
     var tripSinceDay: Long?
@@ -395,9 +406,11 @@ class Store(context: Context) {
 
     /** Chassis cujo carro foi confirmado (pelo multimídia ou pelo dono em Ajustes), e não só palpitado pela fábrica. */
     val vinConfirmed: Set<String>
-        get() = (app.getString("vinConfirmed", "") ?: "").split(';').filter { it.isNotBlank() }.toSet()
+        get() = synchronized(lock) {
+            (app.getString("vinConfirmed", "") ?: "").split(';').filter { it.isNotBlank() }.toSet()
+        }
 
-    fun confirmVin(vin: String) {
+    fun confirmVin(vin: String) = synchronized(lock) {
         app.edit().putString("vinConfirmed", (vinConfirmed + vin).joinToString(";")).apply()
     }
 
@@ -418,12 +431,14 @@ class Store(context: Context) {
 
     /** Chassi -> carro, aprendido na primeira vez e corrigido quando o dono escolhe o carro em Ajustes. */
     val vinCars: Map<String, String>
-        get() = (app.getString("vinCars", "") ?: "").split(';').mapNotNull { e ->
-            val parts = e.split('>')
-            if (parts.size == 2 && parts[0].isNotBlank() && parts[1].isNotBlank()) parts[0] to parts[1] else null
-        }.toMap()
+        get() = synchronized(lock) {
+            (app.getString("vinCars", "") ?: "").split(';').mapNotNull { e ->
+                val parts = e.split('>')
+                if (parts.size == 2 && parts[0].isNotBlank() && parts[1].isNotBlank()) parts[0] to parts[1] else null
+            }.toMap()
+        }
 
-    fun learnVin(vin: String, carId: String) {
+    fun learnVin(vin: String, carId: String) = synchronized(lock) {
         val novo = vinCars + (vin to carId)
         app.edit().putString("vinCars", novo.entries.joinToString(";") { "${it.key}>${it.value}" }).apply()
     }
@@ -494,15 +509,15 @@ class Store(context: Context) {
     val lastRouteAtMs: Long get() = app.getLong("lastRouteAtMs", 0L)
     val lastRouteLat: Double? get() = app.getString("lastRouteLat", null)?.toDoubleOrNull()
     val lastRouteLon: Double? get() = app.getString("lastRouteLon", null)?.toDoubleOrNull()
-    fun setLastRoute(address: String, lat: Double?, lon: Double?) {
+    fun setLastRoute(address: String, lat: Double?, lon: Double?) = synchronized(lock) {
         app.edit().putString("lastRouteAddress", address).putLong("lastRouteAtMs", System.currentTimeMillis())
             .putString("lastRouteLat", lat?.toString()).putString("lastRouteLon", lon?.toString()).apply()
     }
     /** Coordenadas achadas depois: só valem se o destino ainda for o mesmo. */
-    fun setLastRouteCoords(address: String, lat: Double, lon: Double) {
+    fun setLastRouteCoords(address: String, lat: Double, lon: Double) = synchronized(lock) {
         if (lastRouteAddress == address) app.edit().putString("lastRouteLat", lat.toString()).putString("lastRouteLon", lon.toString()).apply()
     }
-    fun clearLastRoute() {
+    fun clearLastRoute() = synchronized(lock) {
         app.edit().remove("lastRouteAddress").remove("lastRouteAtMs").remove("lastRouteLat").remove("lastRouteLon").apply()
     }
     /** Abastecimento: o dono informa o valor pago (true) ou os litros (false). Lembra a última escolha. */
@@ -584,9 +599,9 @@ class Store(context: Context) {
         set(v) { app.edit().putString("mediaMode", v).apply() }
 
     /** Apps que já tocaram algo (inclui o Bluetooth e o rádio do multimídia): viram fontes na aba Mídias. */
-    val mediaSeen: Set<String> get() = p.getStringSet("mediaSeen", emptySet()) ?: emptySet()
+    val mediaSeen: Set<String> get() = synchronized(lock) { p.getStringSet("mediaSeen", emptySet())?.toSet() ?: emptySet() }
 
-    fun addMediaSeen(pkg: String) {
+    fun addMediaSeen(pkg: String) = synchronized(lock) {
         val now = mediaSeen
         if (pkg !in now) p.edit().putStringSet("mediaSeen", now + pkg).apply()
     }
@@ -607,33 +622,35 @@ class Store(context: Context) {
         set(v) { app.edit().putString("lastRadio", v?.let { radioJson(it).toString() }).apply() }
 
     /** Lugares salvos para o comando de voz ("ir para casa"): nome e endereço. */
-    fun places(): List<Pair<String, String>> = try {
-        val arr = JSONArray(app.getString("places", "[]"))
-        (0 until arr.length()).map { arr.getJSONObject(it) }.map { it.optString("name") to it.optString("address") }
-            .filter { it.first.isNotBlank() && it.second.isNotBlank() }
-    } catch (e: Exception) { emptyList() }
+    fun places(): List<Pair<String, String>> = synchronized(lock) {
+        try {
+            val arr = JSONArray(app.getString("places", "[]"))
+            (0 until arr.length()).map { arr.getJSONObject(it) }.map { it.optString("name") to it.optString("address") }
+                .filter { it.first.isNotBlank() && it.second.isNotBlank() }
+        } catch (e: Exception) { emptyList() }
+    }
 
-    fun savePlaces(list: List<Pair<String, String>>) {
+    fun savePlaces(list: List<Pair<String, String>>) = synchronized(lock) {
         val arr = JSONArray()
         list.forEach { (n, a) -> arr.put(org.json.JSONObject().put("name", n).put("address", a)) }
         app.edit().putString("places", arr.toString()).apply()
     }
 
-    fun radioFavorites(): List<RadioStation> {
+    fun radioFavorites(): List<RadioStation> = synchronized(lock) {
         val arr = JSONArray(app.getString("radioFavorites", "[]"))
-        return (0 until arr.length()).mapNotNull { runCatching { radioFrom(arr.getJSONObject(it)) }.getOrNull() }
+        (0 until arr.length()).mapNotNull { runCatching { radioFrom(arr.getJSONObject(it)) }.getOrNull() }
     }
 
-    fun saveRadioFavorites(list: List<RadioStation>) {
+    fun saveRadioFavorites(list: List<RadioStation>) = synchronized(lock) {
         val arr = JSONArray()
         list.forEach { arr.put(radioJson(it)) }
         app.edit().putString("radioFavorites", arr.toString()).apply()
     }
 
     // Abastecimentos
-    fun refuels(): List<Refuel> {
+    fun refuels(): List<Refuel> = synchronized(lock) {
         val arr = JSONArray(p.getString("refuels", "[]"))
-        return (0 until arr.length()).map { i ->
+        (0 until arr.length()).map { i ->
             val o = arr.getJSONObject(i)
             Refuel(
                 epochDay = o.getLong("day"),
@@ -651,15 +668,15 @@ class Store(context: Context) {
     }
 
     // Postos (registro de postos e qualidade do combustível)
-    fun stations(): List<Station> {
+    fun stations(): List<Station> = synchronized(lock) {
         val arr = JSONArray(p.getString("stations", "[]"))
-        return (0 until arr.length()).map { i ->
+        (0 until arr.length()).map { i ->
             val o = arr.getJSONObject(i)
             Station(o.getString("id"), o.getString("name"), o.optString("address"), o.getDouble("lat"), o.getDouble("lon"))
         }
     }
 
-    fun saveStations(list: List<Station>) {
+    fun saveStations(list: List<Station>) = synchronized(lock) {
         val arr = JSONArray()
         list.forEach {
             arr.put(JSONObject().put("id", it.id).put("name", it.name).put("address", it.address).put("lat", it.lat).put("lon", it.lon))
@@ -674,14 +691,14 @@ class Store(context: Context) {
         .put("time", r.timeMs).put("station", r.stationId ?: "").put("eth", r.ethanol)
         .put("ratio", r.tankRatio ?: JSONObject.NULL)
 
-    fun addRefuel(r: Refuel) {
+    fun addRefuel(r: Refuel) = synchronized(lock) {
         val arr = JSONArray(p.getString("refuels", "[]"))
         arr.put(refuelJson(r))
         p.edit().putString("refuels", arr.toString()).apply()
     }
 
     /** Grava a lista inteira (apagar e editar abastecimentos). */
-    fun saveRefuels(list: List<Refuel>) {
+    fun saveRefuels(list: List<Refuel>) = synchronized(lock) {
         val arr = JSONArray()
         list.forEach { arr.put(refuelJson(it)) }
         p.edit().putString("refuels", arr.toString()).apply()

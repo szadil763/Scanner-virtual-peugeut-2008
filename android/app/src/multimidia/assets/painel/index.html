@@ -4,8 +4,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Painel</title>
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" media="print" onload="this.media='all'">
+<script defer async src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <style>
   :root { --bg:#000; --fg:#fff; --dim:#a8b0b8; --ok:#3ddc6b; --warn:#ffcc33; --bad:#ff5555; --btn:#1b2430; --sel:#1f5fa8; }
   * { box-sizing:border-box; }
@@ -227,6 +227,9 @@
   .mi.OK .barra-m div { background:#3ddc6b; } .mi.SOON .barra-m div { background:#ffcc33; } .mi.DUE .barra-m div { background:#ff5555; }
   .mi .porque { grid-column:1; font-size:14px; color:#9aa6b6; line-height:1.2; max-height:2.4em; overflow:hidden; }
   .mi button { grid-column:2; grid-row:1 / span 4; align-self:center; min-height:64px; margin:0; font-size:17px; border-radius:30px; }
+  body.sol { --bg:#000; --fg:#fff; --dim:#ffffff; --btn:#111822; --sel:#1967d2; }
+  body.sol .card, body.sol .item, body.sol .painel, body.sol .grafico, body.sol .folha, body.sol .faixa { background:#000 !important; border:2px solid #8aa4bf !important; }
+  body.sol .aba, body.sol .opc, body.sol .feito, body.sol .mbtn { border-color:#8aa4bf; }
 </style>
 </head>
 <body>
@@ -1214,6 +1217,7 @@
     sol = !!a.sol;
     direcao = a.direcao || 'AUTO';
     el('aj-sol').textContent = 'Tema sol forte: ' + (sol ? 'ligado' : 'desligado');
+    document.body.classList.toggle('sol', sol);
     el('aj-sol').className = 'opc' + (sol ? ' sel' : '');
     ['AUTO', 'ALWAYS_FULL', 'ALWAYS_SIMPLE'].forEach(function (v) {
       el('aj-d-' + v).className = 'opc' + (direcao === v ? ' sel' : '');
@@ -1670,7 +1674,7 @@
     }
     el('posto-status').textContent = 'Posto localizado pelo GPS.';
     el('posto-endereco').textContent = p.endereco;
-    el('mapa-posto').style.display = 'block';
+    el('mapa-posto').style.display = (typeof L !== 'undefined') ? 'block' : 'none';
     if (typeof L !== 'undefined') {
       if (!mapaPostoObj) {
         mapaPostoObj = L.map('mapa-posto').setView([p.lat, p.lon], 17);
