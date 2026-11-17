@@ -1420,7 +1420,7 @@ private fun DiagnosticoScreen(ui: UiState, vm: MonitorEngine) {
         } else {
             ui.batteryStats.forEach { st ->
                 val ruim = st.avgV < 13.0
-                Text("${st.regime.label}: média ${"%.2f".format(java.util.Locale.US, st.avgV)} V (${"%.2f".format(java.util.Locale.US, st.minV)} a ${"%.2f".format(java.util.Locale.US, st.maxV)}) · ${st.count} leituras",
+                Text("${st.label}: média ${"%.2f".format(java.util.Locale.US, st.avgV)} V (${"%.2f".format(java.util.Locale.US, st.minV)} a ${"%.2f".format(java.util.Locale.US, st.maxV)}) · ${st.count} leituras",
                     color = if (ruim) Warn else MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 15.sp)
             }
             Text("Com o motor ligado e o alternador carregando, o normal fica perto de 13,5 a 14,7 V. Perto de 12,5 V é a bateria sozinha.",

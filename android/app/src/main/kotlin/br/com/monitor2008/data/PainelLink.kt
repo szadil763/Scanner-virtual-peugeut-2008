@@ -330,7 +330,7 @@ object PainelLink {
             put("carroAviso", Store(app).vehicleNotice.isNotBlank()) // o app não tem certeza de qual é o carro
             put("bateriaSituacoes", JSONArray().apply {
                 ui.batteryStats.forEach { st ->
-                    put(JSONObject().put("situacao", st.regime.label).put("n", st.count)
+                    put(JSONObject().put("situacao", st.label).put("n", st.count)
                         .put("media", r2(st.avgV)).put("min", r2(st.minV)).put("max", r2(st.maxV)))
                 }
             })

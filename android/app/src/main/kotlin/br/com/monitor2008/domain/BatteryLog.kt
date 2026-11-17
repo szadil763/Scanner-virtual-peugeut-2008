@@ -12,6 +12,8 @@ data class BatteryPoint(
     val loadPct: Double?,
     /** Abertura da borboleta (PID 11), se o carro informar. */
     val throttlePct: Double?,
+    /** Temperatura do motor (PID 05). Acima de [BatteryLog.FAN_FROM_C] a ventoinha do radiador provavelmente está ligada. */
+    val coolantC: Double? = null,
 )
 
 /** Situação de rodagem na hora da leitura. O alternador pode se comportar diferente em cada uma. */
@@ -23,7 +25,7 @@ enum class BatteryRegime(val label: String) {
     RODANDO("Rodando (o carro não informa a carga)"),
 }
 
-data class BatteryStat(val regime: BatteryRegime, val count: Int, val avgV: Double, val minV: Double, val maxV: Double)
+data class BatteryStat(val label: String, val count: Int, val avgV: Double, val minV: Double, val maxV: Double)
 
 /**
  * Registro da tensão da bateria com a rotação, a velocidade e a carga. Serve para ver QUANDO a tensão cai (por exemplo,
@@ -38,6 +40,13 @@ object BatteryLog {
     const val COAST_BELOW_PCT = 18.0
     /** A partir disso, é aceleração forte. */
     const val ACCEL_FROM_PCT = 50.0
+    /**
+     * A ventoinha do radiador costuma ligar perto de 97 °C (EW10 do C4 e EC5 do 2008; a confirmar). Não há PID da
+     * ventoinha, então o motor quente é o sinal indireto. O ar-condicionado também liga a ventoinha e não aparece aqui.
+     */
+    const val FAN_FROM_C = 97.0
+    const val HOT_LABEL = "Motor quente (97 °C ou mais: ventoinha provavelmente ligada)"
+    const val COOL_LABEL = "Motor abaixo de 97 °C (ventoinha provavelmente desligada)"
 
     fun regime(speedKmh: Double, loadPct: Double?, throttlePct: Double?): BatteryRegime {
         if (speedKmh < 3.0) return BatteryRegime.PARADO
@@ -55,21 +64,34 @@ object BatteryLog {
     /** Grava no máximo uma leitura a cada [MIN_GAP_MS] (o registro seria enorme a cada leitura do carro). */
     fun shouldRecord(last: BatteryPoint?, now: BatteryPoint): Boolean = last == null || now.timeMs - last.timeMs >= MIN_GAP_MS
 
+    private fun stat(label: String, ps: List<BatteryPoint>) =
+        BatteryStat(label, ps.size, ps.map { it.volts }.average(), ps.minOf { it.volts }, ps.maxOf { it.volts })
+
     fun stats(points: List<BatteryPoint>): List<BatteryStat> =
-        points.groupBy { regime(it) }.map { (r, ps) ->
-            BatteryStat(r, ps.size, ps.map { it.volts }.average(), ps.minOf { it.volts }, ps.maxOf { it.volts })
-        }.sortedBy { it.regime.ordinal }
+        points.groupBy { regime(it) }.entries.sortedBy { it.key.ordinal }.map { (r, ps) -> stat(r.label, ps) }
+
+    /** Separa as leituras com o motor quente (ventoinha) das outras. Só as que têm a temperatura gravada. */
+    fun heatStats(points: List<BatteryPoint>): List<BatteryStat> {
+        val withTemp = points.filter { it.coolantC != null }
+        val (hot, cool) = withTemp.partition { it.coolantC!! >= FAN_FROM_C }
+        return listOfNotNull(cool.takeIf { it.isNotEmpty() }?.let { stat(COOL_LABEL, it) },
+            hot.takeIf { it.isNotEmpty() }?.let { stat(HOT_LABEL, it) })
+    }
+
+    /** O que o Diagnóstico mostra: por situação de rodagem e, depois, motor frio x quente. */
+    fun allStats(points: List<BatteryPoint>): List<BatteryStat> = stats(points) + heatStats(points)
 
     private fun f(v: Double, d: Int) = String.format(Locale.US, "%.${d}f", v)
 
-    const val CSV_HEADER = "hora_ms,volts,rpm,km_h,carga_pct,acelerador_pct,situacao"
+    const val CSV_HEADER = "hora_ms,volts,rpm,km_h,carga_pct,acelerador_pct,situacao,motor_c"
 
     fun csvLine(p: BatteryPoint): String =
-        "${p.timeMs},${f(p.volts, 2)},${p.rpm.toInt()},${f(p.speedKmh, 0)},${p.loadPct?.let { f(it, 0) } ?: ""},${p.throttlePct?.let { f(it, 0) } ?: ""},${regime(p).name}"
+        "${p.timeMs},${f(p.volts, 2)},${p.rpm.toInt()},${f(p.speedKmh, 0)},${p.loadPct?.let { f(it, 0) } ?: ""},${p.throttlePct?.let { f(it, 0) } ?: ""},${regime(p).name},${p.coolantC?.let { f(it, 0) } ?: ""}"
 
     fun parseCsvLine(line: String): BatteryPoint? = try {
         val c = line.split(',')
-        BatteryPoint(c[0].toLong(), c[1].toDouble(), c[2].toDouble(), c[3].toDouble(), c[4].toDoubleOrNull(), c[5].toDoubleOrNull())
+        BatteryPoint(c[0].toLong(), c[1].toDouble(), c[2].toDouble(), c[3].toDouble(), c[4].toDoubleOrNull(), c[5].toDoubleOrNull(),
+            c.getOrNull(7)?.toDoubleOrNull()) // registros antigos não têm a temperatura
     } catch (e: Exception) { null }
 
     /** Texto para compartilhar (WhatsApp): resumo por situação e, no fim, uma amostra das leituras. */
@@ -79,8 +101,8 @@ object BatteryLog {
         sb.appendLine("*Tensão da bateria — $carName*")
         sb.appendLine("${points.size} leituras (uma a cada 2 s, motor ligado).")
         sb.appendLine()
-        stats(points).forEach {
-            sb.appendLine("• ${it.regime.label}: média ${f(it.avgV, 2)} V (mín ${f(it.minV, 2)} / máx ${f(it.maxV, 2)}), ${it.count} leituras")
+        allStats(points).forEach {
+            sb.appendLine("• ${it.label}: média ${f(it.avgV, 2)} V (mín ${f(it.minV, 2)} / máx ${f(it.maxV, 2)}), ${it.count} leituras")
         }
         sb.appendLine()
         sb.appendLine(CSV_HEADER)

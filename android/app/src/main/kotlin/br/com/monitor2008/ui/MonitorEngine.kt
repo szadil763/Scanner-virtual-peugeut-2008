@@ -222,7 +222,9 @@ class MonitorEngine private constructor(private val app: Application) {
     private val batteryPoints = ArrayList<BatteryPoint>().also { it.addAll(BatteryStore(app, store.carKey).load()) }
     private val batteryPending = ArrayList<BatteryPoint>()
     private var lastBatteryPoint: BatteryPoint? = null
-    @Volatile private var batteryStatsCache: List<BatteryStat> = BatteryLog.stats(batteryPoints)
+    /** Bateria baixa por tempo suficiente para virar alarme (lido no snapshot: tem de vir antes de _ui). */
+    private val lowBattery = br.com.monitor2008.domain.LowBatteryWatch()
+    @Volatile private var batteryStatsCache: List<BatteryStat> = BatteryLog.allStats(batteryPoints)
     private var batteryStatsAtMs = 0L
 
 
@@ -286,7 +288,7 @@ class MonitorEngine private constructor(private val app: Application) {
         val src: ObdSource = if (store.useSimulated) {
             SimulatedSource()
         } else {
-            BluetoothObdSource(app, store.adapterName.ifBlank { null }, adapterAllowed = ::adapterAllowed)
+            BluetoothObdSource(app, store.adapterName.ifBlank { null })
         }
         source = src
         infoJob = scope.launch {
@@ -321,7 +323,7 @@ class MonitorEngine private constructor(private val app: Application) {
     private fun speakCritical(s: Sample) {
         if (store.useSimulated) return
         val now = System.currentTimeMillis()
-        (CriticalAlerts.check(s.coolantC, s.batteryV, s.rpm) + listOfNotNull(tankAlert())).forEach { a ->
+        (CriticalAlerts.check(s.coolantC, s.batteryV, s.rpm, lowBattery.alarm) + listOfNotNull(tankAlert())).forEach { a ->
             if (CriticalAlerts.shouldSpeak(a.id, now, alertSpoken)) {
                 alertSpoken[a.id] = now
                 VoiceAssistant.get(app).say(a.spoken)
@@ -363,7 +365,7 @@ class MonitorEngine private constructor(private val app: Application) {
         val volts = s.batteryV ?: return
         val rpm = s.rpm ?: return
         if (store.useSimulated || rpm < BatteryLog.MIN_RPM) return
-        val p = BatteryPoint(s.timeMs, volts, rpm, s.speedKmh ?: 0.0, s.loadPct, s.throttlePct)
+        val p = BatteryPoint(s.timeMs, volts, rpm, s.speedKmh ?: 0.0, s.loadPct, s.throttlePct, s.coolantC)
         if (!BatteryLog.shouldRecord(lastBatteryPoint, p)) return
         lastBatteryPoint = p
         synchronized(batteryPoints) {
@@ -373,7 +375,7 @@ class MonitorEngine private constructor(private val app: Application) {
         }
         if (s.timeMs - batteryStatsAtMs > 5_000L) {
             batteryStatsAtMs = s.timeMs
-            batteryStatsCache = synchronized(batteryPoints) { BatteryLog.stats(batteryPoints) }
+            batteryStatsCache = synchronized(batteryPoints) { BatteryLog.allStats(batteryPoints) }
         }
     }
 
@@ -394,6 +396,7 @@ class MonitorEngine private constructor(private val app: Application) {
     }
 
     private fun onSample(s: Sample) {
+        lowBattery.update(s.timeMs, s.batteryV, s.rpm)
         recordBattery(s)
         val running = (s.rpm ?: 0.0) > 300
         if (running && !engineWasRunning) MicService.update(app, renew = true)
@@ -627,14 +630,11 @@ class MonitorEngine private constructor(private val app: Application) {
     private fun freshPainelCar(): String? = painelCar?.takeIf { System.currentTimeMillis() - painelCarAtMs < 20_000L }
 
     /**
-     * Com o multimídia por perto (ele diz em qual carro estamos), não conecta em adaptador que se sabe ser de OUTRO
-     * carro: com os dois carros lado a lado, o celular pegava o adaptador do vizinho e trocava de carro a cada conexão.
+     * O carro que o multimídia disse por último, se ele respondeu nos últimos [PAINEL_KEEP_MS]. Usado para decidir o
+     * carro: uma falha de rede de alguns segundos não pode trocar o carro (antes, sem resposta por 20 s, o adaptador
+     * voltava a decidir, trocava de carro, a conexão reiniciava e o celular ficava conectando e desconectando).
      */
-    fun adapterAllowed(address: String): Boolean {
-        val painel = freshPainelCar() ?: return true
-        val dono = store.adapterCars[address.uppercase()] ?: return true
-        return dono == painel
-    }
+    private fun lastPainelCar(): String? = painelCar?.takeIf { System.currentTimeMillis() - painelCarAtMs < PAINEL_KEEP_MS }
 
     /** O multimídia do carro avisou qual é o carro dele (chega a cada envio). */
     fun carFromPainel(id: String) {
@@ -647,7 +647,7 @@ class MonitorEngine private constructor(private val app: Application) {
     /** Junta as pistas e, se algo mudou desde a última conta, decide o carro, aprende e troca. */
     private fun reconcileCar() {
         if (!store.autoDetect) return
-        val painel = freshPainelCar()
+        val painel = lastPainelCar()
         val vin = store.lastVin
         val addr = lastAddr
         val key = "$painel|$vin|$addr"
@@ -660,13 +660,12 @@ class MonitorEngine private constructor(private val app: Application) {
         )
         if (vin != null && vinCar != null && store.vinCars[vin] == null) store.learnVin(vin, vinCar) // guarda o palpite
         if (d.confirmVin && vin != null) { store.learnVin(vin, d.carId); store.confirmVin(vin) }
-        // Não ensina o adaptador se ele já é de outro carro (não sobrescreve um cadastro com um palpite).
-        if (d.learnAdapter && addr != null && (store.adapterCars[addr.uppercase()] ?: d.carId) == d.carId) store.learnAdapter(addr, d.carId)
+        // O multimídia corrige o cadastro do adaptador, mesmo que estivesse gravado como de outro carro.
+        if (d.learnAdapter && addr != null) store.learnAdapter(addr, d.carId)
         store.vehicleNotice = when (d.source) {
-            CarSource.CONFLICT ->
-                "O multimídia diz ${Vehicles.nameOf(painel)}, mas o adaptador com o motor ligado é do ${Vehicles.nameOf(d.carId)}. " +
-                    "O app está lendo o ${Vehicles.nameOf(d.carId)}. Se o multimídia do ${Vehicles.nameOf(painel)} estiver ligado " +
-                    "e você não estiver nele, desligue-o."
+            CarSource.PAINEL ->
+                d.correctedFrom?.let { "Este adaptador (ou chassi) estava gravado como do ${Vehicles.nameOf(it)}; o multimídia diz " +
+                    "${Vehicles.nameOf(d.carId)} e o app corrigiu o cadastro." } ?: ""
             CarSource.VIN_GUESS ->
                 if (Vehicles.isCustomKey(d.carId)) "Chassi novo ($vin): sem perfil cadastrado, usando o perfil genérico. Escolha o modelo em Ajustes, se quiser."
                 else "Chassi $vin identificado como ${Vehicles.nameOf(d.carId)} (palpite pela fábrica). Escolha o carro certo em Ajustes, ou deixe o multimídia confirmar."
@@ -680,7 +679,7 @@ class MonitorEngine private constructor(private val app: Application) {
         if (d.carId != store.carKey) scope.launch {
             if (store.carKey != d.carId) {
                 store.vehicleId = d.carId
-                reloadForCar()
+                reloadForCar() // troca os dados do carro sem derrubar a conexão com o adaptador
             }
         }
         publish()
@@ -702,7 +701,7 @@ class MonitorEngine private constructor(private val app: Application) {
         flushBattery()
         synchronized(batteryPoints) { batteryPoints.clear(); batteryPending.clear(); batteryPoints.addAll(BatteryStore(app, store.carKey).load()) }
         lastBatteryPoint = null
-        batteryStatsCache = BatteryLog.stats(batteryPoints)
+        batteryStatsCache = BatteryLog.allStats(batteryPoints)
         br.com.monitor2008.data.Nuvem.trocouCarro()
         odometerKm = store.odometerKm
         uncalLiters = store.uncalLiters
@@ -722,7 +721,9 @@ class MonitorEngine private constructor(private val app: Application) {
         lastPendingMs = 0L
         tripDtcsRead = false
         engineOffSince = 0L
-        start()
+        // Já conectado: continua lendo o mesmo adaptador; só os dados (viagem, abastecimentos, Saúde) trocam de carro.
+        // Reiniciar a conexão aqui fazia o celular conectar e desconectar a cada troca.
+        if (conn.state != ConnState.CONNECTED) start() else publish()
     }
 
     fun diagnosticLog(): List<String> = source?.diagnosticLog().orEmpty()
@@ -1044,7 +1045,7 @@ class MonitorEngine private constructor(private val app: Application) {
             },
             driveMode = driveSetting(),
             critical = if (store.useSimulated || conn.state != ConnState.CONNECTED) emptyList()
-                else lastSample?.let { CriticalAlerts.check(it.coolantC, it.batteryV, it.rpm) }.orEmpty() + listOfNotNull(tankAlert()),
+                else lastSample?.let { CriticalAlerts.check(it.coolantC, it.batteryV, it.rpm, lowBattery.alarm) }.orEmpty() + listOfNotNull(tankAlert()),
             odoCheckDue = OdometerReminder.due(System.currentTimeMillis(), store.odoCheckedMs, store.odoOffset != null,
                 moving = !store.useSimulated && lastSample?.let {
                     br.com.monitor2008.domain.MovingRules.isMoving(it.speedKmh, System.currentTimeMillis() - it.timeMs)
@@ -1089,6 +1090,8 @@ class MonitorEngine private constructor(private val app: Application) {
     }
 
     companion object {
+        /** Por quanto tempo vale o último carro que o multimídia disse (ver lastPainelCar). */
+        private const val PAINEL_KEEP_MS = 10 * 60_000L
         /** Tempo depois de conectar (ou trocar de carro) antes de conferir o contador de km da central. */
         private const val SETTLE_MS = 8_000L
         /** Motor parado por mais que isso = fim da viagem. */

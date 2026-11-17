@@ -42,6 +42,37 @@ class DriveModeTracker {
     }
 }
 
+/**
+ * Bateria baixa com o motor ligado só vira alarme se durar: abaixo de [LOW_V] por [LOW_MS] seguidos, ou abaixo de
+ * [VERY_LOW_V] por [VERY_LOW_MS]. A ventoinha do radiador (e o ar-condicionado) liga por um ou dois minutos e pode puxar
+ * mais que o alternador dá em marcha lenta; a tensão cai e volta sozinha quando ela desliga. Isso não é defeito.
+ * Para sair do "baixo" a tensão precisa voltar a [RECOVER_V] (evita zerar a contagem com uma leitura solta).
+ */
+class LowBatteryWatch {
+    private var lowSince: Long? = null
+    private var veryLowSince: Long? = null
+    var alarm = false
+        private set
+
+    fun update(nowMs: Long, volts: Double?, rpm: Double?): Boolean {
+        if (volts == null || (rpm ?: 0.0) <= 400) { reset(); return false }
+        lowSince = when { volts < LOW_V -> lowSince ?: nowMs; volts >= RECOVER_V -> null; else -> lowSince }
+        veryLowSince = when { volts < VERY_LOW_V -> veryLowSince ?: nowMs; volts >= LOW_V -> null; else -> veryLowSince }
+        alarm = (lowSince?.let { nowMs - it >= LOW_MS } == true) || (veryLowSince?.let { nowMs - it >= VERY_LOW_MS } == true)
+        return alarm
+    }
+
+    fun reset() { lowSince = null; veryLowSince = null; alarm = false }
+
+    companion object {
+        const val LOW_V = 12.6
+        const val RECOVER_V = 12.8
+        const val LOW_MS = 120_000L
+        const val VERY_LOW_V = 12.0
+        const val VERY_LOW_MS = 20_000L
+    }
+}
+
 /** Alerta grave: faixa vermelha na tela e aviso falado (uma vez a cada [REPEAT_MS] por tipo). */
 data class CriticalAlert(val id: String, val text: String, val spoken: String)
 
@@ -50,16 +81,22 @@ object CriticalAlerts {
 
     private fun n(v: Double, d: Int) = String.format(Locale("pt", "BR"), "%.${d}f", v)
 
-    /** Só o que pede ação já: motor muito quente e bateria sem carga com o motor ligado. */
-    fun check(coolantC: Double?, batteryV: Double?, rpm: Double?): List<CriticalAlert> {
+    /**
+     * Só o que pede ação já: motor muito quente e bateria descarregando com o motor ligado. [batteryLowSustained] vem de
+     * [LowBatteryWatch]: a tensão tem de ficar baixa por um tempo (a ventoinha do radiador puxa muita corrente e
+     * derruba a tensão por um ou dois minutos sem que o alternador esteja com defeito).
+     */
+    fun check(coolantC: Double?, batteryV: Double?, rpm: Double?, batteryLowSustained: Boolean = true): List<CriticalAlert> {
         val out = mutableListOf<CriticalAlert>()
         if (coolantC != null && coolantC >= 110) {
             out += CriticalAlert("temp", "MOTOR MUITO QUENTE: ${n(coolantC, 0)} °C. Pare em local seguro e desligue o motor.",
                 "Atenção: motor a ${n(coolantC, 0)} graus. Pare em local seguro e desligue o motor.")
         }
-        if (batteryV != null && (rpm ?: 0.0) > 400 && batteryV < 12.6) {
-            out += CriticalAlert("bat", "BATERIA NÃO ESTÁ CARREGANDO: ${n(batteryV, 1)} V com o motor ligado. Procure uma oficina.",
-                "Atenção: a bateria não está carregando. ${n(batteryV, 1)} volts com o motor ligado.")
+        if (batteryLowSustained && batteryV != null && (rpm ?: 0.0) > 400 && batteryV < LowBatteryWatch.LOW_V) {
+            out += CriticalAlert("bat",
+                "BATERIA DESCARREGANDO: ${n(batteryV, 1)} V há mais de 2 min com o motor ligado. O carro gasta mais do que o " +
+                    "alternador carrega. Veja em Diagnóstico se acontece com o motor quente (ventoinha) e leve ao eletricista.",
+                "Atenção: a bateria está descarregando. ${n(batteryV, 1)} volts com o motor ligado há mais de dois minutos.")
         }
         return out
     }

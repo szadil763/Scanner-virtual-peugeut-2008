@@ -2,6 +2,7 @@ package br.com.monitor2008.domain
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -26,18 +27,18 @@ class CarIdentityTest {
         assertEquals(CarSource.PAINEL, d.source); assertTrue(d.confirmVin)
     }
 
-    @Test fun aVinOfAnotherCarWinsBecauseItsAdapterHasTheEngineRunning() {
-        // Multimídia do C4 (talvez o do carro ao lado, esquecido ligado), mas o adaptador conectado é do 2008: vale o 2008.
-        val d = CarIdentity.decide(painel = c4, vinCar = p2008, vinConfirmed = true, adapterCar = null, current = c4)
-        assertEquals(CarSource.CONFLICT, d.source); assertEquals(p2008, d.carId); assertEquals(p2008, d.otherCar)
-        assertFalse(d.confirmVin); assertFalse(d.learnAdapter)
-        // Mesmo com o chassi só palpitado pela fábrica: marcas diferentes não combinam.
-        assertEquals(CarSource.CONFLICT, CarIdentity.decide(c4, p2008, false, null, c4).source)
+    @Test fun thePainelAlwaysWinsAndCorrectsAVinRegisteredToAnotherCar() {
+        val d = CarIdentity.decide(painel = c4, vinCar = p2008, vinConfirmed = true, adapterCar = null, current = p2008)
+        assertEquals(CarSource.PAINEL, d.source); assertEquals(c4, d.carId)
+        assertTrue(d.confirmVin); assertTrue(d.learnAdapter); assertEquals(p2008, d.correctedFrom)
     }
 
-    @Test fun anAdapterKnownToBeOfAnotherCarIsAlsoAConflictWhenThereIsNoVin() {
-        val d = CarIdentity.decide(painel = c4, vinCar = null, vinConfirmed = false, adapterCar = p2008, current = c4)
-        assertEquals(CarSource.CONFLICT, d.source); assertEquals(p2008, d.otherCar); assertEquals(p2008, d.carId)
+    @Test fun thePainelAlwaysWinsAndCorrectsAnAdapterRegisteredToAnotherCar() {
+        // O caso do C4: o adaptador (endereço repetido) estava gravado como do 2008.
+        val d = CarIdentity.decide(painel = c4, vinCar = null, vinConfirmed = false, adapterCar = p2008, current = p2008)
+        assertEquals(CarSource.PAINEL, d.source); assertEquals(c4, d.carId)
+        assertTrue(d.learnAdapter); assertEquals(p2008, d.correctedFrom)
+        assertNull(CarIdentity.decide(c4, null, false, c4, p2008).correctedFrom)
     }
 
     @Test fun withoutPainelTheVinWins() {

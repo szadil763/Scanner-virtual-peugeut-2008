@@ -43,7 +43,27 @@ class DriveModeTest {
         assertEquals(listOf("bat"), CriticalAlerts.check(coolantC = 90.0, batteryV = 12.1, rpm = 900.0).map { it.id })
         // Bateria baixa com o motor desligado não é alerta grave (é normal ficar perto de 12,4 V).
         assertTrue(CriticalAlerts.check(coolantC = 90.0, batteryV = 12.1, rpm = 0.0).isEmpty())
+        // Tensão baixa por pouco tempo (ventoinha ligada) não é alarme.
+        assertTrue(CriticalAlerts.check(coolantC = 100.0, batteryV = 12.4, rpm = 800.0, batteryLowSustained = false).isEmpty())
         assertTrue(CriticalAlerts.shouldSpeak("temp", 1_000_000L, emptyMap()))
         assertFalse(CriticalAlerts.shouldSpeak("temp", 1_000_000L, mapOf("temp" to 900_000L)))
+    }
+
+    @Test fun lowBatteryOnlyAlarmsWhenItLasts() {
+        val w = LowBatteryWatch()
+        // Ventoinha ligada por 90 s: cai para 12,4 V e volta para 13,8 V. Sem alarme.
+        assertFalse(w.update(0, 12.4, 800.0)); assertFalse(w.update(90_000, 12.4, 800.0))
+        assertFalse(w.update(92_000, 13.8, 800.0)); assertFalse(w.update(200_000, 12.5, 800.0))
+        // Uma leitura solta de 12,7 V não zera a contagem; 2 min seguidos abaixo de 12,6 V dão alarme.
+        assertFalse(w.update(260_000, 12.7, 800.0))
+        assertTrue(w.update(320_000, 12.5, 800.0))
+        // Motor desligado: zera.
+        assertFalse(w.update(330_000, 12.3, 0.0)); assertFalse(w.update(340_000, 12.3, 800.0))
+    }
+
+    @Test fun veryLowBatteryAlarmsAfter20Seconds() {
+        val w = LowBatteryWatch()
+        assertFalse(w.update(0, 11.8, 900.0)); assertFalse(w.update(10_000, 11.9, 900.0))
+        assertTrue(w.update(20_000, 11.8, 900.0))
     }
 }
