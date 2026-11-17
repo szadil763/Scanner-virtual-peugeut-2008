@@ -404,7 +404,7 @@
 <div class="tela" id="t-mapa">
   <div class="form">
     <div id="mapa-div" style="height:330px;border-radius:14px;border:2px solid #222;flex:0 0 auto"></div>
-    <div class="aviso" id="mapa-explica" style="font-size:20px">Abre o mapa do multimídia. Se ele não abrir, abre o do celular. As instruções de navegação ficam no app de mapa.</div>
+    <div class="aviso" id="mapa-explica" style="font-size:20px">Para usar o mapa do celular, escolha o Android Auto em Ajustes > Mapa e música.</div>
     <button class="enviar" id="mapa-abrir" style="min-height:80px" onclick="mapaAbrir()">Abrir o mapa</button>
     <div class="lbl">Para onde?</div>
     <input type="text" id="mapa-dest" maxlength="150" placeholder="Endereço ou lugar salvo (ex.: Casa)" style="font-size:28px;min-height:64px;background:#000;color:var(--fg);border:3px solid #3a4a5c;border-radius:12px;padding:0 12px">
@@ -463,6 +463,9 @@
     <div class="aviso">Para salvar um lugar novo, use o celular (pede digitação).</div>
     <div class="lbl">App de mapa</div>
     <div class="linha" id="aj-mapas"></div>
+    <div class="lbl">Qual app é o Android Auto?</div>
+    <div class="aviso">Se o app do Android Auto deste multimídia não aparece com "(mapa do celular)" acima, toque nele aqui. O botão Mapa passa a abrir ele.</div>
+    <div class="linha" id="aj-apps" style="flex-wrap:wrap"></div>
     <div class="aviso">"(mapa do celular)" é o Android Auto do multimídia: o mapa é o Google Maps ou o Waze do celular, com o GPS e a internet dele. Ligue o celular no Android Auto antes. O destino digitado aqui é mandado ao celular; se ele não abrir a rota, fale o destino no próprio Android Auto.</div>
     <div class="lbl">App de música</div>
     <div class="linha" id="aj-musicas"></div>
@@ -1197,7 +1200,7 @@
     el('mapa-abrir').textContent = aa ? 'Abrir o Android Auto (mapa do celular)' : 'Abrir o mapa';
     el('mapa-explica').textContent = aa
       ? 'Google Maps ou Waze do celular, pelo Android Auto. Ligue o celular no Android Auto antes.'
-      : 'Abre o mapa do multimídia. Se ele não abrir, abre o do celular. As instruções de navegação ficam no app de mapa.';
+      : 'Para usar o mapa do celular, escolha o Android Auto em Ajustes > Mapa e música.';
 
     var lug = el('aj-lugares');
     lug.textContent = '';
@@ -1224,6 +1227,7 @@
       });
     }
     escolhas(el('aj-mapas'), a.mapas, a.mapaApp, 'ajuste.mapa');
+    escolhas(el('aj-apps'), a.apps, a.aaApp, 'ajuste.mapaAA');
     escolhas(el('aj-musicas'), a.musicas, a.musicaApp, 'ajuste.musica');
     var escolhido = (a.musicas || []).filter(function (o) { return o.pkg === a.musicaApp; })[0];
     el('busca-btn').textContent = 'Buscar e tocar' + (escolhido ? ' no ' + escolhido.nome : '');

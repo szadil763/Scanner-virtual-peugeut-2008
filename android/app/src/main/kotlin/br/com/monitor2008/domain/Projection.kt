@@ -8,7 +8,7 @@ package br.com.monitor2008.domain
 object Projection {
     private val WORDS = listOf(
         "android auto", "androidauto", "zlink", "z-link", "autokit", "auto kit", "carlink", "car link", "tlink",
-        "carplay", "car play", "autolink", "ezlink", "carbit", "smartlink",
+        "carplay", "car play", "autolink", "ezlink", "carbit", "smartlink", "easyconnect", "phonelink", "boxlink",
     )
 
     /** O app do Android Auto do próprio celular (não recebe projeção; num multimídia não serve). */

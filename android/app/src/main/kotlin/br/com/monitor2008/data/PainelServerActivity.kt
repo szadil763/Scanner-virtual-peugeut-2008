@@ -347,6 +347,10 @@ class PainelServerActivity : Activity() {
         when (acao) {
             "ajuste.carroFixo" -> if (br.com.monitor2008.domain.Vehicles.byId(valor) != null) st.fixedCarId = valor
             "ajuste.mapa" -> if (lanc.mapApps().any { it.pkg == valor }) lanc.mapPackage = valor
+            "ajuste.mapaAA" -> if (lanc.launcherApps().any { it.pkg == valor }) {
+                Store(application).projectionPackage = valor
+                lanc.mapPackage = valor
+            }
             "ajuste.musica" -> if (lanc.musicApps().any { it.pkg == valor }) lanc.musicPackage = valor
             "ajuste.voz" -> if (vozesPt().any { it.name == valor }) {
                 st.ttsVoice = valor
@@ -435,6 +439,9 @@ class PainelServerActivity : Activity() {
             // Sem escolha, vale o primeiro da lista (o Android Auto, se houver): marca ele como escolhido.
             put("mapaApp", lanc.mapPackage ?: lanc.mapApps().firstOrNull()?.pkg ?: "")
             put("mapaProjecao", lanc.mapIsProjection())
+            // Todos os apps do multimídia: o dono aponta qual é o Android Auto quando o nome não é reconhecido.
+            put("apps", JSONArray().apply { lanc.launcherApps().forEach { put(JSONObject().put("pkg", it.pkg).put("nome", it.label)) } })
+            put("aaApp", st.projectionPackage ?: "")
             put("musicas", JSONArray().apply { lanc.musicApps().forEach { put(JSONObject().put("pkg", it.pkg).put("nome", it.label)) } })
             put("musicaApp", lanc.musicPackage ?: "")
             put("vozes", JSONArray().apply {
@@ -628,7 +635,7 @@ class PainelServerActivity : Activity() {
         )
         /** Ajustes que mudam as preferências deste multimídia (mapa, música, voz, lugares, rádio ao ligar). */
         private val AJUSTES_LOCAIS = setOf(
-            "ajuste.mapa", "ajuste.musica", "ajuste.voz", "ajuste.vozOuvir", "ajuste.velocidade", "ajuste.tom",
+            "ajuste.mapa", "ajuste.mapaAA", "ajuste.musica", "ajuste.voz", "ajuste.vozOuvir", "ajuste.velocidade", "ajuste.tom",
             "ajuste.continuar", "ajuste.lugarRemover", "atualizacao.verificar", "atualizacao.instalar",
             "sistema.notificacoes", "sistema.sobrepor", "ajuste.flutuante", "ajuste.flutuanteItem", "ajuste.flutuanteTamanho", "ajuste.flutuanteTestar", "ajuste.continuarMapa", "ajuste.carroFixo",
         )

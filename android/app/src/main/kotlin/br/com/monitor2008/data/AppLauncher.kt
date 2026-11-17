@@ -34,17 +34,26 @@ class AppLauncher(private val context: Context) {
     /** Apps do multimídia que mostram o Android Auto do celular. No celular, nenhum. */
     fun projectionApps(): List<String> {
         if (!Features.mediaControl) return emptyList()
-        return try {
-            pm.queryIntentActivities(Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER), 0)
-                .map { it.activityInfo.packageName }.distinct()
-                .filter { it != context.packageName && br.com.monitor2008.domain.Projection.isProjectionApp(it, label(it)) }
+        val escolhido = store.projectionPackage?.takeIf { pm.getLaunchIntentForPackage(it) != null }
+        val achados = try {
+            launcherPackages().filter { br.com.monitor2008.domain.Projection.isProjectionApp(it, label(it)) }
         } catch (_: Exception) { emptyList() }
+        return (listOfNotNull(escolhido) + achados).distinct()
     }
+
+    private fun launcherPackages(): List<String> =
+        pm.queryIntentActivities(Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER), 0)
+            .map { it.activityInfo.packageName }.distinct().filter { it != context.packageName }
+
+    /** Todos os apps com ícone no multimídia, em ordem de nome: para o dono apontar qual é o Android Auto. */
+    fun launcherApps(): List<AppChoice> =
+        if (!Features.mediaControl) emptyList()
+        else try { choices(launcherPackages()).sortedBy { it.label.lowercase() } } catch (_: Exception) { emptyList() }
 
     /** O mapa escolhido (ou o padrão) é o Android Auto do celular? Então a rota é traçada no celular, não aqui. */
     fun mapIsProjection(): Boolean {
         val pkg = mapPackage ?: mapApps().firstOrNull()?.pkg ?: return false
-        return br.com.monitor2008.domain.Projection.isProjectionApp(pkg, label(pkg))
+        return pkg == store.projectionPackage || br.com.monitor2008.domain.Projection.isProjectionApp(pkg, label(pkg))
     }
 
     /** Apps de música instalados: os que oferecem player de mídia e os conhecidos. */
