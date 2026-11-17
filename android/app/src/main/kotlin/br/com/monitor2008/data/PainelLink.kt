@@ -63,6 +63,10 @@ object PainelLink {
      */
     @Volatile private var discoveredNet: Network? = null
     @Volatile private var appCtx: Application? = null
+    /** O que a busca e o envio ao multimídia fizeram por último (mostrado no Diagnóstico do celular). */
+    @Volatile var diag: String = "Ainda não procurou o multimídia."
+        private set
+    private fun hora(): String = java.text.SimpleDateFormat("HH:mm:ss", Locale("pt", "BR")).format(java.util.Date())
     private var failCount = 0
     @Volatile private var lastScanMs = 0L
     private val scanning = AtomicBoolean(false)
@@ -285,9 +289,16 @@ object PainelLink {
      */
     private fun findPainel(): Pair<String, Network?>? {
         val wifis = wifiNetworks()
+        val redes = wifis.joinToString("; ") { (_, b, gw) -> "Wi-Fi ${b.joinToString(",") { "$it.x" }}${gw?.let { " (roteador $it)" } ?: ""}" }
+            .ifBlank { "nenhuma rede Wi-Fi visível para o app" }
+        val outras = localSubnets().joinToString(",") { "$it.x" }.ifBlank { "nenhuma" }
+        diag = "${hora()} procurando. $redes. Outras redes: $outras."
         // Atalho: o roteador do Wi-Fi do Android Auto costuma ser o próprio multimídia.
         for ((net, _, gw) in wifis) {
-            if (gw != null && isPainel(gw, net)) return "$gw:$PORT" to net
+            if (gw != null && isPainel(gw, net)) {
+                diag = "${hora()} achado em $gw pelo Wi-Fi (roteador). $redes."
+                return "$gw:$PORT" to net
+            }
         }
         val found = AtomicReference<Pair<String, Network?>?>(null)
         val probes = Executors.newFixedThreadPool(32)
@@ -305,7 +316,10 @@ object PainelLink {
         for (base in localSubnets()) if (base !in jaVarridas) varrer(base, null)
         futures.forEach { try { it.get() } catch (_: Exception) { } }
         probes.shutdownNow()
-        return found.get()
+        val r = found.get()
+        diag = if (r != null) "${hora()} achado em ${r.first}${if (r.second != null) " pelo Wi-Fi" else " pela rede padrão (hotspot)"}. $redes. Outras redes: $outras."
+        else "${hora()} não achou o multimídia. $redes. Outras redes: $outras."
+        return r
     }
 
     private fun isPainel(ip: String, net: Network? = null): Boolean = try {
@@ -661,6 +675,7 @@ object PainelLink {
             c.setRequestProperty("Content-Type", "application/json; charset=utf-8")
             c.outputStream.use { it.write(body) }
             failCount = 0
+            diag = "${hora()} enviando para $target${if (discoveredNet != null) " pelo Wi-Fi" else ""} (ok)."
             if (c.responseCode == 200) {
                 val txt = c.inputStream.bufferedReader(Charsets.UTF_8).use { it.readText() }
                 val resposta = JSONObject(txt)
@@ -675,7 +690,8 @@ object PainelLink {
                 }
             }
             c.disconnect()
-        } catch (_: Exception) {
+        } catch (e: Exception) {
+            diag = "${hora()} falhou o envio para $target: ${e.javaClass.simpleName} ${e.message ?: ""}".trim()
             // Multimídia desligado ou fora da rede: depois de 3 falhas, procura de novo.
             if (++failCount >= 3) {
                 failCount = 0

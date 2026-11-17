@@ -1410,6 +1410,9 @@ private fun DiagnosticoScreen(ui: UiState, vm: MonitorEngine) {
         if (c.vin != null) Text("Chassi (VIN): ${c.vin}", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 16.sp)
         else if (c.state == ConnState.CONNECTED) Text("Chassi (VIN): o carro não informou", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 16.sp)
         c.adapter?.let { Text("Adaptador conectado: $it", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 16.sp) }
+        if (!br.com.monitor2008.data.Features.mediaControl) {
+            Text("Painel do multimídia: ${br.com.monitor2008.data.PainelLink.diag}", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 15.sp)
+        }
         Text("Carro: ${ui.vehicle?.fullName ?: "?"}", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 16.sp)
         if (ui.vehicleNotice.isNotBlank()) Text(ui.vehicleNotice, color = Warn, fontSize = 15.sp)
         OutlinedButton(onClick = vm::start, modifier = Modifier.height(60.dp)) { Text("Reconectar", fontSize = 18.sp) }
