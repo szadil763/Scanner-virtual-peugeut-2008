@@ -434,6 +434,7 @@ class PainelServerActivity : Activity() {
             } })
             // Sem escolha, vale o primeiro da lista (o Android Auto, se houver): marca ele como escolhido.
             put("mapaApp", lanc.mapPackage ?: lanc.mapApps().firstOrNull()?.pkg ?: "")
+            put("mapaProjecao", lanc.mapIsProjection())
             put("musicas", JSONArray().apply { lanc.musicApps().forEach { put(JSONObject().put("pkg", it.pkg).put("nome", it.label)) } })
             put("musicaApp", lanc.musicPackage ?: "")
             put("vozes", JSONArray().apply {
