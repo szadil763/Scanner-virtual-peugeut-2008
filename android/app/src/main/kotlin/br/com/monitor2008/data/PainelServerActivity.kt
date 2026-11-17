@@ -275,7 +275,9 @@ class PainelServerActivity : Activity() {
                                         AppLauncher(application).routeTo(endereco, null)
                                     } ?: "Digite o destino."
                                 } catch (_: Exception) { "Não consegui abrir o mapa." }
-                                if (erro != null && comandoValido(obj)) pending.add(System.currentTimeMillis() to obj.toString())
+                                // Android Auto: a tela dele abriu aqui, mas quem traça a rota é o Google Maps/Waze do celular.
+                                val noCelular = acaoLocal == "mapa.rota" && try { AppLauncher(application).mapIsProjection() } catch (_: Exception) { false }
+                                if ((erro != null || noCelular) && comandoValido(obj)) pending.add(System.currentTimeMillis() to obj.toString())
                                 // Mapa aberto aqui: o Monitor fica por cima em miniatura (números do carro); o toque volta ao painel.
                                 if (erro == null && FloatingPanel.available(application)) {
                                     FloatingPanel.show(application, PainelServerActivity::class.java)
@@ -426,8 +428,12 @@ class PainelServerActivity : Activity() {
         val st = Store(application)
         val lanc = AppLauncher(application)
         return JSONObject().apply {
-            put("mapas", JSONArray().apply { lanc.mapApps().forEach { put(JSONObject().put("pkg", it.pkg).put("nome", it.label)) } })
-            put("mapaApp", lanc.mapPackage ?: "")
+            val projecao = lanc.projectionApps().toSet()
+            put("mapas", JSONArray().apply { lanc.mapApps().forEach {
+                put(JSONObject().put("pkg", it.pkg).put("nome", if (it.pkg in projecao) "${it.label} (mapa do celular)" else it.label))
+            } })
+            // Sem escolha, vale o primeiro da lista (o Android Auto, se houver): marca ele como escolhido.
+            put("mapaApp", lanc.mapPackage ?: lanc.mapApps().firstOrNull()?.pkg ?: "")
             put("musicas", JSONArray().apply { lanc.musicApps().forEach { put(JSONObject().put("pkg", it.pkg).put("nome", it.label)) } })
             put("musicaApp", lanc.musicPackage ?: "")
             put("vozes", JSONArray().apply {

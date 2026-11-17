@@ -6,6 +6,14 @@
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
 
+    <!-- Achar o app que recebe o Android Auto do celular (ZLink, AutoKit...): cada multimídia tem um nome. -->
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.MAIN" />
+            <category android:name="android.intent.category.LAUNCHER" />
+        </intent>
+    </queries>
+
     <application>
         <receiver
             android:name=".data.BootReceiver"

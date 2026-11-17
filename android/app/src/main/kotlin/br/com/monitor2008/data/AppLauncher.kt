@@ -21,11 +21,30 @@ class AppLauncher(private val context: Context) {
     private val pm = context.packageManager
     private val store = Store(context)
 
-    /** Apps de mapa instalados: os que abrem endereços (geo:) e os navegadores conhecidos. */
+    /**
+     * Apps de mapa instalados: no multimídia, primeiro os que recebem o Android Auto do celular (ZLink, AutoKit...;
+     * o mapa vem do celular, com o GPS dele); depois os navegadores conhecidos e os que abrem endereços (geo:).
+     */
     fun mapApps(): List<AppChoice> {
         val byIntent = pm.queryIntentActivities(Intent(Intent.ACTION_VIEW, Uri.parse("geo:0,0?q=")), 0)
             .map { it.activityInfo.packageName }
-        return choices(KNOWN_MAPS + byIntent)
+        return choices(projectionApps() + KNOWN_MAPS + byIntent)
+    }
+
+    /** Apps do multimídia que mostram o Android Auto do celular. No celular, nenhum. */
+    fun projectionApps(): List<String> {
+        if (!Features.mediaControl) return emptyList()
+        return try {
+            pm.queryIntentActivities(Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER), 0)
+                .map { it.activityInfo.packageName }.distinct()
+                .filter { it != context.packageName && br.com.monitor2008.domain.Projection.isProjectionApp(it, label(it)) }
+        } catch (_: Exception) { emptyList() }
+    }
+
+    /** O mapa escolhido (ou o padrão) é o Android Auto do celular? Então a rota é traçada no celular, não aqui. */
+    fun mapIsProjection(): Boolean {
+        val pkg = mapPackage ?: mapApps().firstOrNull()?.pkg ?: return false
+        return br.com.monitor2008.domain.Projection.isProjectionApp(pkg, label(pkg))
     }
 
     /** Apps de música instalados: os que oferecem player de mídia e os conhecidos. */
@@ -77,6 +96,8 @@ class AppLauncher(private val context: Context) {
      * Mesmo comportamento de [openMap]: ao lado com a tela dividida; senão o Monitor vira janela flutuante.
      */
     fun navigateTo(lat: Double, lon: Double, name: String, activity: Activity?): String? {
+        // Android Auto: o destino é do celular; aqui só abre a tela dele.
+        if (mapIsProjection()) return openMap(activity).also { if (it == null) registrarRota(name, lat, lon) }
         val uri = Uri.parse("geo:$lat,$lon?q=$lat,$lon(${Uri.encode(name)})")
         val intent = Intent(Intent.ACTION_VIEW, uri)
         mapPackage?.let { pkg -> if (pm.getLaunchIntentForPackage(pkg) != null) intent.setPackage(pkg) }
@@ -90,6 +111,7 @@ class AppLauncher(private val context: Context) {
      * outros mapas, na busca do endereço.
      */
     fun routeTo(address: String, activity: Activity?): String? {
+        if (mapIsProjection()) return openMap(activity).also { if (it == null) registrarRota(address, null, null) }
         val pkg = (mapPackage ?: mapApps().firstOrNull()?.pkg)?.takeIf { pm.getLaunchIntentForPackage(it) != null }
         val q = Uri.encode(address)
         val intent = when (pkg) {
