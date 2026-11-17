@@ -497,10 +497,13 @@ class Store(context: Context) {
         set(v) { app.edit().putBoolean("refuelByMoney", v).apply() }
     /**
      * Ler o carro sempre, mesmo sem abrir o app: o multimídia liga a leitura em segundo plano ao
-     * ligar, e ela reconecta sozinha quando o motor liga. Padrão: ligado.
+     * ligar, e ela reconecta sozinha quando o motor liga.
+     * Padrão: DESLIGADO desde a 0.1.161. Hoje quem lê o carro é o celular e manda ao painel; com o multimídia também
+     * lendo, os dois disputavam o adaptador (ele aceita uma conexão por vez) e o celular não conectava. Desligado, o
+     * motor do app no multimídia não abre conexão nenhuma com o adaptador (ver MonitorEngine.start).
      */
     var backgroundReading: Boolean
-        get() = app.getBoolean("backgroundReading", true)
+        get() = app.getBoolean("backgroundReading", false)
         set(v) { app.edit().putBoolean("backgroundReading", v).apply() }
 
     /** Endereço do painel no multimídia (ex.: 10.12.38.252:8080). Vazio = não envia. */

@@ -285,6 +285,14 @@ class MonitorEngine private constructor(private val app: Application) {
         simTrip.reset(); history.clear(); speedHistory.clear(); lastTimeMs = 0L; lastDistCounter = null
         lastSample = null; lastKmPerL = null; lastLph = null; lastMethod = null; dtcs = null; pendingDtcs = null
 
+        // Multimídia que só mostra o painel: não conecta no adaptador. Com o celular lendo o carro, os dois disputavam o
+        // adaptador (uma conexão por vez) e o celular falhava ("read failed"). Liga em Ajustes > Ao ligar o carro.
+        if (br.com.monitor2008.data.Features.mediaControl && !store.useSimulated && !store.backgroundReading) {
+            source = null
+            conn = ConnectionInfo(ConnState.IDLE, "Quem lê o carro é o celular; este multimídia só mostra o painel.")
+            publish()
+            return
+        }
         val src: ObdSource = if (store.useSimulated) {
             SimulatedSource()
         } else {

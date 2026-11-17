@@ -1564,12 +1564,16 @@ private fun StartupSection() {
     if (Features.mediaControl) {
         var background by remember { mutableStateOf(store.backgroundReading) }
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Switch(background, { background = it; store.backgroundReading = it })
+            Switch(background, {
+                background = it; store.backgroundReading = it
+                MonitorEngine.get(ctx.applicationContext as android.app.Application).start()
+            })
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {
-                Text("Ler o carro sempre, mesmo sem abrir o app", fontSize = 18.sp)
-                Text("A leitura começa quando o multimídia liga, em segundo plano, e grava a viagem (km, velocidade, consumo) " +
-                    "mesmo que você não abra o Monitor.", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 15.sp)
+                Text("Este multimídia lê o adaptador do carro", fontSize = 18.sp)
+                Text("Deixe DESLIGADO quando o celular lê o carro e manda os números para o painel: o adaptador aceita uma " +
+                    "conexão por vez, e com os dois tentando o celular não conecta. Ligado, o multimídia lê sozinho, em segundo plano.",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 15.sp)
             }
         }
     }
