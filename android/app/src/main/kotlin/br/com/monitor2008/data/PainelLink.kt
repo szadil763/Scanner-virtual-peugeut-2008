@@ -1,6 +1,10 @@
 package br.com.monitor2008.data
 
 import android.app.Application
+import android.content.Context
+import android.net.ConnectivityManager
+import android.net.Network
+import android.net.NetworkCapabilities
 import android.location.Geocoder
 import android.os.Handler
 import android.os.Looper
@@ -51,6 +55,14 @@ object PainelLink {
     @Volatile private var lastSentMs = 0L
     /** Endereço achado pela busca (ou o último que funcionou). */
     @Volatile private var discovered: String? = null
+    /**
+     * Rede Wi-Fi em que o multimídia foi achado. Com o Android Auto sem fio, o celular entra no Wi-Fi do próprio
+     * multimídia, que não tem internet; o Android manda tudo pelo 4G (rede padrão) e o envio nunca chegava. Abrindo
+     * a conexão por esta rede, os números chegam ao painel mesmo com o Android Auto ligado. Nulo = rede padrão
+     * (hotspot do celular, como antes).
+     */
+    @Volatile private var discoveredNet: Network? = null
+    @Volatile private var appCtx: Application? = null
     private var failCount = 0
     @Volatile private var lastScanMs = 0L
     private val scanning = AtomicBoolean(false)
@@ -201,6 +213,7 @@ object PainelLink {
         val now = System.currentTimeMillis()
         if (now - lastSentMs < 1000) return
         lastSentMs = now
+        appCtx = app
         val target = discovered ?: normalize(manual)
         if (target == null) {
             scheduleScan()
@@ -237,33 +250,66 @@ object PainelLink {
         lastScanMs = now
         scanner.execute {
             try {
-                discovered = findPainel()
+                val achado = findPainel()
+                discoveredNet = achado?.second
+                discovered = achado?.first
             } finally {
                 scanning.set(false)
             }
         }
     }
 
-    /** Procura o /ping do multimídia em todas as redes do celular (hotspot, Wi-Fi), com 32 conexões ao mesmo tempo. */
-    private fun findPainel(): String? {
-        val found = AtomicReference<String?>(null)
+    /** Abre a conexão pela rede indicada (Wi-Fi do Android Auto) ou, sem ela, pela rede padrão. */
+    private fun abrir(url: String, net: Network?): HttpURLConnection =
+        (net?.openConnection(URL(url)) ?: URL(url).openConnection()) as HttpURLConnection
+
+    /** Redes Wi-Fi do celular (inclusive sem internet, como a do Android Auto sem fio), com as sub-redes e o roteador. */
+    private fun wifiNetworks(): List<Triple<Network, List<String>, String?>> = try {
+        val cm = appCtx?.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager
+        @Suppress("DEPRECATION")
+        cm?.allNetworks.orEmpty().mapNotNull { n ->
+            val caps = cm?.getNetworkCapabilities(n) ?: return@mapNotNull null
+            if (!caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)) return@mapNotNull null
+            val lp = cm.getLinkProperties(n) ?: return@mapNotNull null
+            val bases = lp.linkAddresses.mapNotNull { la -> (la.address as? Inet4Address)?.hostAddress?.substringBeforeLast('.') }.distinct()
+            val gw = lp.routes.mapNotNull { r -> (r.gateway as? Inet4Address)?.hostAddress }.firstOrNull { it != "0.0.0.0" }
+            if (bases.isEmpty()) null else Triple(n, bases, gw)
+        }
+    } catch (_: Exception) { emptyList() }
+
+    /**
+     * Procura o /ping do multimídia em todas as redes do celular, com 32 conexões ao mesmo tempo:
+     * 1) cada rede Wi-Fi, abrindo a conexão por ela (o Wi-Fi do Android Auto sem fio não tem internet e o Android
+     *    não o usa sozinho); o roteador primeiro, porque nesse caso o multimídia costuma ser o próprio roteador;
+     * 2) as redes de sempre pela rota padrão (hotspot do celular).
+     */
+    private fun findPainel(): Pair<String, Network?>? {
+        val wifis = wifiNetworks()
+        // Atalho: o roteador do Wi-Fi do Android Auto costuma ser o próprio multimídia.
+        for ((net, _, gw) in wifis) {
+            if (gw != null && isPainel(gw, net)) return "$gw:$PORT" to net
+        }
+        val found = AtomicReference<Pair<String, Network?>?>(null)
         val probes = Executors.newFixedThreadPool(32)
         val futures = ArrayList<Future<*>>()
-        for (base in localSubnets()) {
+        fun varrer(base: String, net: Network?) {
             for (h in 1..254) {
                 val ip = "$base.$h"
                 futures.add(probes.submit {
-                    if (found.get() == null && isPainel(ip)) found.compareAndSet(null, "$ip:$PORT")
+                    if (found.get() == null && isPainel(ip, net)) found.compareAndSet(null, "$ip:$PORT" to net)
                 })
             }
         }
+        val jaVarridas = HashSet<String>()
+        for ((net, bases, _) in wifis) for (b in bases) { varrer(b, net); jaVarridas += b }
+        for (base in localSubnets()) if (base !in jaVarridas) varrer(base, null)
         futures.forEach { try { it.get() } catch (_: Exception) { } }
         probes.shutdownNow()
         return found.get()
     }
 
-    private fun isPainel(ip: String): Boolean = try {
-        val c = URL("http://$ip:$PORT/ping").openConnection() as HttpURLConnection
+    private fun isPainel(ip: String, net: Network? = null): Boolean = try {
+        val c = abrir("http://$ip:$PORT/ping", net)
         c.connectTimeout = 400
         c.readTimeout = 600
         val ok = c.responseCode == 200 &&
@@ -298,7 +344,7 @@ object PainelLink {
         val out = ByteArrayOutputStream()
         pequena.compress(Bitmap.CompressFormat.JPEG, 80, out)
         val bytes = out.toByteArray()
-        val c = URL("http://$target/capa").openConnection() as HttpURLConnection
+        val c = abrir("http://$target/capa", discoveredNet)
         c.requestMethod = "POST"
         c.connectTimeout = 1500
         c.readTimeout = 1500
@@ -606,7 +652,7 @@ object PainelLink {
 
     private fun post(app: Application, target: String, body: ByteArray) {
         try {
-            val c = URL("http://$target/estado").openConnection() as HttpURLConnection
+            val c = abrir("http://$target/estado", discoveredNet)
             c.requestMethod = "POST"
             c.connectTimeout = 1500
             c.readTimeout = 1500
@@ -634,6 +680,7 @@ object PainelLink {
             if (++failCount >= 3) {
                 failCount = 0
                 discovered = null
+                discoveredNet = null
                 scheduleScan()
             }
         }
