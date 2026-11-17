@@ -309,6 +309,10 @@
   <div class="split">
   <div id="mid-esq" style="min-width:0;display:flex;flex-direction:column">
   <div class="tocador" id="mid-musica">
+    <div id="aa-musica" style="display:none;width:100%;border:2px solid #7dd3fc;border-radius:16px;padding:12px;font-size:19px;color:#7dd3fc">
+      Com o Android Auto, a música é a do celular. Os botões ⏮ ⏯ ⏭ daqui controlam o celular. Para escolher outra música, use o Android Auto:
+      <button class="enviar" style="min-height:72px" onclick="abrirAndroidAuto()">Abrir o Android Auto (música do celular)</button>
+    </div>
     <div id="sem-app-musica" style="display:none;width:100%;border:2px solid #ffcc33;border-radius:16px;padding:12px;font-size:18px;color:#ffcc33">
       Nenhum app de música está escolhido em Ajustes, por isso o player pode ficar escondido. Escolha o app que você usa (ex.: Spotify):
       <div id="sem-app-lista" style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px"></div>
@@ -340,7 +344,7 @@
       <button id="tc-play" onclick="cmd('musica.playpause')">▶</button>
       <button onclick="cmd('musica.next')">⏭</button>
     </div>
-    <div class="busca">
+    <div class="busca" id="busca-bloco">
       <input type="text" id="busca-txt" placeholder="Buscar música ou cantor" maxlength="100">
       <button id="busca-btn" onclick="buscarMusica()">Buscar e tocar</button>
     </div>
@@ -1197,6 +1201,9 @@
 
     // Mapa pelo Android Auto: o botão e o texto da aba Mapa dizem que o mapa vem do celular.
     var aa = !!a.mapaProjecao;
+    // Na aba Mídias, a música é a do celular: some a busca do multimídia e aparece o atalho para o Android Auto.
+    el('aa-musica').style.display = aa ? '' : 'none';
+    el('busca-bloco').style.display = aa ? 'none' : '';
     el('mapa-abrir').textContent = aa ? 'Abrir o Android Auto (mapa do celular)' : 'Abrir o mapa';
     el('mapa-explica').textContent = aa
       ? 'Google Maps ou Waze do celular, pelo Android Auto. Ligue o celular no Android Auto antes.'
@@ -1389,6 +1396,9 @@
     if (m.rota && m.rota.length > 1) { L.polyline(m.rota, { color: '#3ddc6b', weight: 6 }).addTo(camadas); }
     if (pts.length === 1) mapaObj.setView(pts[0], 16);
     else if (pts.length > 1) mapaObj.fitBounds(pts, { padding: [30, 30] });
+  }
+  function abrirAndroidAuto() {
+    fetch('/comando', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ acao: 'mapa.abrir' }) });
   }
   function mapaLimpar() {
     fetch('/comando', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ acao: 'mapa.limpar' }) });

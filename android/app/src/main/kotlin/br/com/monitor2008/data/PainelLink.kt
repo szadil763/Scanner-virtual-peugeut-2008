@@ -894,13 +894,23 @@ object PainelLink {
         return true
     }
 
+    private fun teclaDeMidia(app: Application, code: Int) {
+        try {
+            val am = app.getSystemService(Context.AUDIO_SERVICE) as android.media.AudioManager
+            am.dispatchMediaKeyEvent(android.view.KeyEvent(android.view.KeyEvent.ACTION_DOWN, code))
+            am.dispatchMediaKeyEvent(android.view.KeyEvent(android.view.KeyEvent.ACTION_UP, code))
+        } catch (_: Exception) { }
+    }
+
     private fun execute(app: Application, cmd: JSONObject) {
         if (executarMidia(app, cmd.optString("acao"), cmd.optString("texto"))) return
         when (cmd.optString("acao")) {
             "abastecer" -> abastecer(app, cmd)
-            "musica.playpause" -> if (Features.mediaControl) MediaWatcher.get(app).playPause()
-            "musica.next" -> if (Features.mediaControl) MediaWatcher.get(app).next()
-            "musica.prev" -> if (Features.mediaControl) MediaWatcher.get(app).previous()
+            // Pedido do painel com o Android Auto: o celular aperta a tecla de mídia (vale para o Spotify, YouTube Music...
+            // que estiver tocando aqui), sem precisar do acesso às notificações.
+            "musica.playpause" -> if (Features.mediaControl) MediaWatcher.get(app).playPause() else teclaDeMidia(app, android.view.KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE)
+            "musica.next" -> if (Features.mediaControl) MediaWatcher.get(app).next() else teclaDeMidia(app, android.view.KeyEvent.KEYCODE_MEDIA_NEXT)
+            "musica.prev" -> if (Features.mediaControl) MediaWatcher.get(app).previous() else teclaDeMidia(app, android.view.KeyEvent.KEYCODE_MEDIA_PREVIOUS)
             "radio.playpause" -> RadioPlayer.get(app).let { r ->
                 if (r.state.value.playing) r.pause() else r.resume()
             }

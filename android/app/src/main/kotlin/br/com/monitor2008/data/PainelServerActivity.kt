@@ -261,6 +261,12 @@ class PainelServerActivity : Activity() {
                             val corpo = JSONObject().put("mensagem", resultado[0] ?: "O app não respondeu em 3 segundos.").toString()
                             send(out, 200, "application/json; charset=utf-8", corpo.toByteArray(Charsets.UTF_8))
                             respondido = true
+                        } else if (obj != null && acaoLocal in TECLAS_DE_MUSICA &&
+                            try { AppLauncher(application).mapIsProjection() } catch (_: Exception) { false }) {
+                            // Android Auto escolhido: a música que toca é a do celular (vem pelo Android Auto). Os botões
+                            // vão para o celular, que aperta a tecla de mídia lá; aqui só tocaria a mídia do multimídia.
+                            pending.add(System.currentTimeMillis() to obj.toString())
+                            while (pending.size > 5) pending.poll()
                         } else if (obj != null && (acaoLocal.startsWith("musica.") || acaoLocal.startsWith("radio."))) {
                             // Música e rádio: tocam aqui, no multimídia (não passam pelo celular).
                             val texto = obj.optString("texto")
@@ -634,6 +640,7 @@ class PainelServerActivity : Activity() {
             "abastecer", "musica.buscar", "manutencao.feito", "diag.lerFalhas", "ajuste.sol", "ajuste.direcao", "ajuste.combustivel", "ajuste.calibracao", "ajuste.preco", "ajuste.eficiencia", "ajuste.carro", "voz.ouvir", "pendente.cancelar", "mapa.abrir", "mapa.rota", "mapa.limpar", "posto.localizar", "nuvem.sincronizar", "abastecimento.apagar", "abastecimento.editar", "ajuste.calibrarPeloCarro", "trajeto.zerar", "ajuste.tanque", "ajuste.nivelTanque",
         )
         /** Ajustes que mudam as preferências deste multimídia (mapa, música, voz, lugares, rádio ao ligar). */
+        private val TECLAS_DE_MUSICA = setOf("musica.playpause", "musica.next", "musica.prev")
         private val AJUSTES_LOCAIS = setOf(
             "ajuste.mapa", "ajuste.mapaAA", "ajuste.musica", "ajuste.voz", "ajuste.vozOuvir", "ajuste.velocidade", "ajuste.tom",
             "ajuste.continuar", "ajuste.lugarRemover", "atualizacao.verificar", "atualizacao.instalar",
