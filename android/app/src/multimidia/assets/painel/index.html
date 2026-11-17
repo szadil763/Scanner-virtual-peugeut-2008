@@ -1951,7 +1951,8 @@
             st.className = '';
           } else {
             st.textContent = '● ' + quem(s.dados) + (carroDe(s.dados) ? ' conectado ao ' + carroDe(s.dados) : ' conectado') +
-              (s.dados.carroAviso ? '  ⚠ confira se o carro está certo (Ajustes > Carro, no celular)' : '');
+              (s.dados.carroAviso ? '  ⚠ confira se o carro está certo (Ajustes > Carro, no celular)' : '') +
+              (s.outraFonte ? '  ⚠ outro Monitor também manda dados (ignorado): ' + s.outraFonte : '');
             st.className = 'on';
           }
           paint(s.dados);

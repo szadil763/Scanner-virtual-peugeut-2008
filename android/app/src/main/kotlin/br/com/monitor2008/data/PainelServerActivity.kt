@@ -162,18 +162,31 @@ class PainelServerActivity : Activity() {
 
     // Só um celular alimenta o painel por vez. Outro aparelho com o app aberto (sem o adaptador, com trajeto antigo)
     // fazia os números alternarem. Vale quem está conectado ao carro; entre iguais, o que já estava mandando.
+    /** Quem alimenta o painel: a identidade da instalação do app (ou o endereço, nas versões antigas do celular). */
     private var fonteIp: String? = null
+    /** Outro aparelho (ou outro Monitor no mesmo celular) que tentou mandar dados e foi ignorado. */
+    @Volatile private var outraFonte: String? = null
+    @Volatile private var outraFonteMs = 0L
     private var fonteAtMs = 0L
     private var fonteConectada = false
 
     @Synchronized
     private fun fonteAceita(a: java.net.InetAddress?, body: ByteArray): Boolean {
         val ip = a?.hostAddress ?: return true
-        val conectada = try { JSONObject(String(body, Charsets.UTF_8)).optBoolean("ok", false) } catch (_: Exception) { false }
+        val j = try { JSONObject(String(body, Charsets.UTF_8)) } catch (_: Exception) { null }
+        val conectada = j?.optBoolean("ok", false) ?: false
+        // Dois Monitor no mesmo celular chegam do mesmo endereço: a identidade da instalação separa os dois.
+        val id = j?.optString("instancia", "")?.takeIf { it.isNotBlank() } ?: ip
         val agora = System.currentTimeMillis()
-        val livre = fonteIp == null || fonteIp == ip || agora - fonteAtMs > 6_000L || (conectada && !fonteConectada)
-        if (!livre) return false
-        fonteIp = ip; fonteAtMs = agora; fonteConectada = conectada
+        val livre = fonteIp == null || fonteIp == id || agora - fonteAtMs > 6_000L || (conectada && !fonteConectada)
+        if (!livre) {
+            val nome = listOfNotNull(j?.optString("usuario")?.takeIf { it.isNotBlank() }, j?.optString("celular")?.takeIf { it.isNotBlank() }?.let { "($it)" })
+                .joinToString(" ").ifBlank { "outro aparelho" }
+            outraFonte = "$nome, $ip, app $id"
+            outraFonteMs = agora
+            return false
+        }
+        fonteIp = id; fonteAtMs = agora; fonteConectada = conectada
         return true
     }
 
@@ -301,7 +314,7 @@ class PainelServerActivity : Activity() {
                     }
                     method == "GET" && path == "/estado" -> {
                         val age = if (latestAtMs == 0L) -1 else System.currentTimeMillis() - latestAtMs
-                        val json = "{\"idadeMs\":$age,\"dados\":${latestJson ?: "null"},\"vozMultimidia\":\"$ttsStatus\",\"postoLocal\":${postoLocal?.toString() ?: "null"},\"carroFixo\":${JSONObject.quote(Store(application).fixedCarId ?: "")},\"carrosLista\":${carrosLista()}}"
+                        val json = "{\"idadeMs\":$age,\"dados\":${latestJson ?: "null"},\"vozMultimidia\":\"$ttsStatus\",\"postoLocal\":${postoLocal?.toString() ?: "null"},\"carroFixo\":${JSONObject.quote(Store(application).fixedCarId ?: "")},\"outraFonte\":${JSONObject.quote(outraFonte?.takeIf { System.currentTimeMillis() - outraFonteMs < 15_000L } ?: "")},\"carrosLista\":${carrosLista()}}"
                         send(out, 200, "application/json; charset=utf-8", json.toByteArray(Charsets.UTF_8))
                     }
                     method == "GET" && path == "/midia" ->

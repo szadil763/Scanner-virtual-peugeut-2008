@@ -383,6 +383,7 @@ object PainelLink {
         val s = ui.sample
         return JSONObject().apply {
             put("ok", ui.conn.state == ConnState.CONNECTED)
+            put("instancia", Store(app).instanceId)
             // Quem está conectado: o painel mostra "Adilson conectado ao Peugeot 2008 · celular".
             put("usuario", try { Conta.nome() ?: "" } catch (_: Exception) { "" })
             put("celular", nomeDoCelular(app))

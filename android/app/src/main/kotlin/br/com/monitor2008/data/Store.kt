@@ -355,6 +355,15 @@ class Store(context: Context) {
         get() = app.getString("mapPackage", null)
         set(v) { app.edit().putString("mapPackage", v).apply() }
 
+    /**
+     * Identidade desta instalação do app (aleatória, criada uma vez). O painel usa para aceitar um app só: dois
+     * Monitor no mesmo celular (ex.: "apps duplicados" do Xiaomi/POCO) mandavam dados do mesmo endereço e o painel piscava.
+     */
+    val instanceId: String
+        get() = app.getString("instanceId", null) ?: java.util.UUID.randomUUID().toString().take(8).also {
+            app.edit().putString("instanceId", it).apply()
+        }
+
     /** App do multimídia que recebe o Android Auto, escolhido à mão (quando o nome dele não é reconhecido). */
     var projectionPackage: String?
         get() = app.getString("projectionPackage", null)
@@ -689,7 +698,7 @@ private val NAO_VAI_PARA_NUVEM = setOf(
 )
 
 private val CHAVES_DO_APARELHO = setOf(
-    "highContrast", "driveMode", "ttsVoice", "ttsRate", "ttsPitch", "wakeWord", "backgroundReading", "floatMode", "floatSize", "floatItems", "floatX", "floatY", "lastTab", "mapPackage", "musicPackage", "mediaMode", "radioFavorites", "lastRadio", "places", "refuelByMoney", "updateChannel", "updateCheckedMs", "autoOpen", "resumeMedia", "pipOnLeave", "painelAddress", "useSimulated", "vehicleId", "lastPlayingAtMs", "lastPlayingPkg", "aliveAtMs", "lastPlayingTitle", "resumeMap", "lastFront", "lastFrontAtMs", "lastRouteAddress", "lastRouteAtMs", "lastRouteLat", "lastRouteLon", "projectionPackage"
+    "highContrast", "driveMode", "ttsVoice", "ttsRate", "ttsPitch", "wakeWord", "backgroundReading", "floatMode", "floatSize", "floatItems", "floatX", "floatY", "lastTab", "mapPackage", "musicPackage", "mediaMode", "radioFavorites", "lastRadio", "places", "refuelByMoney", "updateChannel", "updateCheckedMs", "autoOpen", "resumeMedia", "pipOnLeave", "painelAddress", "useSimulated", "vehicleId", "lastPlayingAtMs", "lastPlayingPkg", "aliveAtMs", "lastPlayingTitle", "resumeMap", "lastFront", "lastFrontAtMs", "lastRouteAddress", "lastRouteAtMs", "lastRouteLat", "lastRouteLon", "projectionPackage", "instanceId"
 )
 
 /** Arquivo de preferências de cada carro: o 2008 segue no arquivo de sempre (não perde o histórico). */
