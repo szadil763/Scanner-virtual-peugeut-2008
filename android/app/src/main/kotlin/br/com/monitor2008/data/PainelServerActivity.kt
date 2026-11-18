@@ -389,6 +389,7 @@ class PainelServerActivity : Activity() {
             }
             "ajuste.continuar" -> st.resumeMedia = o.optBoolean("valor", true)
             "ajuste.continuarMapa" -> st.resumeMap = o.optBoolean("valor", true)
+            "ajuste.abrirSozinho" -> st.autoOpen = o.optBoolean("valor", true)
             "ajuste.lugarRemover" -> st.savePlaces(st.places().filter { it.first != valor })
             "sistema.notificacoes" -> SystemSettings.notificationAccess(this)
             "sistema.sobrepor" -> SystemSettings.overlay(this)
@@ -471,6 +472,9 @@ class PainelServerActivity : Activity() {
             put("tom", Math.round(st.ttsPitch * 10) / 10.0)
             put("continuar", st.resumeMedia)
             put("continuarMapa", st.resumeMap)
+            // Abrir o painel sozinho quando o multimídia liga (BootReceiver); precisa de "sobrepor a outros apps".
+            put("abrirSozinho", st.autoOpen)
+            put("podeSobrepor", android.provider.Settings.canDrawOverlays(application))
             put("flutuante", JSONObject().apply {
                 put("modo", st.floatMode)
                 put("permissao", android.provider.Settings.canDrawOverlays(this@PainelServerActivity))
@@ -657,7 +661,7 @@ class PainelServerActivity : Activity() {
         private val AJUSTES_LOCAIS = setOf(
             "ajuste.mapa", "ajuste.mapaAA", "ajuste.musica", "ajuste.voz", "ajuste.vozOuvir", "ajuste.velocidade", "ajuste.tom",
             "ajuste.continuar", "ajuste.lugarRemover", "atualizacao.verificar", "atualizacao.instalar",
-            "sistema.notificacoes", "sistema.sobrepor", "ajuste.flutuante", "ajuste.flutuanteItem", "ajuste.flutuanteTamanho", "ajuste.flutuanteTestar", "ajuste.continuarMapa", "ajuste.carroFixo",
+            "sistema.notificacoes", "sistema.sobrepor", "ajuste.flutuante", "ajuste.flutuanteItem", "ajuste.flutuanteTamanho", "ajuste.flutuanteTestar", "ajuste.continuarMapa", "ajuste.abrirSozinho", "ajuste.carroFixo",
         )
         private const val VALIDADE_MS = 20_000L
         /** Fila de comandos (instante, JSON) esperando o próximo envio do celular. */

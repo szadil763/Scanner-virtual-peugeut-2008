@@ -476,6 +476,9 @@
     <div class="lbl">Ao ligar o carro</div>
     <button class="opc" id="aj-cont" onclick="ajusteContinuar()">Continuar a rádio ou a música</button>
     <button class="opc" id="aj-contmapa" onclick="ajusteContinuarMapa()">Voltar ao mapa onde estava</button>
+    <button class="opc" id="aj-abrir" onclick="ajusteAbrirSozinho()">Abrir o Monitor sozinho</button>
+    <div class="aviso" id="aj-abrir-aviso" style="display:none">Falta liberar "sobrepor a outros apps" para o Monitor abrir sozinho.
+      <button class="feito" onclick="cmdAjuste('sistema.sobrepor')">Liberar agora</button></div>
     <div class="aviso">Ao ligar o carro, o mapa volta no mesmo destino. Se o carro desligou a menos de 300 m do destino, a viagem terminou e o mapa não abre.</div>
     <div class="lbl">Miniatura do Monitor sobre outros apps</div>
     <div class="aviso" id="fl-texto">Ao abrir o Spotify, o Monitor fica por cima em miniatura.</div>
@@ -1299,6 +1302,10 @@
     var contMapa = el('aj-contmapa');
     contMapa.textContent = 'Voltar ao mapa onde estava: ' + (a.continuarMapa ? 'ligado' : 'desligado');
     contMapa.className = 'opc' + (a.continuarMapa ? ' sel' : '');
+    var abrir = el('aj-abrir');
+    abrir.textContent = 'Abrir o Monitor sozinho ao ligar o carro: ' + (a.abrirSozinho ? 'ligado' : 'desligado');
+    abrir.className = 'opc' + (a.abrirSozinho ? ' sel' : '');
+    el('aj-abrir-aviso').style.display = (a.abrirSozinho && a.podeSobrepor === false) ? 'block' : 'none';
     var fl = a.flutuante;
     if (fl) {
       var ligada = fl.modo === 'MONITOR';
@@ -1341,6 +1348,9 @@
   }
   function flutuanteModo() {
     cmdAjuste('ajuste.flutuante', { valor: el('fl-modo').classList.contains('sel') ? 'ANDROID' : 'MONITOR' });
+  }
+  function ajusteAbrirSozinho() {
+    cmdAjuste('ajuste.abrirSozinho', { valor: !el('aj-abrir').classList.contains('sel') });
   }
   function ajusteContinuarMapa() {
     cmdAjuste('ajuste.continuarMapa', { valor: !el('aj-contmapa').classList.contains('sel') });
@@ -1488,6 +1498,9 @@
   var parado = true, ultimaVel = null, ultimoMovimentoMs = 0;
   // Celular e multimídia precisam estar na mesma versão: botões novos do painel dependem dos dois.
   var versaoCelular, versaoMm = null, celularVisto = false;
+  // Versão mínima do celular para este painel funcionar (a identidade da instalação entrou na 164). Números
+  // diferentes entre celular e multimídia são normais: muitas versões mudam só um dos dois.
+  var CELULAR_MINIMO = 164;
   function checarVersoes() {
     var box = el('versao-aviso');
     var msg = '';
@@ -1495,9 +1508,9 @@
       if (versaoCelular === undefined || versaoCelular === null) {
         msg = 'O app do celular é antigo (não informa a versão) e este multimídia está na versão ' + versaoMm +
           '. Atualize o app do celular: zerar trajeto, calibrar e outros botões novos só funcionam com os dois na mesma versão.';
-      } else if (versaoCelular !== versaoMm) {
-        msg = 'Celular na versão ' + versaoCelular + ' e multimídia na ' + versaoMm +
-          '. Atualize o que estiver mais antigo, senão alguns botões do painel não funcionam.';
+      } else if (versaoCelular < CELULAR_MINIMO) {
+        msg = 'O app do celular está na versão ' + versaoCelular + ' e o painel precisa da ' + CELULAR_MINIMO +
+          ' ou mais nova. Atualize o app do celular (Ajustes > Conta e atualização, no celular).';
       }
     }
     box.textContent = msg;
