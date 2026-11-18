@@ -546,7 +546,16 @@
       <button class="opc" onclick="nivelTanque(75)">¾</button>
       <button class="opc" onclick="nivelTanque(100)">Cheio</button>
     </div>
-    <div class="aviso" id="tq-ajuste-msg">Toque na fração que o marcador do carro mostra agora. A estimativa continua a partir dali.</div>
+    <div class="lbl">Ou em litros</div>
+    <div style="display:flex;gap:10px;align-items:center;width:100%">
+      <button class="opc" style="flex:0 0 120px;margin:0" onclick="litrosPasso(-5)">−5</button>
+      <button class="opc" style="flex:0 0 120px;margin:0" onclick="litrosPasso(-1)">−1</button>
+      <div id="tq-litros" style="flex:1;text-align:center;font-size:36px;font-weight:700;min-width:0">-- L</div>
+      <button class="opc" style="flex:0 0 120px;margin:0" onclick="litrosPasso(1)">+1</button>
+      <button class="opc" style="flex:0 0 120px;margin:0" onclick="litrosPasso(5)">+5</button>
+    </div>
+    <button class="enviar" style="min-height:64px" onclick="litrosSalvar()">Salvar litros no tanque</button>
+    <div class="aviso" id="tq-ajuste-msg">Toque na fração que o marcador do carro mostra agora, ou ajuste os litros e salve. A estimativa continua a partir dali.</div>
     <button class="feito" style="margin-top:0" onclick="aba('postos')">📍 Ver postos (onde abastecer)</button>
   </div>
   <div class="consumo" id="fc-consumo" style="display:none">
@@ -1023,13 +1032,36 @@
       box.appendChild(linha('', quando + ' · ' + num(r.km, 1) + ' km', '', num(r.litros, 1) + ' L · ' + num(r.kmL, 1) + ' km/l · R$ ' + num(r.custo, 2)));
     });
   }
+  // Correção em litros: começa no valor estimado agora; − e + mudam, "Salvar" manda como percentual da capacidade.
+  var tqAtual = null, tqLitrosEdit = null;
+  function mostraLitros() {
+    var v = tqLitrosEdit !== null ? tqLitrosEdit : (tqAtual && tqAtual.litros != null ? Math.round(tqAtual.litros) : null);
+    el('tq-litros').textContent = v === null ? '-- L' : v + ' L';
+  }
+  function litrosPasso(d) {
+    if (!tqAtual || !tqAtual.capacidade) { el('tq-ajuste-msg').textContent = 'O celular ainda não mandou a capacidade do tanque.'; return; }
+    var base = tqLitrosEdit !== null ? tqLitrosEdit : (tqAtual.litros != null ? Math.round(tqAtual.litros) : 0);
+    tqLitrosEdit = Math.max(0, Math.min(Math.round(tqAtual.capacidade), base + d));
+    mostraLitros();
+  }
+  function litrosSalvar() {
+    if (!parado) { el('tq-ajuste-msg').textContent = 'Corrija o tanque com o carro parado.'; return; }
+    if (!tqAtual || !tqAtual.capacidade || tqLitrosEdit === null) { el('tq-ajuste-msg').textContent = 'Use − e + para escolher os litros antes de salvar.'; return; }
+    var pct = Math.max(0, Math.min(100, tqLitrosEdit / tqAtual.capacidade * 100));
+    cmdAjuste('ajuste.nivelTanque', { percentual: pct });
+    el('tq-ajuste-msg').textContent = 'Tanque ajustado para ' + tqLitrosEdit + ' L. Aguarde a próxima atualização.';
+    tqLitrosEdit = null;
+  }
   function nivelTanque(pct) {
+    tqLitrosEdit = null;
     cmdAjuste('ajuste.nivelTanque', { percentual: pct });
     el('tq-ajuste-msg').textContent = 'Nível ajustado para ' + (pct === 100 ? 'cheio' : pct + '%') + '. Aguarde a próxima atualização.';
   }
   var ultimoGraficoTq = '';
   function paintTanqueConsumo(tq) {
     if (!tq) return;
+    tqAtual = tq;
+    mostraLitros();
     var h = tq.historico || [];
     var chave = JSON.stringify([tq.litros, tq.capacidade, h.length, h.length ? h[h.length - 1][0] : 0]);
     if (chave === ultimoGraficoTq) return;
