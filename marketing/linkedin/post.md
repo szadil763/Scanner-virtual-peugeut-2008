@@ -12,35 +12,33 @@
 
 ## Texto
 
-O app dizia que o carro do meu pai fazia 6,2 km/l.
-O painel do carro dizia 12,8.
+O carro do meu pai tinha um problema que o painel não mostrava.
 
-Esse erro me ensinou mais do que muito curso. 👇
+A gente descobriu pelo multimídia dele. Que nós dois transformamos num scanner de diagnóstico. 🚗
 
-Eu e @Adilson, meu pai, transformamos o multimídia do Peugeot 2008 dele num scanner de diagnóstico. Um adaptador Bluetooth na tomada OBD2, embaixo do painel, e um app Android que conversa com a central do motor.
+Todo carro tem, embaixo do painel, uma tomada chamada OBD2. Por ela a central do motor conta tudo: rotação, temperatura, consumo, falhas guardadas. Com um adaptador Bluetooth barato, qualquer Android consegue ler. Mas os apps prontos são confusos e nada feitos para olhar dirigindo.
 
-O carro responde em hexadecimal: "41 0C 1A F8" vira 1.726 rpm. Só que ele não tinha o sensor de ar, então calculamos o consumo pela física dos gases (pressão, rotação e temperatura). A conta estava certa. O motor real é que não era o do livro: o app gastava 2,5 vezes mais combustível no papel do que o carro na estrada. A solução foi calibrar com dado real, a cada tanque cheio.
+Então resolvemos fazer o nosso. Eu e @Adilson, meu pai.
 
-Na primeira viagem, o app já achou uma falha guardada na central (com a luz da injeção apagada) e a mistura 31% pobre.
+Na primeira viagem, o app achou duas coisas no Peugeot 2008:
+→ uma falha guardada na central, com a luz da injeção apagada
+→ a mistura 31% pobre, a central compensando falta de combustível
 
-Mas a parte que mais me desenvolveu foi a que ninguém vê: persistência de dados. 💾
+Hoje ele mostra o consumo e quanto cada viagem custou, explica as falhas em português, avalia a saúde do motor e até compara os postos pelo combustível.
 
-O carro desliga, a internet cai, e os dados não podem sumir. Então:
-→ tudo é gravado primeiro no aparelho, separado por carro, e funciona offline
-→ abastecimentos, histórico do tanque, viagens e milhares de leituras da bateria
-→ meu celular e o do meu pai sincronizam pelo Firebase: o estado ao vivo a cada 30 s e o resto sempre que algo muda, com uma "impressão digital" dos dados para saber o que é novo
-→ e quando os dois gravam ao mesmo tempo, vale a versão mais nova
+Nem tudo deu certo de primeira. O app dizia que o carro fazia 6,2 km/l. O painel dizia 12,8. A conta estava certa, mas o carro real não era o do livro. Tivemos que ensinar o app a se ajustar a cada tanque cheio. 😅
 
-Foi aí que apareceu o bug que mais me marcou: se um dado chegasse estragado da nuvem, o celular ficaria tentando ler para sempre e nunca mais enviaria nada. Nenhum teste pegou. Foi a leitura atenta do código.
+E a parte que mais me desenvolveu foi a que ninguém vê: cuidar dos dados. 💾
+O carro desliga, a internet cai, e nada pode se perder. Tudo fica guardado primeiro no aparelho, funciona sem internet, e o meu celular e o do meu pai ficam sempre com os mesmos números, mesmo quando os dois mexem ao mesmo tempo.
 
 O que eu levo desse projeto:
-1️⃣ Dado salvo é uma promessa. Hoje penso primeiro no que acontece quando a internet cai, o aparelho desliga ou dois aparelhos gravam juntos.
-2️⃣ O mundo real é o teste final. Fórmula certa com dado errado continua errada.
-3️⃣ IA acelera, revisão protege. Fizemos tudo junto com o Claude Code, e aprendi que ler e questionar o código continua sendo trabalho nosso.
-4️⃣ Paciência. Foram mais de 160 versões, muitas testadas no carro e voltando com foto e registro para a próxima.
+1️⃣ Dado salvo é uma promessa: penso no que acontece quando algo dá errado, não só quando tudo dá certo.
+2️⃣ O mundo real é o teste final.
+3️⃣ IA acelera, revisão protege. Fizemos tudo junto com o Claude Code, e ler e questionar o código continua sendo trabalho nosso.
+4️⃣ Paciência: foram mais de 160 versões até aqui.
 
 E o melhor de tudo foi fazer isso junto com meu pai. ❤️
 
 Qual carro a gente deve testar a seguir? Conta o modelo do seu aí embaixo 👇
 
-#Android #Kotlin #Firebase #PersistenciaDeDados #OBD2 #InteligenciaArtificial #ClaudeCode #PaiEFilho
+#Android #Kotlin #Firebase #OBD2 #InteligenciaArtificial #ClaudeCode #PaiEFilho
