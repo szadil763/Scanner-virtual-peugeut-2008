@@ -1,9 +1,9 @@
 # Instalar o app no multimídia (APK de teste)
 
-O GitHub compila o app sozinho a cada envio para a branch `main` e publica o instalador (APK) em **Releases**.
+O GitHub compila o app sozinho a cada envio para a branch de desenvolvimento e publica o instalador (APK) em **Releases**.
 
 Link fixo do instalador:
-`https://github.com/szadil763/monitor-peugeot-2008/releases/download/latest/monitor-2008.apk`
+`https://github.com/szadil763/Scanner-virtual-peugeut-2008/releases/download/latest/monitor-2008.apk`
 
 ## No multimídia (Android 13)
 

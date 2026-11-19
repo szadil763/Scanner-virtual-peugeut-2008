@@ -1,0 +1,148 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>Carrossel LinkedIn</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700;900&family=Roboto+Condensed:wght@700;800&display=swap">
+<style>
+  :root { --page:#06090D; --panel:#101720; --line:#223041; --ink:#EEF3F8; --dim:#93A4B8; --sky:#38BDF8; --amber:#FBBF24; --green:#4ADE80; --red:#F87171;
+          --display:"Roboto Condensed", "Roboto", sans-serif; --body:"Roboto", sans-serif; }
+  * { box-sizing:border-box; margin:0; padding:0; }
+  html, body { background:var(--page); }
+  @page { size:1080px 1350px; margin:0; }
+  .slide { width:1080px; height:1350px; position:relative; overflow:hidden; padding:96px 88px 140px; color:var(--ink); font-family:var(--body);
+           background:radial-gradient(1200px 800px at 50% -10%, #12305a 0%, rgba(6,9,13,0) 60%), var(--page); page-break-after:always; break-after:page;
+           display:flex; flex-direction:column; }
+  .kicker { font:700 30px/1 var(--body); letter-spacing:.14em; text-transform:uppercase; color:var(--sky); margin-bottom:28px; }
+  h1, h2 { font-family:var(--display); font-weight:800; line-height:1.02; letter-spacing:-.01em; }
+  h1 { font-size:96px; } h2 { font-size:84px; margin-bottom:36px; }
+  .hl { color:var(--amber); } .sky { color:var(--sky); } .ok { color:var(--green); } .bad { color:var(--red); }
+  p, li { font-size:38px; line-height:1.35; color:#cfd9e4; }
+  .foot { position:absolute; left:88px; right:88px; bottom:52px; display:flex; justify-content:space-between; font:500 26px var(--body); color:var(--dim); }
+  .foot b { color:var(--ink); }
+  .swipe { color:var(--sky); font-weight:700; }
+  .foto { border-radius:28px; overflow:hidden; border:2px solid var(--line); box-shadow:0 30px 80px rgba(0,0,0,.55); }
+  .foto img { display:block; width:100%; }
+  .tag { display:inline-block; font:700 22px var(--body); letter-spacing:.08em; text-transform:uppercase; background:var(--green); color:#04210f; padding:8px 16px; border-radius:8px; }
+  .card { background:var(--panel); border:2px solid var(--line); border-radius:28px; padding:36px 40px; }
+  .grow { flex:1; }
+  ul.check { list-style:none; display:grid; gap:44px; margin-top:20px; } ul.check li { font-size:44px; }
+  ul.check li { display:flex; gap:22px; align-items:flex-start; }
+  ul.check li::before { content:"✓"; flex:none; width:52px; height:52px; border-radius:50%; background:rgba(74,222,128,.15); color:var(--green); font:900 32px/52px var(--body); text-align:center; }
+  .big { font:800 150px/1 var(--display); }
+  .grid2 { display:grid; grid-template-columns:1fr 1fr; gap:28px; }
+  .stat { padding:56px 44px; } .stat .big { font-size:170px; color:var(--sky); }
+  .stat p { font-size:36px; margin-top:16px; }
+  .flow { display:grid; gap:18px; }
+  .node { background:var(--panel); border:2px solid var(--line); border-radius:24px; padding:26px 34px; font-size:36px; }
+  .node b { display:block; font-family:var(--display); font-size:46px; color:var(--ink); margin-bottom:6px; }
+  .arrow { text-align:center; color:var(--sky); font:700 30px var(--body); }
+  .num { display:inline-flex; width:64px; height:64px; border-radius:50%; background:var(--amber); color:#1d1300; font:900 36px/64px var(--body); justify-content:center; flex:none; }
+  .row { display:flex; gap:26px; align-items:flex-start; }
+</style>
+</head>
+<body>
+
+<!-- 1. Gancho -->
+<section class="slide">
+  <div class="kicker">Um projeto que saiu do controle</div>
+  <h1>Transformei o multimídia do carro do meu pai em um <span class="hl">scanner de diagnóstico.</span></h1>
+  <div class="grow"></div>
+  <div class="foto"><img src="../../docs/imagens/carro-midias.jpg" alt=""></div>
+  <div class="foot"><span>App Android · OBD2 · Kotlin</span><span class="swipe">Arraste →</span></div>
+</section>
+
+<!-- 2. O problema -->
+<section class="slide">
+  <div class="kicker">O começo</div>
+  <h2 style="font-size:96px">Todo carro tem uma tomada que <span class="hl">conta tudo</span> sobre ele.</h2>
+  <p>Embaixo do painel existe a porta OBD2. Por ela a central do motor informa rotação, temperatura, consumo de ar, falhas guardadas…</p>
+  <p style="margin-top:28px">Com um adaptador Bluetooth barato, qualquer celular consegue ler. Mas os apps prontos são confusos, cheios de anúncio e nada feitos para olhar dirigindo.</p>
+  <div class="grow"></div>
+  <div class="card"><p style="font-size:40px; color:var(--ink)">A pergunta: e se o próprio multimídia do carro virasse o painel?</p></div>
+  <div class="foot"><span>2 / 8</span><span class="swipe">→</span></div>
+</section>
+
+<!-- 3. O que achou -->
+<section class="slide">
+  <div class="kicker">Primeiro teste no carro</div>
+  <h2 style="font-size:70px">Na primeira viagem, o app <span class="hl">achou dois problemas</span> que o painel não mostrava.</h2>
+  <div class="row" style="margin-bottom:30px"><span class="num">1</span><p>Uma falha guardada na central, <b style="color:var(--ink)">sem a luz da injeção acesa.</b></p></div>
+  <div class="row"><span class="num">2</span><p>Mistura <b class="bad">31% pobre</b>: a central compensando falta de combustível. Pista para filtro, bomba ou entrada de ar.</p></div>
+  <div class="grow"></div>
+  <div style="position:relative"><div class="foto"><img src="../../docs/imagens/carro-saude.jpg" alt=""></div><span class="tag" style="position:absolute; left:20px; bottom:20px">Foto real do app no carro</span></div>
+  <div class="foot"><span>3 / 8</span><span class="swipe">→</span></div>
+</section>
+
+<!-- 4. O que faz -->
+<section class="slide">
+  <div class="kicker">Hoje o app faz</div>
+  <h2>De leitor de dados a <span class="sky">assistente do carro.</span></h2>
+  <ul class="check">
+    <li>Consumo em km/l e o custo da viagem em reais</li>
+    <li>Falhas explicadas em português + relatório para o mecânico no WhatsApp</li>
+    <li>Saúde do motor a cada viagem: mistura, sondas, bateria, arrefecimento</li>
+    <li>Ranking de postos: o próprio motor mostra qual combustível rende menos</li>
+    <li>Troca de óleo, revisões, alertas falados e comando de voz</li>
+  </ul>
+  <div class="grow"></div>
+  <div class="foot"><span>4 / 8</span><span class="swipe">→</span></div>
+</section>
+
+<!-- 5. Como funciona -->
+<section class="slide">
+  <div class="kicker">Por baixo do capô</div>
+  <h2>Como funciona</h2>
+  <div class="flow">
+    <div class="node"><b>Adaptador ELM327</b>na tomada OBD2, embaixo do painel</div>
+    <div class="arrow">↓ Bluetooth (BLE primeiro, clássico de reserva)</div>
+    <div class="node"><b>App Android</b>Kotlin + Jetpack Compose: lê, calcula, alerta</div>
+    <div class="arrow">↓ Wi-Fi local &nbsp;·&nbsp; ↔ Firebase</div>
+    <div class="node"><b>Painel no multimídia</b>e os dados do carro em todos os celulares da família</div>
+  </div>
+  <div class="grow"></div>
+  <p style="font-size:32px">Regra de ouro: <b style="color:var(--ink)">somente leitura.</b> O app nunca escreve nada na central do carro.</p>
+  <div class="foot"><span>5 / 8</span><span class="swipe">→</span></div>
+</section>
+
+<!-- 6. Números -->
+<section class="slide">
+  <div class="kicker">Em números</div>
+  <h2>Não ficou no protótipo.</h2>
+  <div class="grid2">
+    <div class="card stat"><div class="big">3</div><p>carros com perfil próprio: Peugeot 2008, Citroën C4 e Nissan Tiida</p></div>
+    <div class="card stat"><div class="big">226</div><p>testes automatizados nas regras do app</p></div>
+    <div class="card stat"><div class="big">160+</div><p>versões publicadas pelo GitHub Actions</p></div>
+    <div class="card stat"><div class="big">0</div><p>comandos de escrita na central do carro</p></div>
+  </div>
+  <div class="grow"></div>
+  <div class="foot"><span>6 / 8</span><span class="swipe">→</span></div>
+</section>
+
+<!-- 7. IA -->
+<section class="slide">
+  <div class="kicker">Feito com IA</div>
+  <h2>A IA escreveu boa parte do código. <span class="hl">O carro decidia se estava certo.</span></h2>
+  <p>Construí o app com o <b style="color:var(--ink)">Claude Code</b>. O que aprendi:</p>
+  <div class="flow" style="margin-top:30px">
+    <div class="node" style="font-size:34px">Teste no carro vale mais que qualquer teoria: cada versão ia para o multimídia e voltava com foto e registro.</div>
+    <div class="node" style="font-size:34px">Regras claras evitam desastre: "só leitura", "não inventar sensor", "nada de digitar dirigindo".</div>
+    <div class="node" style="font-size:34px">Revisar continua sendo trabalho de gente: um PR inteiro parecia certo e escondia um bug que travaria a sincronização.</div>
+  </div>
+  <div class="grow"></div>
+  <div class="foot"><span>7 / 8</span><span class="swipe">→</span></div>
+</section>
+
+<!-- 8. CTA -->
+<section class="slide" style="justify-content:center; text-align:center">
+  <div class="kicker">Código aberto</div>
+  <h1 style="font-size:96px">Qual carro eu devo <span class="sky">testar a seguir?</span></h1>
+  <p style="margin-top:40px">Conta nos comentários o modelo do seu carro.<br>O código é aberto: link no primeiro comentário.</p>
+  <div style="margin-top:70px" class="foto"><img src="../../docs/imagens/carro-manutencao.jpg" alt=""></div>
+  <div class="foot"><span>8 / 8</span><span>Monitor do Carro</span></div>
+</section>
+
+</body>
+</html>
