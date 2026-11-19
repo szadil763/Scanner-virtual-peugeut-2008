@@ -259,7 +259,10 @@ object Nuvem {
                                 }
                                 primeiroTudo = true
                             } catch (e: Exception) {
-                                registrar(store, "erro ao ler dados da nuvem: ${e.message ?: e.javaClass.simpleName}")
+                                // Dados da nuvem ilegíveis: libera o envio, para os dados bons daqui consertarem a nuvem
+                                // (sem isso o celular ficava tentando ler a cada 30 s e nunca mais enviava).
+                                primeiroTudo = true
+                                registrar(store, "erro ao ler dados da nuvem (os daqui vão subir): ${e.message ?: e.javaClass.simpleName}")
                             }
                         }
                         .addOnFailureListener { primeiroTudo = true; registrar(store, "não consegui LER a nuvem: ${it.message ?: "sem permissão"}") }
@@ -315,6 +318,8 @@ object Nuvem {
                     }
                     primeiroPuxe = true
                 } catch (e: Exception) {
+                    // Estado ilegível na nuvem: segue com o daqui (o próximo envio do estado vivo conserta a nuvem).
+                    primeiroPuxe = true
                     registrar(store, "erro ao ler estado do trajeto: ${e.message ?: e.javaClass.simpleName}")
                 }
                 if (mudou) aplicou()

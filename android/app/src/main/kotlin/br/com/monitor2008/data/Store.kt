@@ -697,6 +697,16 @@ class Store(context: Context) {
         p.edit().putString("refuels", arr.toString()).apply()
     }
 
+    /**
+     * Lê, altera e grava os abastecimentos sem que outro envio (ex.: a nuvem) grave no meio.
+     * Retorna a lista gravada.
+     */
+    fun updateRefuels(transform: (List<Refuel>) -> List<Refuel>): List<Refuel> = synchronized(lock) {
+        val novo = transform(refuels())
+        saveRefuels(novo)
+        novo
+    }
+
     /** Grava a lista inteira (apagar e editar abastecimentos). */
     fun saveRefuels(list: List<Refuel>) = synchronized(lock) {
         val arr = JSONArray()

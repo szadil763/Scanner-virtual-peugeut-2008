@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Painel</title>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" media="print" onload="this.media='all'">
-<script defer async src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script defer async src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" onerror="window.leafletFalhou=true"></script>
 <style>
   :root { --bg:#000; --fg:#fff; --dim:#a8b0b8; --ok:#3ddc6b; --warn:#ffcc33; --bad:#ff5555; --btn:#1b2430; --sel:#1f5fa8; }
   * { box-sizing:border-box; }
@@ -1426,7 +1426,12 @@
   }
   var mapaObj = null, camadas = null, ultimoMapa = '';
   function paintMapa(m) {
-    if (typeof L === 'undefined') { el('mapa-aviso').textContent = 'Mapa indisponível: o multimídia precisa de internet.'; return; }
+    if (typeof L === 'undefined') {
+      // O Leaflet carrega sem travar a página: até chegar, avisa que está carregando (sem internet, que falhou).
+      el('mapa-aviso').textContent = window.leafletFalhou ? 'Mapa indisponível: o multimídia precisa de internet.' : 'Carregando o mapa…';
+      return;
+    }
+    if (el('mapa-aviso').textContent === 'Carregando o mapa…') el('mapa-aviso').textContent = 'Digitar o destino só com o carro parado.';
     if (!mapaObj) {
       mapaObj = L.map('mapa-div').setView([-23.55, -46.63], 15);
       L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '© OpenStreetMap' }).addTo(mapaObj);

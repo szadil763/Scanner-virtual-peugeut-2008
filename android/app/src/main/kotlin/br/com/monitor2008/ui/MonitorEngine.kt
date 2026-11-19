@@ -823,7 +823,7 @@ class MonitorEngine private constructor(private val app: Application) {
      */
     fun deleteRefuel(timeMs: Long) {
         if (_ui.value.moving) return
-        store.saveRefuels(store.refuels().filter { it.timeMs != timeMs })
+        store.updateRefuels { list -> list.filter { it.timeMs != timeMs } }
         refuelList = store.refuels().asReversed()
         br.com.monitor2008.data.Nuvem.mudou(app, store)
         publish()
@@ -850,7 +850,9 @@ class MonitorEngine private constructor(private val app: Application) {
                 r = r.copy(stationId = saveManualStation(nome, ""))
             }
         }
-        store.saveRefuels(all.toMutableList().also { it[i] = r })
+        val editado = r
+        // Troca pela hora (não pela posição lida antes): se a lista mudou no meio, não grava por cima de outro.
+        store.updateRefuels { list -> list.map { if (it.timeMs == timeMs) editado else it } }
         refuelList = store.refuels().asReversed()
         br.com.monitor2008.data.Nuvem.mudou(app, store)
         publish()

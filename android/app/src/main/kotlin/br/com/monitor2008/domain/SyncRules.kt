@@ -25,14 +25,15 @@ object SyncRules {
     }
 
     /**
-     * Inclui [newEmail] na lista de convites já normalizada e sem duplicatas.
-     * Retorna null quando o novo e-mail é inválido.
+     * Inclui [newEmail] na lista de convites, sem duplicatas. Retorna null quando o novo e-mail é inválido.
+     * Os convites que já existem ficam todos (só normalizados): um convite antigo que não passe na regra
+     * nova não pode sumir da nuvem só porque outra pessoa foi convidada.
      */
     fun addInvite(existing: List<String>, newEmail: String): List<String>? {
         val candidate = normalizeEmail(newEmail)
         if (!isValidEmail(candidate)) return null
-        val cleaned = existing.map(::normalizeEmail).filter(::isValidEmail)
-        return (cleaned + candidate).distinct()
+        val kept = existing.map(::normalizeEmail).filter { it.isNotEmpty() }
+        return (kept + candidate).distinct()
     }
 
     /** Há alterações locais ainda não confirmadas por um envio completo. */

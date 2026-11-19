@@ -21,11 +21,15 @@ class SyncRulesTest {
     }
 
     @Test fun addsNormalizedUniqueInvitesWithoutDuplicates() {
-        val result = SyncRules.addInvite(listOf("Pai@Gmail.com", "invalido", "mae@uol.com.br"), "  pai@gmail.com ")
+        val result = SyncRules.addInvite(listOf("Pai@Gmail.com", "mae@uol.com.br", ""), "  pai@gmail.com ")
         assertEquals(listOf("pai@gmail.com", "mae@uol.com.br"), result)
 
         val added = SyncRules.addInvite(result!!, "Filho@Hotmail.com")
         assertEquals(listOf("pai@gmail.com", "mae@uol.com.br", "filho@hotmail.com"), added)
+
+        // Convite antigo fora da regra nova não some ao convidar outra pessoa.
+        val antigos = SyncRules.addInvite(listOf("tio@empresa_x.com"), "avo@gmail.com")
+        assertEquals(listOf("tio@empresa_x.com", "avo@gmail.com"), antigos)
 
         assertNull(SyncRules.addInvite(added!!, "invalido@"))
     }
