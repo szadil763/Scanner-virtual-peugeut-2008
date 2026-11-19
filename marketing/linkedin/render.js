@@ -1,4 +1,6 @@
 // Gera as lâminas do carrossel do LinkedIn (PNG 1080x1350) e o PDF para postar como documento.
+// Antes: W=900 H=1000 node marketing/linkedin/painel-demo.js marketing/linkedin/telas
+//        W=1280 H=650 node marketing/linkedin/painel-demo.js marketing/linkedin/telas/largo
 // Uso: node marketing/linkedin/render.js [pasta-de-saída]   (padrão: marketing/linkedin/saida)
 const { chromium } = require("playwright");
 const path = require("path");

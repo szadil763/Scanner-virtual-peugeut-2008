@@ -683,6 +683,8 @@
     abaAtual = nome;
     document.body.classList.toggle('na-midia', nome === 'tocador');
     if (nome === 'mapa' && mapaObj) setTimeout(function () { mapaObj.invalidateSize(); }, 150);
+    // Os gráficos da Saúde desenhados com a aba escondida ficam com largura zero: a próxima atualização refaz.
+    if (nome === 'saude') ultimoSaude = '';
     if (nome === 'abastecer' && !postoAtual) localizarPosto();
     var grupo = nome === 'abastecer' ? 'consumo' : nome;
     var grupoRail = nome === 'ajuda' ? 'ajustes' : nome;
