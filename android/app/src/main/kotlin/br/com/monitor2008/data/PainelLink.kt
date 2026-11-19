@@ -12,6 +12,7 @@ import android.graphics.Bitmap
 import br.com.monitor2008.domain.DriveModeSetting
 import br.com.monitor2008.domain.DtcInfo
 import br.com.monitor2008.domain.MaintCatalog
+import br.com.monitor2008.domain.PainelHttpRules
 import br.com.monitor2008.domain.RefuelMath
 import br.com.monitor2008.domain.VoiceCommands
 import br.com.monitor2008.domain.VoiceRefuel
@@ -32,6 +33,7 @@ import java.net.URL
 import java.util.Collections
 import java.util.concurrent.Future
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicReference
 import java.util.Locale
 import java.util.concurrent.ExecutorService
@@ -67,12 +69,12 @@ object PainelLink {
     @Volatile var diag: String = "Ainda não procurou o multimídia."
         private set
     private fun hora(): String = java.text.SimpleDateFormat("HH:mm:ss", Locale("pt", "BR")).format(java.util.Date())
-    private var failCount = 0
+    private val failCount = AtomicInteger(0)
     @Volatile private var lastScanMs = 0L
     private val scanning = AtomicBoolean(false)
     /** Chave (app|título|artista) da capa já enviada ao multimídia e se um envio está em curso. */
     @Volatile private var capaSent: String? = null
-    @Volatile private var capaSending = false
+    private val capaSending = AtomicBoolean(false)
     /** Pedido feito pelo multimídia: a resposta vai para o painel, que fala pelo som do carro. */
     @Volatile private var vozPainelAte = 0L
     @Volatile private var falaId = 0
@@ -229,24 +231,19 @@ object PainelLink {
         val np = if (Features.mediaControl) MediaWatcher.get(app).now.value else null
         val art = np?.art
         val chave = np?.let { chaveDaMusica(it) }
-        if (art != null && chave != null && chave != capaSent && !capaSending) {
-            capaSending = true
+        if (art != null && chave != null && chave != capaSent && capaSending.compareAndSet(false, true)) {
             pool.execute {
                 try {
                     if (postCapa(target, art)) capaSent = chave
                 } finally {
-                    capaSending = false
+                    capaSending.set(false)
                 }
             }
         }
     }
 
-    /** "10.12.38.252" ou "10.12.38.252:8080" viram "10.12.38.252:8080"; vazio vira null. */
-    fun normalize(address: String): String? {
-        val a = address.trim().removePrefix("http://").trimEnd('/')
-        if (a.isBlank()) return null
-        return if (a.contains(':')) a else "$a:8080"
-    }
+    /** "10.12.38.252" ou "10.12.38.252:8080" viram "10.12.38.252:8080"; vazio ou inválido vira null. */
+    fun normalize(address: String): String? = PainelHttpRules.normalizePainelAddress(address, PORT)
 
     private fun scheduleScan() {
         val now = System.currentTimeMillis()
@@ -675,7 +672,7 @@ object PainelLink {
             c.setFixedLengthStreamingMode(body.size)
             c.setRequestProperty("Content-Type", "application/json; charset=utf-8")
             c.outputStream.use { it.write(body) }
-            failCount = 0
+            failCount.set(0)
             diag = "${hora()} enviando para $target${if (discoveredNet != null) " pelo Wi-Fi" else ""} (ok)."
             if (c.responseCode == 200) {
                 val txt = c.inputStream.bufferedReader(Charsets.UTF_8).use { it.readText() }
@@ -694,8 +691,8 @@ object PainelLink {
         } catch (e: Exception) {
             diag = "${hora()} falhou o envio para $target: ${e.javaClass.simpleName} ${e.message ?: ""}".trim()
             // Multimídia desligado ou fora da rede: depois de 3 falhas, procura de novo.
-            if (++failCount >= 3) {
-                failCount = 0
+            if (failCount.incrementAndGet() >= 3) {
+                failCount.set(0)
                 discovered = null
                 discoveredNet = null
                 scheduleScan()

@@ -83,17 +83,30 @@ class FuelQualityTest {
     }
 
     @Test fun rankingPutsGoodAndNearFirst() {
-        val good = Station("g", "Bom", "", 0.0, 0.0)
-        val far = Station("f", "Bom longe", "", 1.0, 1.0)
-        val bad = Station("b", "Ruim", "", 0.0, 0.001)
+        // Coordenadas reais: (0, 0) quer dizer posto digitado à mão, sem localização (vai para o fim do grupo).
+        val good = Station("g", "Bom", "", -23.55, -46.63)
+        val far = Station("f", "Bom longe", "", -22.55, -45.63)
+        val bad = Station("b", "Ruim", "", -23.55, -46.631)
         val evals = listOf(
             TankEval("g", 0, 50.0, -4.0, null, null, 1, listOf("rendeu 4% melhor que o normal")),
             TankEval("f", 0, 50.0, -4.0, null, null, 1, emptyList()),
             TankEval("b", 0, 50.0, 8.0, null, null, -2, emptyList()),
         )
-        val r = FuelQuality.rank(listOf(bad, far, good), emptyList(), evals, 0.0 to 0.0)
+        val r = FuelQuality.rank(listOf(bad, far, good), emptyList(), evals, -23.55 to -46.63)
         assertEquals(listOf("g", "f", "b"), r.map { it.station.id })
         assertEquals(FuelGrade.BOA, r.first().grade)
         assertTrue(r.first().summary.startsWith("Rendeu 4% melhor"))
+    }
+
+    @Test fun rankingPutsStationWithoutLocationAfterLocatedOnesOfSameGrade() {
+        val manual = Station("m", "Digitado à mão", "", 0.0, 0.0)
+        val far = Station("f", "Bom longe", "", -22.55, -45.63)
+        val evals = listOf(
+            TankEval("m", 0, 50.0, -4.0, null, null, 1, emptyList()),
+            TankEval("f", 0, 50.0, -4.0, null, null, 1, emptyList()),
+        )
+        val r = FuelQuality.rank(listOf(manual, far), emptyList(), evals, -23.55 to -46.63)
+        assertEquals(listOf("f", "m"), r.map { it.station.id })
+        assertNull(r.last().distanceKm)
     }
 }

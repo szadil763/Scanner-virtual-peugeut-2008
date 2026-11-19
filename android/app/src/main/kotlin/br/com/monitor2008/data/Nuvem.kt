@@ -3,12 +3,15 @@ package br.com.monitor2008.data
 import android.content.Context
 import br.com.monitor2008.domain.MaintCatalog
 import br.com.monitor2008.domain.Station
+import br.com.monitor2008.domain.SyncRules
 import br.com.monitor2008.ui.MonitorEngine
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.database.FirebaseDatabase
 import com.google.firebase.database.ServerValue
 import org.json.JSONArray
 import org.json.JSONObject
+import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicLong
 
 /**
  * Dados de cada CARRO na nuvem (Firebase Realtime Database), em /carros/<carro>.
@@ -28,9 +31,12 @@ object Nuvem {
         val id = store.carKey
         carro(id).child("membros").child(uid).setValue(true)
             .addOnSuccessListener {
+                val revEnvio = mudancaSeq.get()
                 receber(ctx, store, id) { ok, msg ->
                     if (ok) {
-                        store.nuvemPronta = true; ultimoEnvioMs = System.currentTimeMillis(); sujo = false
+                        store.nuvemPronta = true
+                        ultimoEnvioMs = System.currentTimeMillis()
+                        enviadoSeq.updateAndGet { cur -> SyncRules.nextSyncedRevision(revEnvio, cur) }
                         // Já traz o trajeto e o tanque do outro celular, sem esperar o relógio.
                         try { agora(ctx, store) } catch (_: Exception) { }
                     }
@@ -45,7 +51,8 @@ object Nuvem {
         carro(id).get()
             .addOnSuccessListener { snap ->
                 var trouxe = false
-                if (snap.exists()) {
+                try {
+                    if (snap.exists()) {
                     val abast = JSONArray(snap.child("abastecimentos").getValue(String::class.java) ?: "[]")
                     val postos = JSONArray(snap.child("postos").getValue(String::class.java) ?: "[]")
                     val manut = JSONObject(snap.child("manutencao").getValue(String::class.java) ?: "{}")
@@ -121,8 +128,16 @@ object Nuvem {
                         }
                     }
                 }
+                } catch (e: Exception) {
+                    registrar(store, "dados inválidos na nuvem: ${e.message ?: e.javaClass.simpleName}")
+                    return@addOnSuccessListener depois(false, "Dados inválidos na nuvem.")
+                }
                 if (trouxe) MonitorEngine.get(ctx.applicationContext as android.app.Application).recarregarCarro()
-                enviar(ctx, store, id, depois)
+                val revEnvio = mudancaSeq.get()
+                enviar(ctx, store, id) { ok, msg ->
+                    if (ok) enviadoSeq.updateAndGet { cur -> SyncRules.nextSyncedRevision(revEnvio, cur) }
+                    depois(ok, msg)
+                }
             }
             .addOnFailureListener { depois(false, "Não consegui ler o carro na nuvem: ${it.message ?: "sem permissão"}") }
     }
@@ -132,13 +147,14 @@ object Nuvem {
     private const val INTERVALO_PERIODICO_MS = 30 * 60_000L
     private const val ENVIO_PRESO_MS = 5 * 60_000L
     @Volatile private var ultimoEnvioMs = 0L
-    @Volatile private var sujo = false
-    @Volatile private var enviandoDesde = 0L
-    @Volatile private var entrando = false
+    private val mudancaSeq = AtomicLong(0L)
+    private val enviadoSeq = AtomicLong(0L)
+    private val enviandoDesde = AtomicLong(0L)
+    private val entrando = AtomicBoolean(false)
 
     /** Algo do carro mudou: envia logo (no máximo uma vez a cada 15 s). */
     fun mudou(ctx: Context, store: Store) {
-        sujo = true
+        mudancaSeq.incrementAndGet()
         try { if (store.nuvemPronta && uid() != null) enviarVivo(store) } catch (_: Exception) { }
         auto(ctx, store)
     }
@@ -182,7 +198,7 @@ object Nuvem {
     fun trocouCarro() {
         primeiroPuxe = false; primeiroTudo = false; inicioVivoMs = 0L
         nuvemTudoMs = 0L; vivoEnviadoT = 0L; vivoEnvioMs = 0L; vivoPuxeMs = 0L; tudoPuxeMs = 0L; ultimoEnvioMs = 0L
-        sujo = false; enviandoDesde = 0L
+        enviadoSeq.set(mudancaSeq.get()); enviandoDesde.set(0L); entrando.set(false)
     }
 
     @Volatile private var nuvemTudoMs = 0L
@@ -199,7 +215,7 @@ object Nuvem {
         if (h != store.dadosHash) {
             store.dadosHash = h
             store.dadosMs = System.currentTimeMillis()
-            sujo = true
+            mudancaSeq.incrementAndGet()
         }
     }
 
@@ -241,8 +257,13 @@ object Nuvem {
                                         registrar(store, "dados daqui são mais completos: vão subir")
                                     }
                                 }
-                            } catch (_: Exception) { }
-                            primeiroTudo = true
+                                primeiroTudo = true
+                            } catch (e: Exception) {
+                                // Dados da nuvem ilegíveis: libera o envio, para os dados bons daqui consertarem a nuvem
+                                // (sem isso o celular ficava tentando ler a cada 30 s e nunca mais enviava).
+                                primeiroTudo = true
+                                registrar(store, "erro ao ler dados da nuvem (os daqui vão subir): ${e.message ?: e.javaClass.simpleName}")
+                            }
                         }
                         .addOnFailureListener { primeiroTudo = true; registrar(store, "não consegui LER a nuvem: ${it.message ?: "sem permissão"}") }
                 } else primeiroTudo = true
@@ -295,8 +316,12 @@ object Nuvem {
                             }
                         }
                     }
-                } catch (_: Exception) { }
-                primeiroPuxe = true
+                    primeiroPuxe = true
+                } catch (e: Exception) {
+                    // Estado ilegível na nuvem: segue com o daqui (o próximo envio do estado vivo conserta a nuvem).
+                    primeiroPuxe = true
+                    registrar(store, "erro ao ler estado do trajeto: ${e.message ?: e.javaClass.simpleName}")
+                }
                 if (mudou) aplicou()
             }
             .addOnFailureListener { primeiroPuxe = true }
@@ -312,9 +337,11 @@ object Nuvem {
             if (uid() == null) { registrar(store, "sem conta Google neste celular (entre em Ajustes)"); return }
             val agora = System.currentTimeMillis()
             if (!store.nuvemPronta) {
-                if (Features.mediaControl || entrando) return
-                entrando = true
-                sincronizar(ctx, store) { ok, msg -> entrando = false; registrar(store, (if (ok) "entrou no carro: " else "NÃO entrou no carro: ") + msg) }
+                if (Features.mediaControl || !entrando.compareAndSet(false, true)) return
+                sincronizar(ctx, store) { ok, msg ->
+                    entrando.set(false)
+                    registrar(store, (if (ok) "entrou no carro: " else "NÃO entrou no carro: ") + msg)
+                }
                 return
             }
             // Qualquer mudança nos dados do carro (feita aqui) é carimbada; mudança vinda de outro celular é adotada.
@@ -328,18 +355,30 @@ object Nuvem {
             else if (agora - vivoPuxeMs >= VIVO_INTERVALO_MS && agora - store.vivoMs > VIVO_PARADO_MS) {
                 puxarVivo(store) { MonitorEngine.get(ctx.applicationContext as android.app.Application).reloadLive() }
             }
-            if (enviandoDesde != 0L && agora - enviandoDesde < ENVIO_PRESO_MS) return
+            val emCurso = enviandoDesde.get()
+            if (emCurso != 0L && agora - emCurso < ENVIO_PRESO_MS) return
             // Só envia a foto geral depois de conferir a nuvem, e se os dados daqui não estiverem atrás dos de lá.
             if (!primeiroTudo || store.dadosMs <= 0L || store.dadosMs < nuvemTudoMs) return
             val vencido = agora - ultimoEnvioMs >= INTERVALO_PERIODICO_MS
-            if (!vencido && !(sujo && agora - ultimoEnvioMs >= INTERVALO_MUDANCA_MS)) return
-            enviandoDesde = agora
+            val temPendencia = SyncRules.hasPendingChanges(mudancaSeq.get(), enviadoSeq.get())
+            if (!vencido && !(temPendencia && agora - ultimoEnvioMs >= INTERVALO_MUDANCA_MS)) return
+            if (!enviandoDesde.compareAndSet(emCurso, agora)) return
+            val revEnvio = mudancaSeq.get()
             enviar(ctx, store, store.carKey) { ok, msg ->
-                enviandoDesde = 0L
+                enviandoDesde.set(0L)
                 registrar(store, if (ok) "enviou os dados para a nuvem" else "NÃO enviou: $msg")
-                if (ok) { sujo = false; ultimoEnvioMs = System.currentTimeMillis() } else ultimoEnvioMs = System.currentTimeMillis() - INTERVALO_PERIODICO_MS + 60_000L
+                if (ok) {
+                    enviadoSeq.updateAndGet { cur -> SyncRules.nextSyncedRevision(revEnvio, cur) }
+                    ultimoEnvioMs = System.currentTimeMillis()
+                } else {
+                    ultimoEnvioMs = System.currentTimeMillis() - INTERVALO_PERIODICO_MS + 60_000L
+                }
             }
-        } catch (_: Exception) { enviandoDesde = 0L; entrando = false }
+        } catch (e: Exception) {
+            enviandoDesde.set(0L)
+            entrando.set(false)
+            registrar(store, "erro na sincronização automática: ${e.message ?: e.javaClass.simpleName}")
+        }
     }
 
     /** Envia só os trajetos guardados (ao zerar o trajeto). Em silêncio: sem conta ou sem sincronizar o carro antes, não faz nada. */
@@ -411,13 +450,14 @@ object Nuvem {
 
     /** Convida uma pessoa (pelo e-mail Google dela). Ela entra sozinha ao sincronizar. */
     fun convidar(store: Store, email: String, depois: (Boolean, String) -> Unit) {
-        val e = email.trim().lowercase()
-        if (!e.contains("@")) return depois(false, "Digite um e-mail válido.")
+        val e = SyncRules.normalizeEmail(email)
+        if (!SyncRules.isValidEmail(e)) return depois(false, "Digite um e-mail válido.")
         val ref = carro(store.carKey).child("convites")
         ref.get()
             .addOnSuccessListener { snap ->
-                val atual = snap.getValue(String::class.java)?.split(',')?.filter { it.isNotBlank() }?.toSet() ?: emptySet()
-                ref.setValue((atual + e).joinToString(","))
+                val atual = snap.getValue(String::class.java)?.split(',')?.filter { it.isNotBlank() } ?: emptyList()
+                val novaLista = SyncRules.addInvite(atual, e) ?: return@addOnSuccessListener depois(false, "Digite um e-mail válido.")
+                ref.setValue(novaLista.joinToString(","))
                     .addOnSuccessListener { depois(true, "$e foi convidado. A pessoa entra com a conta Google dela e sincroniza.") }
                     .addOnFailureListener { depois(false, "Não convidei: ${it.message ?: "sem permissão"}") }
             }
