@@ -34,6 +34,11 @@
   .topo { position:absolute; top:52px; right:80px; font:400 26px var(--mono); color:var(--mono-cinza); }
   .rodape { position:absolute; left:80px; right:80px; bottom:58px; display:flex; justify-content:space-between; font:400 26px var(--mono); color:var(--mono-cinza); }
   .rodape .arrasta { color:var(--azul2); }
+  .lista { display:grid; gap:22px; }
+  .item { position:relative; background:var(--card); border:2px solid var(--borda); border-radius:18px; padding:36px 60px 34px 44px; }
+  .item::after { content:""; position:absolute; right:12px; top:22px; bottom:22px; width:5px; border-radius:3px; background:var(--azul); }
+  .item b { display:block; font:600 54px/1.1 var(--titulo); color:var(--branco); margin-bottom:22px; }
+  .item span { font:500 28px var(--titulo); color:var(--sub); }
 </style>
 </head>
 <body>
@@ -74,16 +79,20 @@
   <div class="rodape"><span>@gsxuza.dev</span><span class="arrasta">→</span></div>
 </section>
 
-<!-- 4. Pergunta -->
+<!-- 4. O que aprendi -->
 <section class="slide">
   <div class="topo">04/04</div>
-  <div class="kicker">e agora?</div>
+  <div class="kicker">o que aprendi</div>
   <div class="traco"></div>
-  <h1><span class="c">Qual carro</span><span class="b">a gente testa agora?</span></h1>
+  <h1><span class="c">O que eu</span><span class="b">levo disso:</span></h1>
   <div class="grow"></div>
-  <div class="card"><img src="../../docs/imagens/carro-saude.jpg" alt=""></div>
-  <div class="nota">foto real · na primeira viagem, achou 2 problemas</div>
-  <div class="rodape"><span>@gsxuza.dev</span><span>comenta aí 👇</span></div>
+  <div class="lista">
+    <div class="item"><b>Dado salvo é promessa</b><span>offline · sincronização · nada se perde</span></div>
+    <div class="item"><b>O mundo real é o teste final</b><span>o app dizia 6,2 km/l · o carro, 12,8</span></div>
+    <div class="item"><b>IA acelera, revisão protege</b><span>Claude Code · ler o código continua sendo nosso</span></div>
+  </div>
+  <div class="grow"></div>
+  <div class="rodape"><span>@gsxuza.dev</span><span>qual carro a gente testa agora? 👇</span></div>
 </section>
 
 </body>
