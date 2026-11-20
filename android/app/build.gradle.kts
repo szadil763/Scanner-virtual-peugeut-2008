@@ -5,6 +5,10 @@ plugins {
     id("com.google.gms.google-services")
 }
 
+// Chave de assinatura: 2 quando o CI passa o arquivo da chave nova (segredo), 1 quando não (debug.keystore).
+val chaveArquivo: String? = System.getenv("SIGNING_STORE_FILE")?.takeIf { it.isNotBlank() && file(it).exists() }
+val chaveGeracao: Int = if (chaveArquivo != null) 2 else 1
+
 android {
     namespace = "br.com.monitor2008"
     compileSdk = 34
@@ -20,16 +24,26 @@ android {
         // Reconhecimento offline da palavra "Monitor" (Vosk) tem biblioteca nativa: só ARM, como os
         // multimídias e celulares; deixa o APK ~20 MB menor que com x86.
         ndk { abiFilters += listOf("arm64-v8a", "armeabi-v7a") }
+        buildConfigField("int", "CHAVE_ASSINATURA", chaveGeracao.toString())
     }
 
-    // Chave de debug fixa e pública (não é segredo): mantém a mesma assinatura em todo APK gerado,
-    // assim uma versão nova instala por cima da anterior sem desinstalar.
+    // Assinatura. Chave 2 (segredo do GitHub Actions, ver docs/ATUALIZACAO.md): o CI passa o arquivo e as
+    // senhas por variáveis de ambiente. Sem elas (build local ou antes de criar os segredos), vale a chave 1,
+    // a debug.keystore pública do repositório. A geração vai para BuildConfig.CHAVE_ASSINATURA e para as
+    // notas da release ("chave: N"): o app avisa que precisa reinstalar quando a chave muda.
     signingConfigs {
         getByName("debug") {
-            storeFile = file("debug.keystore")
-            storePassword = "android"
-            keyAlias = "androiddebugkey"
-            keyPassword = "android"
+            if (chaveArquivo != null) {
+                storeFile = file(chaveArquivo)
+                storePassword = System.getenv("SIGNING_STORE_PASSWORD")
+                keyAlias = System.getenv("SIGNING_KEY_ALIAS")
+                keyPassword = System.getenv("SIGNING_KEY_PASSWORD")
+            } else {
+                storeFile = file("debug.keystore")
+                storePassword = "android"
+                keyAlias = "androiddebugkey"
+                keyPassword = "android"
+            }
         }
     }
 

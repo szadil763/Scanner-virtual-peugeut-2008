@@ -37,6 +37,26 @@ class UpdateTest {
         assertEquals("monitor-2008-celular.apk", UpdateRules.apkName(phone = true))
     }
 
+    @Test fun signingKeyComesFromTheNotes() {
+        assertEquals(1, UpdateRules.signingKey("Versão 0.1.170. versionCode: 170"))
+        assertEquals(2, UpdateRules.signingKey("Versão 0.1.171. versionCode: 171. chave: 2"))
+        assertEquals(2, UpdateRules.parse("Versão 0.1.171 versionCode: 171 chave: 2", url)?.signingKey)
+        assertEquals(1, UpdateRules.parse("versionCode: 170", url)?.signingKey)
+    }
+
+    @Test fun otherKeyNeedsReinstall() {
+        val nova = UpdateRules.parse("versionCode: 171 chave: 2", url)
+        val antiga = UpdateRules.parse("versionCode: 171", url)
+        assertTrue(UpdateRules.needsReinstall(nova, installedKey = 1))
+        assertFalse(UpdateRules.needsReinstall(nova, installedKey = 2))
+        assertFalse(UpdateRules.needsReinstall(antiga, installedKey = 1))
+        assertFalse(UpdateRules.needsReinstall(null, installedKey = 1))
+    }
+
+    @Test fun releasePageForTheBrowser() {
+        assertEquals("https://github.com/o/r/releases/tag/latest", UpdateRules.releasePage("o", "r", UpdateChannel.TESTE))
+    }
+
     @Test fun channelPointsToItsRelease() {
         assertEquals("https://api.github.com/repos/o/r/releases/tags/estavel", UpdateRules.releaseUrl("o", "r", UpdateChannel.ESTAVEL))
         assertEquals("https://api.github.com/repos/o/r/releases/tags/latest", UpdateRules.releaseUrl("o", "r", UpdateChannel.TESTE))

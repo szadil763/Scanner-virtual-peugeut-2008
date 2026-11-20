@@ -487,6 +487,12 @@ class PainelServerActivity : Activity() {
             is UpdateState.Checking -> Triple("Verificando…", false, false)
             is UpdateState.UpToDate -> Triple("Já está na versão mais recente (${up.installedCode}).", false, false)
             is UpdateState.Available -> Triple("Versão nova: ${s.version.versionName}. Toque em Baixar e instalar.", true, false)
+            is UpdateState.NeedsReinstall -> Triple(
+                "Versão ${s.version.versionName}: troca da chave de segurança, não instala por cima. Com o carro parado: " +
+                    "1) toque em Sincronizar este carro (Ajustes > Conta e atualização); 2) baixe o APK pelo navegador em ${s.page}; " +
+                    "3) desinstale o Monitor; 4) instale o APK baixado; 5) entre na conta e sincronize de novo.",
+                false, false,
+            )
             is UpdateState.Downloading -> Triple("Baixando ${s.version.versionName}: ${(s.progress * 100).toInt()}%", false, false)
             is UpdateState.Ready -> Triple("Versão ${s.version.versionName} baixada. Toque em Instalar agora.", true, true)
             is UpdateState.Failed -> Triple(s.message, false, false)
