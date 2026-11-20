@@ -32,6 +32,30 @@ jobs:
         with:
           gradle-version: "8.9"
 
+      # Chave de assinatura 2 (docs/ATUALIZACAO.md): só existe depois que o dono do repositório cria os segredos.
+      # Sem eles, o Gradle usa a debug.keystore (chave 1), como antes.
+      - name: Chave de assinatura
+        env:
+          SIGNING_KEYSTORE_BASE64: ${{ secrets.SIGNING_KEYSTORE_BASE64 }}
+          SIGNING_STORE_PASSWORD: ${{ secrets.SIGNING_STORE_PASSWORD }}
+          SIGNING_KEY_ALIAS: ${{ secrets.SIGNING_KEY_ALIAS }}
+          SIGNING_KEY_PASSWORD: ${{ secrets.SIGNING_KEY_PASSWORD }}
+        run: |
+          if [ -n "$SIGNING_KEYSTORE_BASE64" ]; then
+            echo "$SIGNING_KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/monitor.jks"
+            {
+              echo "SIGNING_STORE_FILE=$RUNNER_TEMP/monitor.jks"
+              echo "SIGNING_STORE_PASSWORD=$SIGNING_STORE_PASSWORD"
+              echo "SIGNING_KEY_ALIAS=$SIGNING_KEY_ALIAS"
+              echo "SIGNING_KEY_PASSWORD=$SIGNING_KEY_PASSWORD"
+              echo "CHAVE=2"
+            } >> "$GITHUB_ENV"
+            echo "Assinando com a chave 2 (segredo)."
+          else
+            echo "CHAVE=1" >> "$GITHUB_ENV"
+            echo "Sem segredo de assinatura: chave 1 (debug.keystore)."
+          fi
+
       - name: Validar fórmulas e tabelas
         run: node tools/verify-formulas.js
 
@@ -62,4 +86,4 @@ jobs:
           gh release delete latest --yes --cleanup-tag || true
           gh release create latest monitor-2008.apk monitor-2008-celular.apk \
             --title "Monitor 2008 (versão mais recente)" \
-            --notes "Versão 0.1.${GITHUB_RUN_NUMBER}. APK de teste gerado em $(date -u +'%d/%m/%Y %H:%M') UTC a partir do commit ${GITHUB_SHA::7}. Multimídia: monitor-2008.apk. Celular: monitor-2008-celular.apk. versionCode: ${GITHUB_RUN_NUMBER}"
+            --notes "Versão 0.1.${GITHUB_RUN_NUMBER}. APK de teste gerado em $(date -u +'%d/%m/%Y %H:%M') UTC a partir do commit ${GITHUB_SHA::7}. Multimídia: monitor-2008.apk. Celular: monitor-2008-celular.apk. versionCode: ${GITHUB_RUN_NUMBER}. chave: ${CHAVE}"

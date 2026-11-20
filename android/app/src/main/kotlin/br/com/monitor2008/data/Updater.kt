@@ -28,6 +28,11 @@ sealed class UpdateState {
     data object Checking : UpdateState()
     data class UpToDate(val channel: UpdateChannel) : UpdateState()
     data class Available(val version: RemoteVersion) : UpdateState()
+    /**
+     * Versão nova assinada com outra chave (troca de segurança): o Android não instala por cima. O dono
+     * sincroniza o carro, baixa pelo navegador em [page], desinstala o app e instala o APK novo.
+     */
+    data class NeedsReinstall(val version: RemoteVersion, val page: String) : UpdateState()
     data class Downloading(val version: RemoteVersion, val progress: Float) : UpdateState()
     /** Baixado: falta o dono tocar em "Instalar" na tela do Android. */
     data class Ready(val version: RemoteVersion, val file: File) : UpdateState()
@@ -54,6 +59,9 @@ class Updater private constructor(private val app: Application) {
         0
     }
 
+    /** Geração da chave que assinou este APK (o CI grava em BuildConfig; ver docs/ATUALIZACAO.md). */
+    val installedKey: Int = br.com.monitor2008.BuildConfig.CHAVE_ASSINATURA
+
     var channel: UpdateChannel
         get() = UpdateChannel.values().firstOrNull { it.name == store.updateChannel } ?: UpdateChannel.ESTAVEL
         set(v) {
@@ -79,7 +87,9 @@ class Updater private constructor(private val app: Application) {
                     remote == null -> if (ch == UpdateChannel.ESTAVEL) {
                         UpdateState.Failed("Ainda não há versão estável publicada.")
                     } else UpdateState.Failed("Não foi possível ler a versão publicada.")
-                    UpdateRules.isNewer(remote, installedCode) -> UpdateState.Available(remote)
+                    UpdateRules.isNewer(remote, installedCode) && UpdateRules.needsReinstall(remote, installedKey) ->
+                        UpdateState.NeedsReinstall(remote!!, UpdateRules.releasePage(OWNER, REPO, ch))
+                    UpdateRules.isNewer(remote, installedCode) -> UpdateState.Available(remote!!)
                     else -> UpdateState.UpToDate(ch)
                 }
             } catch (e: Exception) {

@@ -100,6 +100,17 @@ internal fun UpdateBanner(moving: Boolean) {
         }
         return
     }
+    val reinstall = state as? UpdateState.NeedsReinstall
+    if (reinstall != null) {
+        Card(Modifier.fillMaxWidth().padding(bottom = 8.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
+            Row(Modifier.padding(horizontal = 14.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text("Versão ${reinstall.version.versionName}: troca de segurança, precisa reinstalar o app. Veja como em Ajustes > Atualização.",
+                    fontSize = 15.sp, color = Warn, modifier = Modifier.weight(1f))
+            }
+        }
+        return
+    }
     val v = when (val s = state) {
         is UpdateState.Available -> s.version
         is UpdateState.Ready -> s.version
@@ -121,6 +132,32 @@ internal fun UpdateBanner(moving: Boolean) {
             UpdateAction(state, moving, compact = true)
         }
     }
+}
+
+/**
+ * Troca da chave de assinatura: o Android não instala por cima, então o passo a passo é sincronizar,
+ * baixar pelo navegador, desinstalar e instalar. Os dados do carro voltam pela nuvem.
+ */
+@Composable
+private fun ReinstallSteps(s: UpdateState.NeedsReinstall, moving: Boolean) {
+    val ctx = LocalContext.current
+    Text("Versão ${s.version.versionName}: troca da chave de segurança do app.", fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = Warn)
+    Text(
+        "Desta vez o Android não deixa instalar por cima. Faça uma vez, com o carro parado:\n" +
+            "1. Ajustes > Conta Google e nuvem: toque em Sincronizar este carro.\n" +
+            "2. Toque em Abrir a página e baixe o APK pelo navegador.\n" +
+            "3. Desinstale o Monitor (segure o ícone > Desinstalar).\n" +
+            "4. Abra o APK baixado e instale.\n" +
+            "5. Entre na mesma conta Google e toque em Sincronizar este carro: os dados voltam.",
+        fontSize = 16.sp,
+    )
+    OutlinedButton({
+        try {
+            ctx.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(s.page)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+        } catch (e: Exception) {
+            Toast.makeText(ctx, "Nenhum navegador encontrado.", Toast.LENGTH_LONG).show()
+        }
+    }, Modifier.height(60.dp), enabled = !moving) { Text("Abrir a página de download", fontSize = 18.sp) }
 }
 
 /** Seção de Ajustes: versão instalada, canal e o botão de atualizar. */
@@ -159,6 +196,7 @@ internal fun UpdateSection(moving: Boolean) {
             Text("Baixando a versão ${s.version.versionName}...", fontSize = 16.sp)
             LinearProgressIndicator(progress = { s.progress }, modifier = Modifier.fillMaxWidth().height(10.dp))
         }
+        is UpdateState.NeedsReinstall -> ReinstallSteps(s, moving)
         is UpdateState.Ready -> Text(
             "Versão ${s.version.versionName} baixada. Toque em Instalar e confirme na tela do Android; os dados do app continuam.",
             fontSize = 16.sp,
