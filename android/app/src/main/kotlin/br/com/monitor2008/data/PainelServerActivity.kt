@@ -75,6 +75,7 @@ class PainelServerActivity : Activity() {
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        if (CrashLog.showIfPending(this)) { super.onCreate(savedInstanceState); return }
         SessionResume.capture(application) // estado da sessão anterior, antes de esta tela mudar o que está na frente
         super.onCreate(savedInstanceState)
         val info = TextView(this).apply {

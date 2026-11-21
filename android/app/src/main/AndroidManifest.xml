@@ -87,6 +87,7 @@
     </queries>
 
     <application
+        android:name=".MonitorApp"
         android:allowBackup="true"
         android:label="Monitor 2008"
         android:icon="@mipmap/ic_launcher"
@@ -153,6 +154,12 @@
                 <category android:name="androidx.car.app.category.POI" />
             </intent-filter>
         </service>
+
+        <!-- Registro de erros: aparece na abertura seguinte quando o app fechou sozinho (data/CrashLog). -->
+        <activity
+            android:name=".data.CrashReportActivity"
+            android:exported="false"
+            android:label="Erro do Monitor 2008" />
 
         <activity
             android:name=".MainActivity"

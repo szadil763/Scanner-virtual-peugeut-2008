@@ -44,6 +44,8 @@ class MainActivity : ComponentActivity() {
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        // O app fechou sozinho da última vez: mostra o motivo antes de tudo (ver data/CrashLog).
+        if (br.com.monitor2008.data.CrashLog.showIfPending(this)) { super.onCreate(savedInstanceState); return }
         SessionResume.capture(application) // guarda o que ficou na frente da última vez, antes de esta tela mudar isso
         super.onCreate(savedInstanceState)
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
