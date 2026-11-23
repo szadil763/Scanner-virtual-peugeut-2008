@@ -96,7 +96,17 @@ class AppLauncher(private val context: Context) {
         set(v) { store.musicPackage = v }
 
     /** Devolve null se abriu, ou a mensagem de erro. */
-    fun openMap(activity: Activity?): String? = open(mapPackage ?: mapApps().firstOrNull()?.pkg, "mapa", activity)
+    fun openMap(activity: Activity?): String? {
+        // Android Auto: o som é o do celular. A rádio pela internet do multimídia tomava o som e a música do
+        // Android Auto não tocava; pausa a rádio antes de abrir.
+        if (mapIsProjection()) {
+            try {
+                val radio = RadioPlayer.get(context.applicationContext as android.app.Application)
+                if (radio.state.value.playing) radio.pause()
+            } catch (_: Exception) { }
+        }
+        return open(mapPackage ?: mapApps().firstOrNull()?.pkg, "mapa", activity)
+    }
 
     fun openMusic(activity: Activity?): String? = open(musicPackage ?: musicApps().firstOrNull()?.pkg, "música", activity)
 

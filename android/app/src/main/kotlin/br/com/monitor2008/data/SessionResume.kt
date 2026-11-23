@@ -99,12 +99,33 @@ object SessionResume {
 
     private fun resumeSession(app: Application, front: String?, frontAtMs: Long) {
         val store = Store(app)
+        // Android Auto escolhido como mapa: a música e o mapa vêm do celular. Retomar a rádio ou a música do
+        // multimídia tomava o som do Android Auto (ele conectava, mas não tocava), e o painel abria por cima dele.
+        // Então só traz a tela do Android Auto para a frente, com o Monitor em miniatura por cima.
+        if (try { AppLauncher(app).mapIsProjection() } catch (_: Exception) { false }) {
+            abrirAndroidAuto(app)
+            return
+        }
         // Música e rádio: no thread principal (o player da rádio exige).
         if (store.resumeMedia) {
             val pkg = store.lastPlayingPkg
             if (pkg != null && ResumeRules.shouldResume(store.aliveAtMs, store.lastPlayingAtMs, pkg)) retomarMidia(app, pkg, front)
         }
         if (store.resumeMap && ResumeRules.shouldResumeMap(front, frontAtMs, System.currentTimeMillis())) retomarMapa(app, store)
+    }
+
+    /**
+     * Ao ligar o carro com o Android Auto: espera o painel abrir (ele é o servidor que recebe os números do celular,
+     * precisa estar aberto atrás) e põe o Android Auto na frente, com o Monitor em miniatura por cima.
+     */
+    private fun abrirAndroidAuto(app: Application) {
+        scope.launch {
+            delay(6_000)
+            withContext(Dispatchers.Main) {
+                val erro = try { AppLauncher(app).openMap(null) } catch (_: Exception) { "erro" }
+                if (erro == null && FloatingPanel.available(app)) FloatingPanel.show(app, PainelServerActivity::class.java)
+            }
+        }
     }
 
     /** Botão "Tocar de novo" da aba Mídias: volta a tocar a última mídia. */
